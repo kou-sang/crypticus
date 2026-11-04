@@ -1,0 +1,78 @@
+@import 'tailwindcss';
+
+/* Paleta "papel de periódico": tinta, papel y rojo de corrección. */
+:root {
+  --paper: #f4efe4;
+  --paper-2: #ebe4d4;
+  --ink: #1b1a17;
+  --muted: #6b665c;
+  --line: #d6cdb9;
+  --accent: #c8361d;
+  --ok: #2f6b3a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #16150f;
+    --paper-2: #211f18;
+    --ink: #ece6d8;
+    --muted: #9b9484;
+    --line: #36332a;
+    --accent: #e0573b;
+    --ok: #6fb07a;
+  }
+}
+
+@theme {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-ok: var(--ok);
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+html {
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--paper);
+}
+
+/* Celdas de cuadrícula para el adorno de la landing y las enumeraciones. */
+.grid-cell {
+  @apply inline-flex size-9 items-center justify-center border border-ink font-mono text-sm font-semibold uppercase;
+}
+
+.fade-in {
+  animation: fade-in 180ms ease-out both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: none; }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in { animation: none; }
+}
