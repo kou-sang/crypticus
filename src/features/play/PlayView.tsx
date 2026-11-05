@@ -3,12 +3,18 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Competition, CrypticPublic, Participant } from '../../../shared/types';
 import { answerLengthFromEnumeration, normalizeAnswer } from '../../../shared/answer';
 import { nextPendingClue } from '../../../shared/scoring';
-import { api, ApiError } from '../../lib/api';
+import { ApiError, type AnswerResult, type HintResult } from '../../lib/api';
 import { getCryptics } from '../../lib/repo';
 import { cx, errorMessage } from '../../lib/utils';
 import { Button, ErrorBanner, Spinner } from '../../components/ui';
 
 type Feedback = { kind: 'correct'; points: number } | { kind: 'wrong' } | null;
+
+/** Acciones de juego (en esta variante: mensajes WebSocket al Durable Object). */
+export interface GameActions {
+  answer: (crypticId: string, guess: string) => Promise<AnswerResult>;
+  hint: (crypticId: string, reveal: boolean) => Promise<HintResult>;
+}
 
 /** Celdas que reflejan lo tecleado, agrupadas según la enumeración "(4,3-2)". */
 function AnswerCells({ enumeration, value, solvedAnswer }: { enumeration: string; value: string; solvedAnswer?: string }) {
@@ -39,7 +45,7 @@ function AnswerCells({ enumeration, value, solvedAnswer }: { enumeration: string
   );
 }
 
-export function PlayView({ competition, me }: { competition: Competition; me: Participant }) {
+export function PlayView({ competition, me, actions }: { competition: Competition; me: Participant; actions: GameActions }) {
   const [cryptics, setCryptics] = useState<Map<string, CrypticPublic> | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(() => nextPendingClue(competition.crypticIds, me.solvedIds));
@@ -66,11 +72,11 @@ export function PlayView({ competition, me }: { competition: Competition; me: Pa
   // Recupera pistas ya reveladas (p. ej. tras recargar) solo si se usaron.
   useEffect(() => {
     if (!selectedId || hints[selectedId] || !(me.hintsByClue[selectedId] ?? 0)) return;
-    api
-      .hint(competition.id, selectedId, false)
+    actions
+      .hint(selectedId, false)
       .then((res) => setHints((prev) => ({ ...prev, [selectedId]: res.hints })))
       .catch((err: unknown) => console.error('[hint] recuperar', err));
-  }, [selectedId, competition.id, me.hintsByClue, hints]);
+  }, [selectedId, actions, me.hintsByClue, hints]);
 
   useEffect(() => {
     setGuess('');
@@ -100,10 +106,10 @@ export function PlayView({ competition, me }: { competition: Competition; me: Pa
     setBusy('answer');
     setError(null);
     try {
-      const result = await api.answer(competition.id, selectedId, guess);
+      const result = await actions.answer(selectedId, guess);
       if (result.correct) {
         setFeedback({ kind: 'correct', points: result.points });
-        if (result.answer) setAnswers((prev) => ({ ...prev, [selectedId]: result.answer! }));
+        setAnswers((prev) => ({ ...prev, [selectedId]: guess })); // Correcta => lo tecleado es la respuesta.
         const solvedId = selectedId;
         window.setTimeout(() => goToNext(solvedId), 650);
       } else {
@@ -122,7 +128,7 @@ export function PlayView({ competition, me }: { competition: Competition; me: Pa
     setBusy('hint');
     setError(null);
     try {
-      const result = await api.hint(competition.id, selectedId, true);
+      const result = await actions.hint(selectedId, true);
       setHints((prev) => ({ ...prev, [selectedId]: result.hints }));
     } catch (err) {
       setError(errorMessage(err));

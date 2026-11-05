@@ -4,6 +4,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+### Changed (variante Cloudflare, rama `feat/cloudflare-durable-objects`)
+
+- Juego en vivo servido por un Durable Object por competencia vía WebSocket (validación en memoria).
+- Respuestas almacenadas como HMAC-SHA256 empaquetadas con el Worker; ya no se guardan en Firestore.
+- Cierre por alarma del Durable Object; resultados, rating y estadísticas sincronizados a Firestore por REST.
+- Hosting en Cloudflare Workers Static Assets. Se eliminan las Vercel Functions.
+
 ## [0.1.0] - 2026-11-04
 
 ### Added

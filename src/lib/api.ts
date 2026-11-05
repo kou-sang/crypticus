@@ -1,4 +1,4 @@
-// Cliente de las Vercel Functions con token de Firebase y errores tipados.
+// Cliente HTTP del Worker (solo `start`; respuestas y pistas van por WebSocket, ver gameChannel.ts).
 import { auth } from './firebase';
 
 export class ApiError extends Error {
@@ -38,25 +38,8 @@ async function post<T>(path: string, body: Record<string, unknown>): Promise<T> 
   return payload.data;
 }
 
-export interface AnswerResult {
-  correct: boolean;
-  points: number;
-  finished: boolean;
-  answer?: string;
-  explanation?: string | null;
-}
-
-export interface HintResult {
-  hints: string[];
-  remaining: number;
-}
+export type { AnswerReply as AnswerResult, HintReply as HintResult } from '../../shared/protocol';
 
 export const api = {
   start: (competitionId: string) => post<{ startedAt: number; endsAt: number }>('competitions/start', { competitionId }),
-  answer: (competitionId: string, crypticId: string, guess: string) =>
-    post<AnswerResult>('competitions/answer', { competitionId, crypticId, guess }),
-  hint: (competitionId: string, crypticId: string, reveal: boolean) =>
-    post<HintResult>('competitions/hint', { competitionId, crypticId, reveal }),
-  finalize: (competitionId: string) =>
-    post<{ finished: boolean; winnerId: string | null }>('competitions/finalize', { competitionId }),
 };

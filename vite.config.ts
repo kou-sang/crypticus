@@ -4,6 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    // En desarrollo, /api (HTTP y WebSocket) va a `wrangler dev`.
+    proxy: { '/api': { target: 'http://127.0.0.1:8787', ws: true, changeOrigin: true } },
+  },
   build: {
     target: 'es2022',
     rollupOptions: {
@@ -17,7 +21,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['shared/**/*.test.ts', 'src/**/*.test.ts'],
+    include: ['shared/**/*.test.ts', 'src/**/*.test.ts', 'worker/**/*.test.ts'],
     environment: 'node',
   },
 });

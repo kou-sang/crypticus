@@ -27,3 +27,5 @@ jobs:
           VITE_FIREBASE_AUTH_DOMAIN: ci.firebaseapp.com
           VITE_FIREBASE_PROJECT_ID: ci
           VITE_FIREBASE_APP_ID: ci
+      # Valida bundle del Worker + Durable Object sin desplegar.
+      - run: npx wrangler deploy --dry-run --outdir .wrangler/dry-run

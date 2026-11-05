@@ -2,6 +2,8 @@
 
 Plataforma web de competencias de cripticos en tiempo real: amigos, chat, rankings y varios modos de juego.
 
+> **Variante B — Firebase + Cloudflare.** La variante A (Firebase + Vercel) vive en la rama `feat/initial-platform`.
+
 ## Stack
 
 | Capa | Tecnología |
@@ -9,10 +11,17 @@ Plataforma web de competencias de cripticos en tiempo real: amigos, chat, rankin
 | UI | React 19 + React Router 7 + Tailwind CSS 4 (Vite 7, SPA con rutas *lazy*) |
 | Auth | Firebase Auth (email/contraseña y Google) |
 | Datos y tiempo real | Cloud Firestore (`onSnapshot`, caché persistente en IndexedDB) |
-| Lógica autoritativa | Vercel Functions (`api/`) con Firebase Admin SDK |
+| Juego en vivo | Cloudflare Durable Object por competencia (`worker/competitionRoom.ts`), WebSocket con hibernación |
+| Hosting + API | Cloudflare Workers con Static Assets (`worker/index.ts`) |
+| Respuestas | HMAC-SHA256 empaquetadas con el Worker (`worker/generated/`, fuera de git) |
 | Dominio compartido | `shared/` — funciones puras (puntaje, ranking, fin de partida, Elo) usadas por cliente y servidor |
 
-> Firebase Spark (gratis) **no permite Cloud Functions**; por eso la validación de respuestas vive en Vercel Functions.
+### Flujo de una partida
+
+1. Lobby en Firestore (crear, unirse, salir) — igual que la variante A.
+2. El anfitrión llama `POST /api/competitions/start`: el Worker lee la sala por REST, inicializa el Durable Object y marca `live` en Firestore.
+3. Cada cliente abre `wss://…/api/competitions/:id/ws`, se autentica con su ID token y juega: **respuestas y pistas se validan en memoria del DO** (sin base de datos en el camino crítico).
+4. Al terminar (meta, ventaja de dos o alarma de tiempo), el DO escribe resultados, rating y estadísticas en Firestore y reintenta por alarma si falla.
 
 ## Modos y puntajes
 
@@ -28,8 +37,8 @@ Plataforma web de competencias de cripticos en tiempo real: amigos, chat, rankin
 ## Estructura
 
 ```
-api/                 Vercel Functions (start, answer, hint, finalize)
-shared/              Dominio puro + tests
+worker/              Worker (HTTP + assets), Durable Object, auth JWT, cliente REST de Firestore
+shared/              Dominio puro + protocolo WS + HMAC + tests
 src/
   features/          landing, auth, dashboard, competitions, play, friends, chat, rankings, profile
   components/        UI base, layout, guardas de ruta
@@ -41,22 +50,18 @@ firestore.rules      Seguridad: el cliente nunca escribe puntajes
 
 ## Puesta en marcha
 
-1. **Firebase**: crea un proyecto, activa Auth (Email + Google) y Firestore. Genera una cuenta de servicio (Configuración → Cuentas de servicio → Generar clave).
-2. **Variables**: copia `.env.example` a `.env.local` y completa los valores.
-3. **Instalar y correr**:
-   ```bash
-   npm install
-   npm run dev          # http://localhost:5173 (las /api requieren `vercel dev`)
-   npx vercel dev       # front + funciones en local
-   ```
-4. **Reglas e índices**: `npx firebase-tools deploy --only firestore:rules,firestore:indexes`
-5. **Cargar cripticos**: crea `data/cryptics.json` con el formato de `data/cryptics.example.json` y ejecuta:
-   ```bash
-   npm run import:cryptics -- data/cryptics.json --dry-run   # valida
-   npm run import:cryptics -- data/cryptics.json             # escribe
-   ```
-   Los ids son deterministas: reimportar actualiza en vez de duplicar. Las respuestas y pistas van a `crypticSecrets` (inaccesible al cliente).
-6. **Deploy**: importa el repo en Vercel y define las mismas variables (`FIREBASE_SERVICE_ACCOUNT` solo en servidor).
+Ver la guía completa de despliegue en la descripción del PR. Resumen:
+
+```bash
+npm install
+cp .env.example .env.local                      # credenciales web de Firebase
+printf 'FIREBASE_SERVICE_ACCOUNT=...\nANSWER_HMAC_KEY=...\n' > .dev.vars
+npm run import:cryptics -- data/cryptics.json   # Firestore + worker/generated/cryptic-secrets.json
+npm run dev:worker                              # build + wrangler dev (http://localhost:8787)
+npm run deploy                                  # build + wrangler deploy
+```
+
+> Cada vez que importes cripticos nuevos, **vuelve a desplegar** el Worker: los hashes viajan dentro del bundle.
 
 ### Formato de cripticos
 
@@ -67,7 +72,8 @@ firestore.rules      Seguridad: el cliente nunca escribe puntajes
 
 ## Límites del plan gratuito (importante)
 
-Firestore Spark: **50 000 lecturas/día y 20 000 escrituras/día**. Cada actualización de un documento escuchado cuesta una lectura **por cliente suscrito**. Una partida de 10 jugadores × 20 cripticos genera ~2 000–3 000 lecturas (marcador + chat). Mitigaciones ya aplicadas: caché persistente, rankings sin `onSnapshot`, chat limitado a 50 mensajes, perfiles cacheados en memoria.
+- **Firestore Spark**: 50 000 lecturas/día y 20 000 escrituras/día. En esta variante el marcador en vivo **no** consume Firestore; solo lobby, chat, perfiles y resultados finales.
+- **Workers Free**: 100 000 peticiones/día a `/api/*` (los assets estáticos son gratis e ilimitados). Durable Objects tiene cuotas propias en el plan Free; revisa el panel de Cloudflare si el volumen crece.
 
 ## Scripts
 
@@ -77,6 +83,8 @@ Firestore Spark: **50 000 lecturas/día y 20 000 escrituras/día**. Cada actuali
 | `npm run typecheck` | TypeScript estricto |
 | `npm test` | Tests de dominio (Vitest) |
 | `npm run build` | Build de producción |
+| `npm run dev:worker` | Build + Worker local con Durable Objects |
+| `npm run deploy` | Build + despliegue a Cloudflare |
 
 ## Versionado
 

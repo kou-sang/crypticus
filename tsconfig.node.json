@@ -2,7 +2,10 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -11,7 +14,13 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["vite.config.ts", "api", "scripts", "shared"]
+  "include": [
+    "vite.config.ts",
+    "scripts",
+    "shared"
+  ]
 }

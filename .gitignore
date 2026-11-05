@@ -1,6 +1,5 @@
 node_modules
 dist
-.vercel
 .env
 .env.*
 !.env.example
@@ -10,3 +9,6 @@ data/cryptics.json
 .firebase
 *.log
 .DS_Store
+worker/generated/
+.wrangler
+.dev.vars
