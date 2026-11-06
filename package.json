@@ -1,6 +1,6 @@
 {
   "name": "crypticus",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Plataforma de competencias de cripticos en tiempo real (variante Cloudflare Workers + Durable Objects).",

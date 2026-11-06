@@ -21,6 +21,7 @@ import {
 import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, validateConfig } from '../../../shared/scoring';
 import { GAME_MODES, type ComebackLevel, type CompetitionVisibility, type DuelDamage, type GameMode } from '../../../shared/types';
 import { Button, ErrorBanner, PageHeader } from '../../components/ui';
+import { BackLink } from '../../components/BackLink';
 
 const STORAGE_KEY = 'crypticus.newGame.v2';
 
@@ -411,7 +412,7 @@ export default function CreateCompetitionPage() {
         clueCount: built.clueCount,
         ...(rivalId ? { invitedIds: [rivalId] } : {}),
       });
-      navigate(`/c/${id}`);
+      navigate(`/c/${id}`, { replace: true });
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);
@@ -420,6 +421,7 @@ export default function CreateCompetitionPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
+      <BackLink fallback="/jugar" />
       <PageHeader kicker="Jugar" title={rivalId ? `Desafiar a ${rivalName}` : 'Nueva partida'} />
 
       <form onSubmit={handleSubmit} className="space-y-6">
