@@ -1,15 +1,15 @@
 // Canal WebSocket con el Durable Object de una competencia: auth, request/response y reconexión.
 import { auth } from './firebase';
-import { ApiError, type AnswerResult, type HintResult } from './api';
-import type { ClientMessage, RoomSnapshot, ServerMessage } from '../../shared/protocol';
-import type { Participant } from '../../shared/types';
+import { ApiError } from './api';
+import type { AckReply, ActionMessage, AnswerReply, ClientMessage, HintReply, ServerMessage } from '../../shared/protocol';
+import type { LiveState } from '../../shared/engine';
+import type { Difficulty } from '../../shared/types';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
 
 export interface GameChannelHandlers {
-  onReady: (snapshot: RoomSnapshot) => void;
-  onParticipant: (participant: Participant) => void;
-  onFinished: (winnerId: string | null) => void;
+  onReady: (state: LiveState | null, serverTime: number) => void;
+  onState: (state: LiveState) => void;
   onConnection: (state: ConnectionState) => void;
 }
 
@@ -72,12 +72,24 @@ export class GameChannel {
     };
   }
 
-  answer(crypticId: string, guess: string): Promise<AnswerResult> {
-    return this.request<AnswerResult>({ type: 'answer', reqId: this.nextId(), crypticId, guess });
+  answer(crypticId: string, guess: string): Promise<AnswerReply> {
+    return this.request<AnswerReply>({ type: 'answer', reqId: this.nextId(), crypticId, guess });
   }
 
-  hint(crypticId: string, reveal: boolean): Promise<HintResult> {
-    return this.request<HintResult>({ type: 'hint', reqId: this.nextId(), crypticId, reveal });
+  hint(crypticId: string, reveal: boolean): Promise<HintReply> {
+    return this.request<HintReply>({ type: 'hint', reqId: this.nextId(), crypticId, reveal });
+  }
+
+  vote(tier: Difficulty): Promise<AckReply> {
+    return this.request<AckReply>({ type: 'vote', reqId: this.nextId(), tier });
+  }
+
+  extraTime(): Promise<AckReply> {
+    return this.request<AckReply>({ type: 'extraTime', reqId: this.nextId() });
+  }
+
+  skip(): Promise<AckReply> {
+    return this.request<AckReply>({ type: 'skip', reqId: this.nextId() });
   }
 
   dispose(): void {
@@ -100,7 +112,7 @@ export class GameChannel {
     this.socket.send(JSON.stringify(message));
   }
 
-  private request<T>(message: Extract<ClientMessage, { reqId: string }>): Promise<T> {
+  private request<T>(message: ActionMessage): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       if (!this.authenticated) {
         reject(new ApiError('offline', 'Conectando con la sala…', 0));
@@ -135,14 +147,11 @@ export class GameChannel {
         this.authenticated = true;
         this.attempts = 0;
         this.handlers.onConnection('open');
-        this.handlers.onReady(message.snapshot);
+        this.handlers.onReady(message.state, message.serverTime);
         this.startPing();
         break;
-      case 'participant':
-        this.handlers.onParticipant(message.participant);
-        break;
-      case 'finished':
-        this.handlers.onFinished(message.winnerId);
+      case 'state':
+        this.handlers.onState(message.state);
         break;
       case 'reply': {
         const pending = this.pending.get(message.reqId);

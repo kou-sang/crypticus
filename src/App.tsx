@@ -18,6 +18,8 @@ const FriendsPage = lazy(() => import('./features/friends/FriendsPage'));
 const ChatPage = lazy(() => import('./features/chat/ChatPage'));
 const RankingsPage = lazy(() => import('./features/rankings/RankingsPage'));
 const ProfilePage = lazy(() => import('./features/profile/ProfilePage'));
+const HistoryPage = lazy(() => import('./features/history/HistoryPage'));
+const SettingsPage = lazy(() => import('./features/settings/SettingsPage'));
 
 export function App() {
   return (
@@ -42,6 +44,8 @@ export function App() {
                   <Route path="/chat/:chatId" element={<ChatPage />} />
                   <Route path="/rankings" element={<RankingsPage />} />
                   <Route path="/u/:uid" element={<ProfilePage />} />
+                  <Route path="/historial" element={<HistoryPage />} />
+                  <Route path="/ajustes" element={<SettingsPage />} />
                 </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

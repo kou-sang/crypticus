@@ -2,7 +2,7 @@
   {
     "clue": "Ave que oye al revés (3)",
     "answer": "oye",
-    "difficulty": 1,
+    "difficulty": "facil",
     "hints": ["Es un anagrama-reverso", "Lee 'oye' de derecha a izquierda"],
     "explanation": "Ejemplo de formato: reemplazar por cripticos reales."
   },
@@ -11,7 +11,7 @@
     "clue": "Pista de ejemplo con enumeración explícita (4,4)",
     "answer": "cara dura",
     "enumeration": "(4,4)",
-    "difficulty": 3,
+    "difficulty": "medio",
     "hints": ["Primera pista", "Segunda pista", "Tercera pista"],
     "setter": "kou-sang",
     "tags": ["ejemplo"]

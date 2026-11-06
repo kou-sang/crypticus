@@ -1,11 +1,13 @@
 // Panel principal: estadísticas, mis competencias y accesos rápidos.
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { collection, limit, orderBy, query, where } from 'firebase/firestore';
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
 import { useLiveQuery } from '../../hooks/useFirestore';
 import { useFriends } from '../../hooks/useFriends';
-import type { Competition } from '../../../shared/types';
+import type { Competition, UserProfile } from '../../../shared/types';
+import { RankingTable } from '../rankings/RankingsPage';
 import { Card, EmptyState, PageHeader, Spinner } from '../../components/ui';
 import { CompetitionCard } from '../competitions/CompetitionCard';
 
@@ -16,6 +18,22 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       <p className="font-mono text-3xl font-semibold">{value}</p>
     </div>
   );
+}
+
+/** Top 5 global (consulta puntual: 5 lecturas). */
+function TopPlayers({ meId }: { meId: string }) {
+  const [rows, setRows] = useState<UserProfile[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getDocs(query(collection(db, 'users'), orderBy('rating', 'desc'), limit(5)))
+      .then((snap) => !cancelled && setRows(snap.docs.map((d) => d.data() as UserProfile)))
+      .catch((err: unknown) => console.error('[dashboard] top', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (!rows) return <Spinner />;
+  return <RankingTable rows={rows} meId={meId} />;
 }
 
 export default function DashboardPage() {
@@ -88,6 +106,15 @@ export default function DashboardPage() {
 
         <aside className="space-y-4">
           <Card>
+            <div className="mb-2 flex items-baseline justify-between">
+              <h3 className="font-display text-lg">Top 5</h3>
+              <Link to="/rankings" className="text-xs font-semibold underline underline-offset-4">
+                Ranking completo
+              </Link>
+            </div>
+            <TopPlayers meId={profile.uid} />
+          </Card>
+          <Card>
             <h3 className="font-display text-lg">Partida rápida</h3>
             <p className="mt-1 text-sm text-muted">10 minutos, 10 pistas, puntaje clásico. Comparte el enlace.</p>
             <Link to="/competencias/nueva?preset=quick" className="mt-3 inline-block text-sm font-semibold underline decoration-accent underline-offset-4">
@@ -96,9 +123,16 @@ export default function DashboardPage() {
           </Card>
           <Card>
             <h3 className="font-display text-lg">Duelo</h3>
-            <p className="mt-1 text-sm text-muted">1 contra 1. Gana quien saque dos de ventaja.</p>
+            <p className="mt-1 text-sm text-muted">1 contra 1 por rondas, votando la dificultad. Gana quien saque dos de ventaja.</p>
             <Link to="/competencias/nueva?preset=duel" className="mt-3 inline-block text-sm font-semibold underline decoration-accent underline-offset-4">
               Retar a alguien →
+            </Link>
+          </Card>
+          <Card>
+            <h3 className="font-display text-lg">Jefe</h3>
+            <p className="mt-1 text-sm text-muted">Cooperativo. Cuanto antes resuelvan, más daño le hacen.</p>
+            <Link to="/competencias/nueva?preset=boss" className="mt-3 inline-block text-sm font-semibold underline decoration-accent underline-offset-4">
+              Formar equipo →
             </Link>
           </Card>
         </aside>

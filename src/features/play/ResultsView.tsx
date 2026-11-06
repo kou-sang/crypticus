@@ -1,5 +1,7 @@
 // Resultados finales (standings congelados por el servidor al cerrar).
+import { useEffect } from 'react';
 import { Link } from 'react-router';
+import { playCue } from '../../lib/sound';
 import type { Competition } from '../../../shared/types';
 import { cx } from '../../lib/utils';
 
@@ -17,12 +19,28 @@ const REASONS: Record<string, string> = {
   time: 'Se acabó el tiempo.',
   target: 'Alguien alcanzó la meta.',
   winByTwo: 'Ventaja de dos alcanzada.',
-  exhausted: 'Se resolvieron todos los cripticos.',
+  exhausted: 'No quedan cripticos.',
+  bossDefeated: 'El jefe cayó.',
+  bossSurvived: 'El jefe resistió.',
 };
 
-export function ResultsView({ competition, meId }: { competition: Competition & { finalStandings?: Standing[]; endReason?: string }; meId: string }) {
+type FinishedCompetition = Competition & {
+  finalStandings?: Standing[];
+  endReason?: string;
+  bossDefeated?: boolean | null;
+  boss?: { hp: number; maxHp: number } | null;
+};
+
+export function ResultsView({ competition, meId }: { competition: FinishedCompetition; meId: string }) {
   const standings = competition.finalStandings ?? [];
   const winner = standings.find((s) => s.uid === competition.winnerId);
+  const isBoss = competition.mode === 'boss';
+  const won = isBoss ? competition.bossDefeated === true : competition.winnerId === meId;
+
+  // Fanfarria al entrar en resultados.
+  useEffect(() => {
+    playCue(won ? 'victory' : 'defeat');
+  }, [won]);
 
   return (
     <div className="space-y-8">
@@ -31,7 +49,15 @@ export function ResultsView({ competition, meId }: { competition: Competition & 
           {REASONS[competition.endReason ?? ''] ?? 'Competencia terminada.'}
         </p>
         <p className="mt-2 font-display text-4xl">
-          {winner ? (
+          {isBoss ? (
+            competition.bossDefeated ? (
+              <>
+                ¡Jefe <em className="text-accent">derrotado</em>!
+              </>
+            ) : (
+              `El jefe sobrevivió con ${competition.boss?.hp ?? '?'} de vida`
+            )
+          ) : winner ? (
             <>
               Gana <em className="text-accent">{winner.displayName}</em>
             </>
@@ -48,8 +74,8 @@ export function ResultsView({ competition, meId }: { competition: Competition & 
             <th className="py-2">Jugador</th>
             <th className="py-2 text-right">Resueltos</th>
             <th className="py-2 text-right">Pistas</th>
-            <th className="py-2 text-right">Puntos</th>
-            <th className="py-2 text-right">Rating</th>
+            <th className="py-2 text-right">{isBoss ? 'Daño' : 'Puntos'}</th>
+            {!isBoss && <th className="py-2 text-right">Rating</th>}
           </tr>
         </thead>
         <tbody>
@@ -60,9 +86,11 @@ export function ResultsView({ competition, meId }: { competition: Competition & 
               <td className="py-2.5 text-right font-mono">{s.solved}</td>
               <td className="py-2.5 text-right font-mono">{s.hintsUsed}</td>
               <td className="py-2.5 text-right font-mono font-semibold">{s.score}</td>
-              <td className={cx('py-2.5 text-right font-mono', s.ratingDelta > 0 ? 'text-ok' : s.ratingDelta < 0 ? 'text-accent' : '')}>
-                {s.ratingDelta > 0 ? `+${s.ratingDelta}` : s.ratingDelta}
-              </td>
+              {!isBoss && (
+                <td className={cx('py-2.5 text-right font-mono', s.ratingDelta > 0 ? 'text-ok' : s.ratingDelta < 0 ? 'text-accent' : '')}>
+                  {s.ratingDelta > 0 ? `+${s.ratingDelta}` : s.ratingDelta}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

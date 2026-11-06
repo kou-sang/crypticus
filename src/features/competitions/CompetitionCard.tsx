@@ -1,16 +1,35 @@
 import { Link } from 'react-router';
 import type { Competition } from '../../../shared/types';
-import { SCORING_LABELS } from '../../../shared/scoring';
+import { BOSS_LABELS, COMEBACK_LABELS, FLOW_LABELS, SCORING_LABELS } from '../../../shared/scoring';
 import { Badge } from '../../components/ui';
 import { formatRelative } from '../../lib/utils';
 
 const STATUS_LABEL = { lobby: 'En sala', live: 'En vivo', finished: 'Terminada' } as const;
 
-export function describeMode(competition: Pick<Competition, 'mode' | 'durationSec' | 'targetCount' | 'scoring'>): string {
-  if (competition.scoring === 'winByTwo') return 'Duelo a 2 de ventaja';
-  return competition.mode === 'timed'
-    ? `${Math.round(competition.durationSec / 60)} min`
-    : `Carrera a ${competition.targetCount}`;
+type ModeFields = Pick<
+  Competition,
+  'mode' | 'durationSec' | 'targetCount' | 'scoring' | 'flow' | 'winByTwo' | 'bossLevel' | 'difficultyVote' | 'extraTime' | 'comeback' | 'hideScoreboard' | 'wrongPenalty' | 'rivalCountdownSec'
+>;
+
+export function describeMode(c: ModeFields): string {
+  const minutes = `${Math.round(c.durationSec / 60)} min`;
+  if (c.mode === 'boss') return `Jefe ${BOSS_LABELS[c.bossLevel] ?? ''} · ${minutes}`;
+  if (c.mode === 'count') return `${c.flow === 'rounds' ? 'Primero a' : 'Carrera a'} ${c.targetCount}`;
+  return minutes;
+}
+
+/** Etiquetas cortas de los modificadores activos. */
+export function describeModifiers(c: ModeFields): string[] {
+  const tags: string[] = [FLOW_LABELS[c.flow]?.title ?? 'Libre'];
+  if (c.mode !== 'boss') tags.push(SCORING_LABELS[c.scoring]?.title ?? 'Clásico');
+  if (c.winByTwo) tags.push('Diferencia de dos');
+  if (c.difficultyVote) tags.push('Vota dificultad');
+  if (c.rivalCountdownSec > 0) tags.push(`Cuenta atrás ${c.rivalCountdownSec}s`);
+  if (c.comeback && c.comeback !== 'off') tags.push(COMEBACK_LABELS[c.comeback]);
+  if (c.extraTime?.enabled) tags.push(`+${c.extraTime.seconds}s ×${c.extraTime.maxUses}`);
+  if (c.wrongPenalty > 0) tags.push(`−${c.wrongPenalty} por error`);
+  if (c.hideScoreboard) tags.push('Marcador oculto');
+  return tags;
 }
 
 export function CompetitionCard({ competition }: { competition: Competition }) {
@@ -27,7 +46,7 @@ export function CompetitionCard({ competition }: { competition: Competition }) {
         <Badge tone={tone}>{STATUS_LABEL[competition.status]}</Badge>
       </div>
       <p className="mt-2 font-mono text-xs uppercase tracking-wider text-muted">
-        {describeMode(competition)} · {SCORING_LABELS[competition.scoring].title} · {competition.crypticIds.length} pistas
+        {describeMode(competition)} · {describeModifiers(competition).slice(0, 3).join(' · ')}
       </p>
       <div className="mt-3 flex items-center justify-between text-xs text-muted">
         <span>

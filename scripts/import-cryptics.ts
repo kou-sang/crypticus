@@ -7,7 +7,8 @@ import { cert, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { deriveEnumeration, normalizeAnswer } from '../shared/answer.js';
 import { hashAnswer } from '../shared/answerHash.js';
-import type { CrypticImportItem, CrypticPublic, CrypticSecret, Difficulty } from '../shared/types.js';
+import { parseDifficulty } from '../shared/scoring.js';
+import type { CrypticImportItem, CrypticPublic, CrypticSecret } from '../shared/types.js';
 
 const BATCH_SIZE = 400; // < límite de 500 escrituras por batch.
 const SECRETS_PATH = 'worker/generated/cryptic-secrets.json';
@@ -30,8 +31,8 @@ function validateItem(item: unknown, index: number): ValidItem {
   if (typeof raw.answer !== 'string' || normalizeAnswer(raw.answer).length === 0) {
     throw new Error(`#${index}: "answer" inválido`);
   }
-  const difficulty = (raw.difficulty ?? 3) as Difficulty;
-  if (![1, 2, 3, 4, 5].includes(difficulty)) throw new Error(`#${index}: "difficulty" debe ser 1..5`);
+  const tier = parseDifficulty(raw.difficulty);
+  if (!tier) throw new Error(`#${index}: "difficulty" debe ser fácil, medio o difícil`);
   const hints = Array.isArray(raw.hints) ? raw.hints.filter((h) => typeof h === 'string' && h.trim()) : [];
 
   return {
@@ -39,7 +40,7 @@ function validateItem(item: unknown, index: number): ValidItem {
     publicData: {
       clue: raw.clue.trim(),
       enumeration: raw.enumeration ?? deriveEnumeration(raw.answer),
-      difficulty,
+      tier,
       hintCount: hints.length,
       rand: Math.random(), // Para muestreo aleatorio eficiente (where rand >= x).
       ...(raw.setter ? { setter: raw.setter } : {}),
@@ -87,7 +88,7 @@ async function main(): Promise<void> {
   for (const item of items) {
     existing[item.id] = {
       hash: await hashAnswer(hmacKey, item.id, item.secretData.answer),
-      difficulty: item.publicData.difficulty,
+      tier: item.publicData.tier,
       hints: item.secretData.hints,
       ...(item.secretData.explanation ? { explanation: item.secretData.explanation } : {}),
     };

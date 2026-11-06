@@ -19,6 +19,7 @@ interface RawDocument {
 
 export type Write =
   | { kind: 'update'; path: string; data: Record<string, unknown> } // merge de campos listados
+  | { kind: 'set'; path: string; data: Record<string, unknown> } // crea o reemplaza el documento
   | { kind: 'increment'; path: string; increments: Record<string, number> };
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
@@ -127,6 +128,9 @@ export class FirestoreRest {
     if (writes.length === 0) return;
     if (writes.length > 500) throw new AppError(500, 'too_many_writes', 'Más de 500 escrituras en un commit.');
     const body = writes.map((write) => {
+      if (write.kind === 'set') {
+        return { update: { name: this.name(write.path), fields: encodeFields(write.data) } };
+      }
       if (write.kind === 'update') {
         return {
           update: { name: this.name(write.path), fields: encodeFields(write.data) },

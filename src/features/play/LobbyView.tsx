@@ -2,12 +2,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Competition, Participant, UserProfile } from '../../../shared/types';
-import { SCORING_LABELS } from '../../../shared/scoring';
 import { api } from '../../lib/api';
 import { deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
 import { errorMessage } from '../../lib/utils';
 import { Avatar, Badge, Button, ErrorBanner } from '../../components/ui';
-import { describeMode } from '../competitions/CompetitionCard';
+import { describeMode, describeModifiers } from '../competitions/CompetitionCard';
 
 export function LobbyView({
   competition,
@@ -56,8 +55,9 @@ export function LobbyView({
       <div className="flex flex-wrap gap-2">
         <Badge tone="ok">En sala</Badge>
         <Badge>{describeMode(competition)}</Badge>
-        <Badge>{SCORING_LABELS[competition.scoring].title}</Badge>
-        <Badge>{competition.crypticIds.length} cripticos</Badge>
+        {describeModifiers(competition).map((tag) => (
+          <Badge key={tag}>{tag}</Badge>
+        ))}
         <Badge>{competition.maxHintsPerClue} pistas c/u</Badge>
       </div>
 

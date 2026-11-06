@@ -7,12 +7,13 @@ import { useSession } from '../../hooks/useAuth';
 import { useFriends } from '../../hooks/useFriends';
 import { useUsers } from '../../hooks/useUsers';
 import { cx, errorMessage } from '../../lib/utils';
+import { getGlobalPosition } from '../../lib/repo';
 import { ErrorBanner, PageHeader, Spinner } from '../../components/ui';
 import type { UserProfile } from '../../../shared/types';
 
 const TOP_LIMIT = 50;
 
-function RankingTable({ rows, meId }: { rows: UserProfile[]; meId: string }) {
+export function RankingTable({ rows, meId }: { rows: UserProfile[]; meId: string }) {
   return (
     <table className="w-full border-collapse text-sm">
       <thead>
@@ -20,7 +21,8 @@ function RankingTable({ rows, meId }: { rows: UserProfile[]; meId: string }) {
           <th className="w-12 py-2">#</th>
           <th className="py-2">Jugador</th>
           <th className="py-2 text-right">Partidas</th>
-          <th className="py-2 text-right">Victorias</th>
+          <th className="hidden py-2 text-right sm:table-cell">% Vict.</th>
+          <th className="hidden py-2 text-right sm:table-cell">Resueltos</th>
           <th className="py-2 text-right">Rating</th>
         </tr>
       </thead>
@@ -35,7 +37,10 @@ function RankingTable({ rows, meId }: { rows: UserProfile[]; meId: string }) {
               <span className="font-mono text-xs text-muted">@{user.handle}</span>
             </td>
             <td className="py-2.5 text-right font-mono">{user.stats.played}</td>
-            <td className="py-2.5 text-right font-mono">{user.stats.wins}</td>
+            <td className="hidden py-2.5 text-right font-mono sm:table-cell">
+              {user.stats.played > 0 ? `${Math.round((user.stats.wins / user.stats.played) * 100)}%` : '—'}
+            </td>
+            <td className="hidden py-2.5 text-right font-mono sm:table-cell">{user.stats.solved}</td>
             <td className="py-2.5 text-right font-mono font-semibold">{user.rating}</td>
           </tr>
         ))}
@@ -49,6 +54,7 @@ export default function RankingsPage() {
   const [tab, setTab] = useState<'global' | 'friends'>('global');
   const [top, setTop] = useState<UserProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [position, setPosition] = useState<number | null>(null);
   const { friendIds } = useFriends(profile.uid);
   const friendProfiles = useUsers(friendIds);
 
@@ -57,10 +63,13 @@ export default function RankingsPage() {
     getDocs(query(collection(db, 'users'), orderBy('rating', 'desc'), limit(TOP_LIMIT)))
       .then((snap) => !cancelled && setTop(snap.docs.map((d) => d.data() as UserProfile)))
       .catch((err: unknown) => !cancelled && setError(errorMessage(err)));
+    getGlobalPosition(profile.rating)
+      .then((value) => !cancelled && setPosition(value))
+      .catch((err: unknown) => console.error('[ranking] posición', err));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [profile.rating]);
 
   const friendsRows = [profile, ...friendProfiles.values()].sort((a, b) => b.rating - a.rating);
 
@@ -78,6 +87,10 @@ export default function RankingsPage() {
           </button>
         ))}
       </div>
+      <p className="mb-6 border-l-4 border-accent pl-3 text-sm">
+        Tu posición global: <strong className="font-mono">{position ? `#${position}` : '…'}</strong> · rating{' '}
+        <strong className="font-mono">{profile.rating}</strong>
+      </p>
       <ErrorBanner error={error} />
       {tab === 'global' ? (
         top === null ? <Spinner /> : <RankingTable rows={top} meId={profile.uid} />

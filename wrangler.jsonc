@@ -16,8 +16,8 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CompetitionRoom"] }],
   "vars": {
-    // Reemplazar por el id de tu proyecto Firebase.
-    "FIREBASE_PROJECT_ID": "REPLACE_WITH_FIREBASE_PROJECT_ID"
+    // Id del proyecto Firebase (público).
+    "FIREBASE_PROJECT_ID": "crypticus-eh"
   }
   // Secrets (no van aquí): `wrangler secret put FIREBASE_SERVICE_ACCOUNT` y `wrangler secret put ANSWER_HMAC_KEY`
 }

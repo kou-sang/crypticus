@@ -50,3 +50,14 @@ export function toHandle(raw: string): string {
     .replace(/[^a-z0-9_]/g, '')
     .slice(0, 20);
 }
+
+/** Tipo de dispositivo: puntero táctil grueso o UA móvil => móvil. */
+export function detectDevice(): 'mobile' | 'desktop' {
+  try {
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    const mobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    return coarse || mobileUa ? 'mobile' : 'desktop';
+  } catch {
+    return 'desktop';
+  }
+}

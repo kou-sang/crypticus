@@ -3,8 +3,19 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Logo } from '../../components/Logo';
 import { useAuth } from '../../hooks/useAuth';
-import { SCORING_LABELS } from '../../../shared/scoring';
-import type { ScoringRule } from '../../../shared/types';
+import { MODE_LABELS } from '../../../shared/scoring';
+import type { CompetitionMode } from '../../../shared/types';
+
+const RULES = [
+  { title: 'Clásico', text: 'Fácil, medio o difícil: más dificultad, más puntos.' },
+  { title: 'Menos pistas', text: 'Cada pista usada resta puntos.' },
+  { title: 'Velocidad', text: 'Bonus por resolver antes que el reloj.' },
+  { title: 'Diferencia de dos', text: 'Gana quien saque dos cripticos de ventaja. Si no, prórroga.' },
+  { title: 'Vota la dificultad', text: 'Cada ronda se elige el próximo. El que va perdiendo desempata.' },
+  { title: 'Remontada', text: 'Quien va atrás gana más, en proporción a la distancia.' },
+  { title: 'Tiempo extra', text: '¿Trabados? Si todos lo piden, el reloj suma segundos.' },
+  { title: 'Marcador oculto', text: 'Nadie sabe quién gana hasta el final.' },
+];
 
 const DEMO_ANSWER = 'CRYPTICUS';
 
@@ -95,28 +106,26 @@ export function LandingPage() {
       </section>
 
       <section id="modos" className="border-y-2 border-ink bg-paper-2/50">
-        <div className="mx-auto grid max-w-6xl gap-px bg-line md:grid-cols-2">
-          <div className="bg-paper p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Modo</p>
-            <h2 className="mt-1 font-display text-3xl">Por tiempo</h2>
-            <p className="mt-2 text-muted">Reloj fijo. Al sonar la campana, gana quien tenga más puntos.</p>
-          </div>
-          <div className="bg-paper p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Modo</p>
-            <h2 className="mt-1 font-display text-3xl">Por cantidad</h2>
-            <p className="mt-2 text-muted">Carrera a N cripticos. El primero en llegar se lleva la partida.</p>
-          </div>
+        <div className="mx-auto grid max-w-6xl gap-px bg-line md:grid-cols-3">
+          {(Object.keys(MODE_LABELS) as CompetitionMode[]).map((mode) => (
+            <div key={mode} className="bg-paper p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Modo</p>
+              <h2 className="mt-1 font-display text-3xl">{MODE_LABELS[mode].title}</h2>
+              <p className="mt-2 text-muted">{MODE_LABELS[mode].description}</p>
+            </div>
+          ))}
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="font-display text-4xl font-semibold">Criterios de puntaje</h2>
+        <h2 className="font-display text-4xl font-semibold">Reglas a tu medida</h2>
+        <p className="mt-2 text-muted">Combínalas antes de empezar: cada partida puede ser distinta.</p>
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {(Object.keys(SCORING_LABELS) as ScoringRule[]).map((rule, index) => (
-            <article key={rule} className="border-t-2 border-ink pt-3">
-              <p className="font-mono text-xs text-muted">0{index + 1}</p>
-              <h3 className="mt-1 font-display text-xl">{SCORING_LABELS[rule].title}</h3>
-              <p className="mt-1 text-sm text-muted">{SCORING_LABELS[rule].description}</p>
+          {RULES.map((rule, index) => (
+            <article key={rule.title} className="border-t-2 border-ink pt-3">
+              <p className="font-mono text-xs text-muted">{String(index + 1).padStart(2, '0')}</p>
+              <h3 className="mt-1 font-display text-xl">{rule.title}</h3>
+              <p className="mt-1 text-sm text-muted">{rule.text}</p>
             </article>
           ))}
         </div>

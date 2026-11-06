@@ -5,7 +5,8 @@ dist
 !.env.example
 *.local
 service-account*.json
-data/cryptics.json
+data/*.json
+!data/cryptics.example.json
 .firebase
 *.log
 .DS_Store

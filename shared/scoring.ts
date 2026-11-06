@@ -1,22 +1,35 @@
-// Motor de reglas de competencia: puntuación, ranking, fin de partida y rating.
-// Funciones puras: se ejecutan en el servidor (fuente de verdad) y en el cliente (previsualización).
+// Reglas de puntuación, daño al jefe, ranking, validación y rating.
+// Funciones puras usadas por el motor (servidor) y por la UI (previsualización).
 
 import type {
-  Competition,
+  BossLevel,
+  ComebackLevel,
   CompetitionConfig,
+  CompetitionMode,
   Difficulty,
+  GameFlow,
   Participant,
   RankedParticipant,
   ScoringRule,
+  TierMix,
 } from './types';
 
 export const DEFAULT_CONFIG: CompetitionConfig = {
   mode: 'timed',
   scoring: 'standard',
+  flow: 'free',
   durationSec: 600,
   targetCount: 5,
-  winByTwoMinScore: 3,
+  winByTwo: false,
+  difficultyVote: false,
+  rivalCountdownSec: 0,
+  comeback: 'off',
+  extraTime: { enabled: false, seconds: 60, maxUses: 2 },
+  bossLevel: 'normal',
   maxHintsPerClue: 3,
+  wrongPenalty: 0,
+  tierMix: 'balanced',
+  hideScoreboard: false,
 };
 
 export const LIMITS = {
@@ -24,78 +37,170 @@ export const LIMITS = {
   maxDurationSec: 3 * 60 * 60,
   minTargetCount: 1,
   maxTargetCount: 50,
-  minPlayers: 2,
+  minPlayers: 1,
   maxPlayers: 50,
+  maxCluesPerTier: 30,
+  minExtraSeconds: 10,
+  maxExtraSeconds: 300,
+  maxExtraUses: 5,
+  maxWrongPenalty: 100,
+  maxRivalCountdownSec: 120,
   minAttemptIntervalMs: 800, // Anti fuerza bruta.
+  overtimeRatio: 0.5, // Prórroga máxima de "diferencia de dos": 50 % de la duración.
+  winByTwoMargin: 2,
 } as const;
 
+// ---------- Etiquetas para la UI ----------
+
+export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil' };
+
+export const MODE_LABELS: Record<CompetitionMode, { title: string; description: string }> = {
+  timed: { title: 'Por tiempo', description: 'Más puntos al terminar el reloj.' },
+  count: { title: 'Por cantidad', description: 'El primero en resolver N gana.' },
+  boss: { title: 'Jefe', description: 'Cooperativo: bajen la vida del jefe antes de que acabe el tiempo.' },
+};
+
 export const SCORING_LABELS: Record<ScoringRule, { title: string; description: string }> = {
-  standard: { title: 'Clásico', description: 'Puntos según la dificultad del criptico.' },
+  standard: { title: 'Clásico', description: 'Puntos según la dificultad.' },
   fewestHints: { title: 'Menos pistas', description: 'Cada pista usada resta puntos.' },
   speed: { title: 'Velocidad', description: 'Bonus por resolver antes.' },
-  winByTwo: { title: 'Diferencia de dos', description: 'Duelo: gana quien saque 2 de ventaja.' },
 };
+
+export const FLOW_LABELS: Record<GameFlow, { title: string; description: string }> = {
+  free: { title: 'Libre', description: 'Cada uno a su ritmo por la misma lista.' },
+  rounds: { title: 'Rondas', description: 'Todos el mismo criptico; el primero en acertar se lo lleva.' },
+};
+
+export const COMEBACK_LABELS: Record<ComebackLevel, string> = { off: 'Sin remontada', low: 'Remontada suave', high: 'Remontada fuerte' };
+export const TIER_MIX_LABELS: Record<TierMix, string> = {
+  balanced: 'Equilibrada',
+  easy: 'Mayoría fáciles',
+  hard: 'Mayoría difíciles',
+  progressive: 'Progresiva (fácil → difícil)',
+};
+export const BOSS_LABELS: Record<BossLevel, string> = { normal: 'Normal', hard: 'Duro', epic: 'Épico' };
+
+// ---------- Puntaje ----------
 
 const BASE_POINTS = 100;
 const HINT_PENALTY = 30;
 const MIN_POINTS = 10;
 const MAX_SPEED_BONUS = 100;
+const BOSS_BASE_DAMAGE = 100;
+const BOSS_MIN_RATIO = 0.1;
 
-export function difficultyMultiplier(difficulty: Difficulty): number {
-  return 1 + (difficulty - 1) * 0.25; // 1.00 .. 2.00
+export const BOSS_HP_PER_PLAYER: Record<BossLevel, number> = { normal: 350, hard: 500, epic: 700 };
+/** Vida que recupera el jefe por cada respuesta incorrecta. */
+export const BOSS_HEAL_ON_MISS: Record<BossLevel, number> = { normal: 15, hard: 25, epic: 40 };
+
+const TIER_MULTIPLIER: Record<Difficulty, number> = { easy: 1, medium: 1.5, hard: 2 };
+/** Peso de la dificultad en la remontada: los fáciles no dan bonus de remontada. */
+const TIER_COMEBACK_WEIGHT: Record<Difficulty, number> = { easy: 0, medium: 0.5, hard: 1 };
+const COMEBACK_STRENGTH: Record<ComebackLevel, number> = { off: 0, low: 0.5, high: 1 };
+
+export function tierMultiplier(tier: Difficulty): number {
+  return TIER_MULTIPLIER[tier];
+}
+
+/** Proporción [0,1] que le falta a `score` para alcanzar al líder. 0 si es líder. */
+export function gapRatio(score: number, leaderScore: number): number {
+  if (leaderScore <= 0 || score >= leaderScore) return 0;
+  return (leaderScore - Math.max(0, score)) / leaderScore;
+}
+
+/**
+ * Multiplicador de remontada, proporcional al puntaje propio respecto del líder.
+ * Ej.: remontada fuerte, difícil, con la mitad de puntos del líder => ×1.5.
+ */
+export function comebackFactor(level: ComebackLevel, tier: Difficulty, score: number, leaderScore: number): number {
+  return 1 + COMEBACK_STRENGTH[level] * TIER_COMEBACK_WEIGHT[tier] * gapRatio(score, leaderScore);
 }
 
 export interface SolveInput {
   rule: ScoringRule;
-  difficulty: Difficulty;
+  tier: Difficulty;
   hintsUsed: number;
-  elapsedMs: number; // Desde el inicio de la competencia.
-  durationMs: number;
+  remainingRatio: number; // Tiempo restante / duración, en [0,1].
+  comeback: ComebackLevel;
+  score: number; // Puntaje actual del jugador.
+  leaderScore: number; // Puntaje del líder (excluye a nadie).
 }
 
 /** Puntos otorgados por resolver un criptico. */
 export function computeSolvePoints(input: SolveInput): number {
-  const { rule, difficulty, hintsUsed, elapsedMs, durationMs } = input;
-  if (rule === 'winByTwo') return 1;
-
-  const base = Math.round(BASE_POINTS * difficultyMultiplier(difficulty));
-
-  if (rule === 'standard') return base;
-
-  if (rule === 'fewestHints') {
-    return Math.max(MIN_POINTS, base - HINT_PENALTY * Math.max(0, hintsUsed));
+  const base = BASE_POINTS * TIER_MULTIPLIER[input.tier];
+  let raw: number;
+  if (input.rule === 'fewestHints') {
+    raw = Math.max(MIN_POINTS, base - HINT_PENALTY * Math.max(0, input.hintsUsed));
+  } else if (input.rule === 'speed') {
+    raw = base + MAX_SPEED_BONUS * clamp01(input.remainingRatio);
+  } else {
+    raw = base;
   }
-
-  // speed: bonus lineal decreciente según el tiempo transcurrido.
-  const safeDuration = Math.max(1, durationMs);
-  const remainingRatio = Math.min(1, Math.max(0, 1 - elapsedMs / safeDuration));
-  return base + Math.round(MAX_SPEED_BONUS * remainingRatio);
+  return Math.round(raw * comebackFactor(input.comeback, input.tier, input.score, input.leaderScore));
 }
+
+/** Daño al jefe: proporcional al tiempo restante (con un mínimo del 10 %). */
+export function computeBossDamage(tier: Difficulty, remainingRatio: number): number {
+  return Math.round(BOSS_BASE_DAMAGE * TIER_MULTIPLIER[tier] * Math.max(BOSS_MIN_RATIO, clamp01(remainingRatio)));
+}
+
+export function bossMaxHp(level: BossLevel, players: number): number {
+  return BOSS_HP_PER_PLAYER[level] * Math.max(1, players);
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+}
+
+// ---------- Validación ----------
 
 /** Valida una configuración; devuelve la lista de errores (vacía si es válida). */
 export function validateConfig(config: CompetitionConfig, maxPlayers: number): string[] {
   const errors: string[] = [];
   if (config.durationSec < LIMITS.minDurationSec || config.durationSec > LIMITS.maxDurationSec) {
-    errors.push(`La duración debe estar entre ${LIMITS.minDurationSec}s y ${LIMITS.maxDurationSec}s.`);
+    errors.push(`La duración debe estar entre ${LIMITS.minDurationSec / 60} y ${LIMITS.maxDurationSec / 60} minutos.`);
   }
   if (config.mode === 'count' && (config.targetCount < LIMITS.minTargetCount || config.targetCount > LIMITS.maxTargetCount)) {
-    errors.push(`La meta debe estar entre ${LIMITS.minTargetCount} y ${LIMITS.maxTargetCount} cripticos.`);
+    errors.push(`La meta debe estar entre ${LIMITS.minTargetCount} y ${LIMITS.maxTargetCount}.`);
   }
   if (maxPlayers < LIMITS.minPlayers || maxPlayers > LIMITS.maxPlayers) {
     errors.push(`Los jugadores deben estar entre ${LIMITS.minPlayers} y ${LIMITS.maxPlayers}.`);
   }
-  if (config.scoring === 'winByTwo' && maxPlayers !== 2) {
-    errors.push('"Diferencia de dos" es un duelo: exactamente 2 jugadores.');
+  if (config.winByTwo && config.mode === 'boss') errors.push('"Diferencia de dos" no aplica al modo jefe.');
+  if (config.winByTwo && maxPlayers < 2) errors.push('"Diferencia de dos" requiere al menos 2 jugadores.');
+  if (config.difficultyVote && config.flow !== 'rounds') errors.push('Votar dificultad requiere el flujo por rondas.');
+  if (config.rivalCountdownSec < 0 || config.rivalCountdownSec > LIMITS.maxRivalCountdownSec) {
+    errors.push(`La cuenta atrás debe estar entre 0 y ${LIMITS.maxRivalCountdownSec} segundos.`);
   }
-  if (config.maxHintsPerClue < 0 || config.maxHintsPerClue > 10) {
-    errors.push('Las pistas por criptico deben estar entre 0 y 10.');
+  if (config.rivalCountdownSec > 0 && config.flow !== 'rounds') errors.push('La cuenta atrás tras acierto requiere el flujo por rondas.');
+  if (config.extraTime.enabled) {
+    if (config.extraTime.seconds < LIMITS.minExtraSeconds || config.extraTime.seconds > LIMITS.maxExtraSeconds) {
+      errors.push(`El tiempo extra debe estar entre ${LIMITS.minExtraSeconds} y ${LIMITS.maxExtraSeconds} segundos.`);
+    }
+    if (config.extraTime.maxUses < 1 || config.extraTime.maxUses > LIMITS.maxExtraUses) {
+      errors.push(`Los usos de tiempo extra deben estar entre 1 y ${LIMITS.maxExtraUses}.`);
+    }
+  }
+  if (config.maxHintsPerClue < 0 || config.maxHintsPerClue > 10) errors.push('Las pistas por criptico deben estar entre 0 y 10.');
+  if (config.wrongPenalty < 0 || config.wrongPenalty > LIMITS.maxWrongPenalty) {
+    errors.push(`La penalización debe estar entre 0 y ${LIMITS.maxWrongPenalty}.`);
   }
   return errors;
 }
 
-/** Ordena: más puntos > menos pistas > resolvió antes > se unió antes. */
-export function rankParticipants(participants: Participant[]): RankedParticipant[] {
+// ---------- Ranking ----------
+
+export type RankMetric = 'score' | 'solved';
+
+/**
+ * Orden: métrica principal (puntos, o resueltos en "diferencia de dos") > puntos > menos pistas
+ * > resolvió antes > se unió antes. Empates exactos comparten posición.
+ */
+export function rankParticipants(participants: Participant[], metric: RankMetric = 'score'): RankedParticipant[] {
+  const primary = (p: Participant) => (metric === 'solved' ? p.solvedIds.length : p.score);
   const sorted = [...participants].sort((a, b) => {
+    if (primary(b) !== primary(a)) return primary(b) - primary(a);
     if (b.score !== a.score) return b.score - a.score;
     if (a.hintsUsed !== b.hintsUsed) return a.hintsUsed - b.hintsUsed;
     const aTime = a.lastSolvedAt ?? Number.POSITIVE_INFINITY;
@@ -104,74 +209,18 @@ export function rankParticipants(participants: Participant[]): RankedParticipant
     return a.joinedAt - b.joinedAt;
   });
 
-  // Empates exactos comparten posición (ranking estilo "1, 1, 3").
   const ranked: RankedParticipant[] = [];
   sorted.forEach((participant, index) => {
     const previous = ranked[index - 1];
     const tied =
       previous !== undefined &&
+      primary(previous) === primary(participant) &&
       previous.score === participant.score &&
       previous.hintsUsed === participant.hintsUsed &&
       previous.lastSolvedAt === participant.lastSolvedAt;
     ranked.push({ ...participant, rank: tied ? previous.rank : index + 1 });
   });
   return ranked;
-}
-
-export type EndReason = 'time' | 'target' | 'winByTwo' | 'exhausted' | null;
-
-export interface EndEvaluation {
-  finished: boolean;
-  reason: EndReason;
-  winnerId: string | null;
-}
-
-type EndCompetitionFields = Pick<
-  Competition,
-  'mode' | 'scoring' | 'targetCount' | 'winByTwoMinScore' | 'endsAt' | 'crypticIds'
->;
-
-/** Decide si la competencia terminó y quién ganó. */
-export function evaluateEnd(
-  competition: EndCompetitionFields,
-  participants: Participant[],
-  now: number,
-): EndEvaluation {
-  const ranked = rankParticipants(participants);
-  const leader = ranked[0];
-  const runnerUp = ranked[1];
-  const leaderId = leader && (!runnerUp || runnerUp.rank !== leader.rank) ? leader.uid : null;
-  const totalClues = competition.crypticIds.length;
-
-  if (competition.scoring === 'winByTwo' && leader) {
-    const lead = leader.score - (runnerUp?.score ?? 0);
-    if (leader.score >= competition.winByTwoMinScore && lead >= 2) {
-      return { finished: true, reason: 'winByTwo', winnerId: leader.uid };
-    }
-  }
-
-  if (competition.mode === 'count' && competition.scoring !== 'winByTwo') {
-    const target = Math.min(competition.targetCount, totalClues);
-    // El primero en llegar a la meta gana (desempate por lastSolvedAt ya aplicado en ranking).
-    const finishers = ranked
-      .filter((p) => p.solvedIds.length >= target)
-      .sort((a, b) => (a.lastSolvedAt ?? Infinity) - (b.lastSolvedAt ?? Infinity));
-    if (finishers[0]) {
-      return { finished: true, reason: 'target', winnerId: finishers[0].uid };
-    }
-  }
-
-  const everyoneExhausted =
-    participants.length > 0 && participants.every((p) => p.solvedIds.length >= totalClues);
-  if (everyoneExhausted) {
-    return { finished: true, reason: 'exhausted', winnerId: leaderId };
-  }
-
-  if (competition.endsAt !== null && now >= competition.endsAt) {
-    return { finished: true, reason: 'time', winnerId: leaderId };
-  }
-
-  return { finished: false, reason: null, winnerId: null };
 }
 
 /**
@@ -190,7 +239,6 @@ export function computeRatingDeltas(
     return deltas;
   }
   const k = kFactor / (n - 1);
-
   for (const player of ranked) {
     const playerRating = ratings[player.uid] ?? 1200;
     let delta = 0;
@@ -206,8 +254,23 @@ export function computeRatingDeltas(
   return deltas;
 }
 
-/** Siguiente criptico pendiente para un participante (orden fijo de la competencia). */
-export function nextPendingClue(crypticIds: string[], solvedIds: string[]): string | null {
-  const solved = new Set(solvedIds);
-  return crypticIds.find((id) => !solved.has(id)) ?? null;
+/** Convierte etiquetas libres de importación a dificultad. */
+export function parseDifficulty(raw: unknown): Difficulty | null {
+  if (raw === undefined || raw === null || raw === '') return 'medium';
+  if (typeof raw === 'number') {
+    if (raw <= 2) return 'easy';
+    if (raw === 3) return 'medium';
+    if (raw <= 5) return 'hard';
+    return null;
+  }
+  const value = String(raw)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase();
+  if (['easy', 'facil', 'f'].includes(value)) return 'easy';
+  if (['medium', 'medio', 'media', 'normal', 'm'].includes(value)) return 'medium';
+  if (['hard', 'dificil', 'd'].includes(value)) return 'hard';
+  if (/^\d$/.test(value)) return parseDifficulty(Number(value));
+  return null;
 }

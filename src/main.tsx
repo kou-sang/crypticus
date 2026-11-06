@@ -5,6 +5,9 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 import './index.css';
 import { App } from './App';
+import { applyDocumentSettings } from './lib/settings';
+
+applyDocumentSettings();
 
 const container = document.getElementById('root');
 if (!container) throw new Error('No se encontró #root');

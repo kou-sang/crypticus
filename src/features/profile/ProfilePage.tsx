@@ -1,16 +1,17 @@
 // Perfil público de un jugador con historial reciente.
-import { useState } from 'react';
-import { useParams } from 'react-router';
-import { collection, doc, limit, orderBy, query, where } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router';
+import { doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
-import { useLiveDoc, useLiveQuery } from '../../hooks/useFirestore';
+import { useLiveDoc } from '../../hooks/useFirestore';
 import { useFriends } from '../../hooks/useFriends';
-import { sendFriendRequest } from '../../lib/repo';
+import { getHistory, sendFriendRequest } from '../../lib/repo';
 import { errorMessage, pairId } from '../../lib/utils';
 import { Avatar, Button, EmptyState, ErrorBanner, PageLoader } from '../../components/ui';
-import type { Competition, UserProfile } from '../../../shared/types';
-import { CompetitionCard } from '../competitions/CompetitionCard';
+import type { HistoryEntry, UserProfile } from '../../../shared/types';
+import { RatingChart } from '../../components/RatingChart';
+import { HistoryTable } from '../history/HistoryPage';
 
 export default function ProfilePage() {
   const { uid = '' } = useParams();
@@ -20,17 +21,18 @@ export default function ProfilePage() {
   const [busy, setBusy] = useState(false);
 
   const user = useLiveDoc<UserProfile>(uid ? doc(db, 'users', uid) : null, [uid]);
-  const history = useLiveQuery<Competition>(
-    uid
-      ? query(
-          collection(db, 'competitions'),
-          where('participantIds', 'array-contains', uid),
-          orderBy('createdAt', 'desc'),
-          limit(6),
-        )
-      : null,
-    [uid],
-  );
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    getHistory(uid, 20)
+      .then((list) => !cancelled && setHistory(list))
+      .catch((err: unknown) => console.error('[perfil] historial', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
 
   if (user.loading) return <PageLoader />;
   if (!user.data) return <EmptyState title="Jugador no encontrado" />;
@@ -85,14 +87,23 @@ export default function ProfilePage() {
         ))}
       </dl>
 
-      <h2 className="mb-4 font-display text-2xl">Historial</h2>
-      {history.data.length === 0 ? (
-        <EmptyState title="Sin partidas todavía" />
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {history.data.map((c) => <CompetitionCard key={c.id} competition={c} />)}
-        </div>
-      )}
+      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+        <section>
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="font-display text-2xl">Historial</h2>
+            {isMe && (
+              <Link to="/historial" className="text-sm font-semibold underline underline-offset-4">
+                Ver todo
+              </Link>
+            )}
+          </div>
+          {history.length === 0 ? <EmptyState title="Sin partidas todavía" /> : <HistoryTable entries={history.slice(0, 10)} />}
+        </section>
+        <section>
+          <h2 className="mb-4 font-display text-2xl">Rating</h2>
+          <RatingChart history={history} />
+        </section>
+      </div>
     </>
   );
 }

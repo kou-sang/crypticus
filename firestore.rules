@@ -34,6 +34,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Historial de partidas y rating: lo escribe el servidor al terminar cada partida.
+    match /users/{uid}/history/{competitionId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // Unicidad de @handle: el id del doc es el handle.
     match /handles/{handle} {
       allow read: if signedIn();
@@ -66,12 +72,23 @@ service cloud.firestore {
         && next().participantIds == [request.auth.uid]
         && next().crypticIds is list
         && next().crypticIds.size() >= 1
-        && next().crypticIds.size() <= 50
+        && next().crypticIds.size() <= 150
+        && next().pool is map
         && next().maxPlayers is int
-        && next().maxPlayers >= 2
+        && next().maxPlayers >= 1
         && next().maxPlayers <= 50
-        && next().mode in ['timed', 'count']
-        && next().scoring in ['standard', 'fewestHints', 'speed', 'winByTwo']
+        && next().mode in ['timed', 'count', 'boss']
+        && next().scoring in ['standard', 'fewestHints', 'speed']
+        && next().flow in ['free', 'rounds']
+        && next().winByTwo is bool
+        && next().difficultyVote is bool
+        && next().rivalCountdownSec is int && next().rivalCountdownSec >= 0 && next().rivalCountdownSec <= 120
+        && next().hideScoreboard is bool
+        && next().comeback in ['off', 'low', 'high']
+        && next().bossLevel in ['normal', 'hard', 'epic']
+        && next().tierMix in ['balanced', 'easy', 'hard', 'progressive']
+        && next().extraTime is map
+        && next().wrongPenalty is int && next().wrongPenalty >= 0 && next().wrongPenalty <= 100
         && next().visibility in ['public', 'friends', 'private']
         && next().title is string && next().title.size() >= 3 && next().title.size() <= 60
         && next().startedAt == null && next().endsAt == null
@@ -101,7 +118,8 @@ service cloud.firestore {
           && request.resource.data.score == 0
           && request.resource.data.solvedIds == []
           && request.resource.data.hintsUsed == 0
-          && request.resource.data.attempts == 0;
+          && request.resource.data.attempts == 0
+          && request.resource.data.wrongAttempts == 0;
         // Salir del lobby, o borrar la competencia entera (anfitrión) en el mismo batch.
         allow delete: if isUser(uid)
           && (!existsAfter(/databases/$(database)/documents/competitions/$(competitionId))

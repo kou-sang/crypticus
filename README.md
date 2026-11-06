@@ -2,7 +2,6 @@
 
 Plataforma web de competencias de cripticos en tiempo real: amigos, chat, rankings y varios modos de juego.
 
-> **Variante B — Firebase + Cloudflare.** La variante A (Firebase + Vercel) vive en la rama `feat/initial-platform`.
 
 ## Stack
 
@@ -18,20 +17,21 @@ Plataforma web de competencias de cripticos en tiempo real: amigos, chat, rankin
 
 ### Flujo de una partida
 
-1. Lobby en Firestore (crear, unirse, salir) — igual que la variante A.
+1. Lobby en Firestore (crear, unirse, salir).
 2. El anfitrión llama `POST /api/competitions/start`: el Worker lee la sala por REST, inicializa el Durable Object y marca `live` en Firestore.
 3. Cada cliente abre `wss://…/api/competitions/:id/ws`, se autentica con su ID token y juega: **respuestas y pistas se validan en memoria del DO** (sin base de datos en el camino crítico).
 4. Al terminar (meta, ventaja de dos o alarma de tiempo), el DO escribe resultados, rating y estadísticas en Firestore y reintenta por alarma si falla.
 
-## Modos y puntajes
+## Modos y reglas
 
-- **Tipo**: `timed` (gana quien tenga más puntos al acabar el reloj) · `count` (carrera: primero en resolver N).
-- **Puntaje**:
-  - `standard` — 100 × multiplicador de dificultad (1.00–2.00).
-  - `fewestHints` — base − 30 por pista (mínimo 10).
-  - `speed` — base + bonus de hasta 100 decreciente con el tiempo.
-  - `winByTwo` — duelo 1v1; 1 punto por criptico; termina cuando el líder alcanza el mínimo y saca **2 de ventaja**.
-- **Desempate**: puntos → menos pistas → resolvió antes → se unió antes.
+Se configuran antes de empezar (ver `CreateCompetitionPage`):
+
+- **Modo**: `timed` (más puntos al acabar el reloj) · `count` (primero en N cripticos o rondas) · `boss` (cooperativo contra un jefe).
+- **Flujo**: `free` (cada uno a su ritmo por la lista) · `rounds` (todos el mismo criptico; el primero en acertar se lo lleva).
+- **Puntaje** (competitivo): `standard` · `fewestHints` · `speed`. Base = 100 × dificultad (fácil 1 · medio 1,5 · difícil 2).
+- **Remontada**: × (1 + k · peso · (líder − tú) / líder). Peso: fácil 0, medio 0,5, difícil 1; k: suave 0,5, fuerte 1.
+- **Modificadores**: diferencia de dos (ventaja de 2 resueltos, con prórroga del 50 %), votar dificultad (rondas; en empate decide quien va último), cuenta atrás tras acierto (rondas; efecto desmayo), tiempo extra por unanimidad, penalización por error, mezcla de dificultades y marcador oculto.
+- **Jefe**: vida = 350 / 500 / 700 por jugador. Daño = 100 × dificultad × tiempo restante en proporción (mínimo 10 %). Fallar cura 15 / 25 / 40. No cambia el rating.
 - **Rating**: Elo multijugador por pares (K = 32 / (n − 1)).
 
 ## Estructura
@@ -50,7 +50,7 @@ firestore.rules      Seguridad: el cliente nunca escribe puntajes
 
 ## Puesta en marcha
 
-Ver la guía completa de despliegue en la descripción del PR. Resumen:
+Guía completa en [`docs/DEPLOY.md`](docs/DEPLOY.md). Resumen:
 
 ```bash
 npm install
@@ -66,13 +66,13 @@ npm run deploy                                  # build + wrangler deploy
 ### Formato de cripticos
 
 ```json
-{ "clue": "Texto de la pista (5)", "answer": "respuesta", "difficulty": 1-5,
+{ "clue": "Texto de la pista (5)", "answer": "respuesta", "difficulty": "facil | medio | dificil",
   "hints": ["pista 1", "pista 2"], "explanation": "opcional", "enumeration": "opcional, se deriva" }
 ```
 
 ## Límites del plan gratuito (importante)
 
-- **Firestore Spark**: 50 000 lecturas/día y 20 000 escrituras/día. En esta variante el marcador en vivo **no** consume Firestore; solo lobby, chat, perfiles y resultados finales.
+- **Firestore Spark**: 50 000 lecturas/día y 20 000 escrituras/día. El juego en vivo **no** consume Firestore; solo lobby, chat, perfiles y resultados finales.
 - **Workers Free**: 100 000 peticiones/día a `/api/*` (los assets estáticos son gratis e ilimitados). Durable Objects tiene cuotas propias en el plan Free; revisa el panel de Cloudflare si el volumen crece.
 
 ## Scripts

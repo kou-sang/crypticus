@@ -11,8 +11,9 @@
   --ok: #2f6b3a;
 }
 
+/* Tema: sistema por defecto; ajustes puede forzar claro u oscuro (atributo data-theme en <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --paper: #16150f;
     --paper-2: #211f18;
     --ink: #ece6d8;
@@ -21,6 +22,16 @@
     --accent: #e0573b;
     --ok: #6fb07a;
   }
+}
+
+:root[data-theme='dark'] {
+  --paper: #16150f;
+  --paper-2: #211f18;
+  --ink: #ece6d8;
+  --muted: #9b9484;
+  --line: #36332a;
+  --accent: #e0573b;
+  --ok: #6fb07a;
 }
 
 @theme {
@@ -73,6 +84,69 @@ body {
   75% { transform: translateX(6px); }
 }
 
+/* ---------- Animaciones de juego ---------- */
+
+@keyframes cell-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25) rotate(-4deg); }
+  100% { transform: scale(1); }
+}
+.cell-pop { animation: cell-pop 420ms cubic-bezier(.2,.9,.3,1.4) both; }
+
+@keyframes burst {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.3); opacity: 0; }
+}
+.burst-dot { animation: burst 700ms ease-out forwards; }
+
+@keyframes float-up {
+  0% { transform: translate(-50%, 0); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(-50%, -64px); opacity: 0; }
+}
+.float-up { animation: float-up 1100ms ease-out forwards; }
+
+@keyframes boss-idle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.boss-idle { animation: boss-idle 2.4s ease-in-out infinite; }
+
+@keyframes boss-hit {
+  0% { transform: translateX(0) rotate(0); filter: none; }
+  20% { transform: translateX(-10px) rotate(-6deg); filter: brightness(1.8) saturate(0); }
+  40% { transform: translateX(8px) rotate(4deg); }
+  60% { transform: translateX(-5px) rotate(-2deg); }
+  100% { transform: none; filter: none; }
+}
+.boss-hit { animation: boss-hit 480ms ease-out; }
+
+@keyframes boss-heal {
+  0%, 100% { filter: none; }
+  50% { filter: drop-shadow(0 0 14px var(--ok)) brightness(1.15); }
+}
+.boss-heal { animation: boss-heal 700ms ease-in-out; }
+
+@keyframes toast-in {
+  from { transform: translateX(110%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.toast-in { animation: toast-in 260ms cubic-bezier(.2,.8,.2,1) both; }
+
+/* Movimiento reducido: por sistema (si no se fuerza) o forzado desde ajustes. */
 @media (prefers-reduced-motion: reduce) {
-  .fade-in { animation: none; }
+  :root:not([data-motion='full']) *,
+  :root:not([data-motion='full']) *::before,
+  :root:not([data-motion='full']) *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
 }

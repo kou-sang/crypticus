@@ -38,8 +38,6 @@ async function post<T>(path: string, body: Record<string, unknown>): Promise<T> 
   return payload.data;
 }
 
-export type { AnswerReply as AnswerResult, HintReply as HintResult } from '../../shared/protocol';
-
 export const api = {
   start: (competitionId: string) => post<{ startedAt: number; endsAt: number }>('competitions/start', { competitionId }),
 };

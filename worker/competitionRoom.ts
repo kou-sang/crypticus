@@ -1,48 +1,52 @@
-// Durable Object: un árbitro autoritativo por competencia.
-// Estado en memoria + SQLite local del DO; WebSocket con hibernación; cierre por alarma.
-// Firestore solo se toca al iniciar (vía Worker) y al terminar (resultados, rating, estadísticas).
+// Durable Object: árbitro autoritativo de una competencia.
+// Ejecuta shared/engine.ts en memoria, persiste en el SQLite local del DO, difunde el estado por
+// WebSocket (con hibernación) y usa alarmas para fin por tiempo, prórroga y reintentos de sincronización.
 import { DurableObject } from 'cloudflare:workers';
 import { verifyAnswer } from '../shared/answerHash';
-import { computeRatingDeltas, computeSolvePoints, evaluateEnd, LIMITS, rankParticipants, type EndEvaluation } from '../shared/scoring';
-import type { Competition, CompetitionStatus, Participant } from '../shared/types';
+import {
+  applyAnswer,
+  applyDifficultyVote,
+  applyHint,
+  createLiveState,
+  GameError,
+  nextDeadline,
+  rankState,
+  reserveAttempt,
+  tick,
+  toggleExtraTime,
+  toggleSkip,
+  type LiveState,
+} from '../shared/engine';
+import { computeRatingDeltas } from '../shared/scoring';
+import type { CompetitionConfig, Difficulty, Participant } from '../shared/types';
 import {
   MAX_CLIENT_MESSAGE_BYTES,
+  type AckReply,
+  type ActionMessage,
   type AnswerReply,
   type ClientMessage,
   type HintReply,
-  type RoomSnapshot,
   type ServerMessage,
 } from '../shared/protocol';
 import { verifyFirebaseToken } from './auth';
 import { AppError } from './errors';
 import { FirestoreRest, type Write } from './firestore';
-import { getCrypticSecret } from './secrets';
+import { buildCatalog, getCrypticSecret } from './secrets';
 import type { Env } from './env';
-
-type RoomConfig = Pick<
-  Competition,
-  'mode' | 'scoring' | 'durationSec' | 'targetCount' | 'winByTwoMinScore' | 'maxHintsPerClue' | 'crypticIds' | 'hostId'
->;
-
-interface RoomState {
-  competitionId: string;
-  config: RoomConfig;
-  status: CompetitionStatus;
-  startedAt: number;
-  endsAt: number;
-  participants: Record<string, Participant>;
-  winnerId: string | null;
-  endReason: EndEvaluation['reason'];
-  synced: boolean; // Resultado persistido en Firestore
-  syncAttempts: number;
-}
 
 export interface StartInput {
   competitionId: string;
-  config: RoomConfig;
+  title: string;
+  config: CompetitionConfig;
   participants: Participant[];
+  crypticIds: string[];
+  pool: Record<Difficulty, string[]>;
   startedAt: number;
-  endsAt: number;
+}
+
+interface SyncMeta {
+  synced: boolean;
+  attempts: number;
 }
 
 interface SocketAttachment {
@@ -50,17 +54,20 @@ interface SocketAttachment {
 }
 
 const STATE_KEY = 'state';
+const SYNC_KEY = 'sync';
 const SYNC_RETRY_MS = 15_000;
 const MAX_SYNC_ATTEMPTS = 20;
 
 export class CompetitionRoom extends DurableObject<Env> {
-  private state: RoomState | null = null;
+  private state: LiveState | null = null;
+  private sync: SyncMeta = { synced: false, attempts: 0 };
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // Restaura el estado tras hibernación/desalojo antes de procesar cualquier evento.
     ctx.blockConcurrencyWhile(async () => {
-      this.state = (await ctx.storage.get<RoomState>(STATE_KEY)) ?? null;
+      this.state = (await ctx.storage.get<LiveState>(STATE_KEY)) ?? null;
+      this.sync = (await ctx.storage.get<SyncMeta>(SYNC_KEY)) ?? { synced: false, attempts: 0 };
     });
   }
 
@@ -69,35 +76,28 @@ export class CompetitionRoom extends DurableObject<Env> {
   /** Idempotente: si ya inició, devuelve los tiempos existentes. */
   async start(input: StartInput): Promise<{ startedAt: number; endsAt: number }> {
     if (this.state) {
-      if (this.state.competitionId !== input.competitionId) throw new AppError(409, 'room_mismatch', 'Sala inconsistente.');
+      if (this.state.competitionId !== input.competitionId) throw new Error('Sala inconsistente.');
       return { startedAt: this.state.startedAt, endsAt: this.state.endsAt };
     }
-    const participants: Record<string, Participant> = {};
-    for (const p of input.participants) participants[p.uid] = p;
-
-    this.state = {
+    const allIds = [...new Set([...input.crypticIds, ...input.pool.easy, ...input.pool.medium, ...input.pool.hard])];
+    this.state = createLiveState({
       competitionId: input.competitionId,
+      title: input.title,
       config: input.config,
-      status: 'live',
+      participants: input.participants,
+      crypticIds: input.crypticIds,
+      pool: input.pool,
+      catalog: buildCatalog(allIds),
       startedAt: input.startedAt,
-      endsAt: input.endsAt,
-      participants,
-      winnerId: null,
-      endReason: null,
-      synced: false,
-      syncAttempts: 0,
-    };
-    await this.persist();
-    await this.ctx.storage.setAlarm(input.endsAt);
-    return { startedAt: input.startedAt, endsAt: input.endsAt };
+    });
+    await this.commit();
+    return { startedAt: this.state.startedAt, endsAt: this.state.endsAt };
   }
 
   // ---------- WebSocket ----------
 
   async fetch(request: Request): Promise<Response> {
-    if (request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('Se esperaba WebSocket', { status: 426 });
-    }
+    if (request.headers.get('Upgrade') !== 'websocket') return new Response('Se esperaba WebSocket', { status: 426 });
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server);
@@ -111,7 +111,6 @@ export class CompetitionRoom extends DurableObject<Env> {
       this.send(ws, { type: 'error', code: 'too_large', message: 'Mensaje demasiado grande.' });
       return;
     }
-
     let message: ClientMessage;
     try {
       message = JSON.parse(text) as ClientMessage;
@@ -120,31 +119,18 @@ export class CompetitionRoom extends DurableObject<Env> {
       return;
     }
 
-    if (message.type === 'ping') {
-      this.send(ws, { type: 'pong', serverTime: Date.now() });
-      return;
-    }
-
-    if (message.type === 'auth') {
-      await this.handleAuth(ws, message.token);
-      return;
-    }
+    if (message.type === 'ping') return this.send(ws, { type: 'pong', serverTime: Date.now() });
+    if (message.type === 'auth') return this.handleAuth(ws, message.token);
 
     const uid = (ws.deserializeAttachment() as SocketAttachment | null)?.uid ?? null;
     const reqId = typeof message.reqId === 'string' ? message.reqId.slice(0, 40) : '';
     try {
       if (!uid) throw new AppError(401, 'unauthenticated', 'Autentícate primero.');
-      if (typeof message.crypticId !== 'string') throw new AppError(400, 'bad_body', 'crypticId inválido.');
-      const data =
-        message.type === 'answer'
-          ? await this.handleAnswer(uid, message.crypticId, String(message.guess ?? '').slice(0, 100))
-          : await this.handleHint(uid, message.crypticId, message.reveal === true);
+      const data = await this.handleAction(uid, message);
       this.send(ws, { type: 'reply', reqId, ok: true, data });
     } catch (error) {
-      const appError =
-        error instanceof AppError ? error : new AppError(500, 'internal', 'Error interno.');
-      if (!(error instanceof AppError)) console.error('[room] error', error);
-      this.send(ws, { type: 'reply', reqId, ok: false, error: { code: appError.code, message: appError.message } });
+      const { code, message: text } = describeError(error);
+      this.send(ws, { type: 'reply', reqId, ok: false, error: { code, message: text } });
     }
   }
 
@@ -152,7 +138,7 @@ export class CompetitionRoom extends DurableObject<Env> {
     try {
       ws.close(code === 1005 ? 1000 : code, 'bye');
     } catch {
-      // El socket ya estaba cerrado.
+      // Ya estaba cerrado.
     }
   }
 
@@ -160,170 +146,140 @@ export class CompetitionRoom extends DurableObject<Env> {
     console.warn('[room] websocket error', error);
   }
 
-  // ---------- Alarma: fin por tiempo y reintentos de sincronización ----------
+  // ---------- Alarma ----------
 
   async alarm(): Promise<void> {
-    if (!this.state) return;
-    if (this.state.status === 'live') {
-      const evaluation = this.evaluate(Date.now());
-      await this.finish(evaluation.finished ? evaluation : { finished: true, reason: 'time', winnerId: null });
+    const state = this.state;
+    if (!state) return;
+    if (state.status === 'live') {
+      const result = tick(state, Date.now());
+      await this.commit();
+      if (result.finished) await this.syncResults();
       return;
     }
-    if (!this.state.synced) await this.syncResults();
+    if (!this.sync.synced) await this.syncResults();
   }
 
-  // ---------- Handlers ----------
+  // ---------- Acciones ----------
 
   private async handleAuth(ws: WebSocket, token: unknown): Promise<void> {
     try {
       const user = await verifyFirebaseToken(typeof token === 'string' ? token : '', this.env.FIREBASE_PROJECT_ID);
       ws.serializeAttachment({ uid: user.uid } satisfies SocketAttachment);
-      this.send(ws, { type: 'ready', uid: user.uid, snapshot: this.snapshot() });
+      this.send(ws, { type: 'ready', uid: user.uid, state: this.state, serverTime: Date.now() });
     } catch (error) {
-      const message = error instanceof AppError ? error.message : 'No autorizado.';
-      this.send(ws, { type: 'error', code: 'unauthenticated', message });
+      this.send(ws, { type: 'error', code: 'unauthenticated', message: describeError(error).message });
       ws.close(4401, 'unauthenticated');
     }
   }
 
-  private requireLive(now: number): RoomState {
-    const state = this.state;
-    if (!state || state.status !== 'live') throw new AppError(409, 'not_live', 'La competencia no está en curso.');
-    if (now < state.startedAt) throw new AppError(409, 'not_started', 'Aún no empieza.');
-    return state;
+  private requireState(): LiveState {
+    if (!this.state) throw new GameError('not_live', 'La competencia no ha iniciado.');
+    return this.state;
   }
 
-  private requireParticipant(state: RoomState, uid: string): Participant {
-    const participant = state.participants[uid];
-    if (!participant) throw new AppError(403, 'not_participant', 'No participas en esta competencia.');
-    return participant;
+  private async handleAction(uid: string, message: ActionMessage): Promise<AnswerReply | HintReply | AckReply> {
+    const state = this.requireState();
+    const now = Date.now();
+
+    // Si venció el plazo, se evalúa primero (cierre o prórroga).
+    if (state.status === 'live' && now >= nextDeadline(state)) {
+      const result = tick(state, now);
+      await this.commit();
+      if (result.finished) {
+        await this.syncResults();
+        throw new GameError('time_up', 'Se acabó el tiempo.');
+      }
+    }
+
+    switch (message.type) {
+      case 'answer':
+        return this.handleAnswer(uid, String(message.crypticId ?? ''), String(message.guess ?? '').slice(0, 100));
+      case 'hint':
+        return this.handleHint(uid, String(message.crypticId ?? ''), message.reveal === true);
+      case 'vote':
+        applyDifficultyVote(state, { uid, tier: message.tier, now });
+        await this.commit();
+        return { ok: true };
+      case 'extraTime': {
+        const { applied } = toggleExtraTime(state, { uid, now });
+        await this.commit();
+        return { ok: true, applied };
+      }
+      case 'skip': {
+        const { skipped } = toggleSkip(state, { uid, now });
+        await this.commit();
+        if (state.status === 'finished') await this.syncResults();
+        return { ok: true, applied: skipped };
+      }
+      default:
+        throw new AppError(400, 'unknown_action', 'Acción desconocida.');
+    }
   }
 
   private async handleAnswer(uid: string, crypticId: string, guess: string): Promise<AnswerReply> {
+    const state = this.requireState();
     const now = Date.now();
-    const state = this.requireLive(now);
-
-    if (now >= state.endsAt) {
-      await this.finish(this.evaluateOrTime(now));
-      return { correct: false, points: 0, finished: true };
-    }
-
-    const before = this.requireParticipant(state, uid);
-    if (!state.config.crypticIds.includes(crypticId)) throw new AppError(400, 'unknown_cryptic', 'Criptico fuera de la competencia.');
-    if (before.solvedIds.includes(crypticId)) throw new AppError(409, 'already_solved', 'Ya resolviste este criptico.');
-    if (before.lastAttemptAt !== null && now - before.lastAttemptAt < LIMITS.minAttemptIntervalMs) {
-      throw new AppError(429, 'too_fast', 'Espera un momento antes de volver a intentar.');
-    }
+    reserveAttempt(state, uid, crypticId, now); // Valida y reserva la ventana anti fuerza bruta.
     const secret = getCrypticSecret(crypticId);
-    if (!secret) throw new AppError(404, 'missing_cryptic', 'Criptico no encontrado.');
+    if (!secret) throw new GameError('missing_cryptic', 'Criptico no encontrado.');
 
-    // Reserva el intento ANTES del await para que dos mensajes simultáneos no se intercalen.
-    before.lastAttemptAt = now;
     const correct = await verifyAnswer(this.env.ANSWER_HMAC_KEY, crypticId, guess, secret.hash);
-
-    // Revalidación síncrona tras el await (el DO puede haber procesado otros mensajes).
-    const participant = this.requireParticipant(this.requireLive(now), uid);
-    participant.attempts += 1;
-
-    if (!correct || participant.solvedIds.includes(crypticId)) {
-      await this.persist();
-      return { correct: false, points: 0, finished: false };
-    }
-
-    const points = computeSolvePoints({
-      rule: state.config.scoring,
-      difficulty: secret.difficulty,
-      hintsUsed: participant.hintsByClue[crypticId] ?? 0,
-      elapsedMs: now - state.startedAt,
-      durationMs: state.config.durationSec * 1000,
-    });
-    participant.score += points;
-    participant.solvedIds = [...participant.solvedIds, crypticId];
-    participant.lastSolvedAt = now;
-
-    const evaluation = this.evaluate(now);
-    await this.persist();
-    this.broadcast({ type: 'participant', participant });
-    if (evaluation.finished) await this.finish(evaluation);
-
-    return { correct: true, points, finished: evaluation.finished, explanation: secret.explanation ?? null };
+    // applyAnswer revalida: durante el await pudo cerrarse la ronda.
+    const outcome = applyAnswer(state, { uid, crypticId, correct, now: Date.now() });
+    await this.commit();
+    if (outcome.finished) await this.syncResults();
+    return { ...outcome, explanation: outcome.correct ? (secret.explanation ?? null) : null };
   }
 
   private async handleHint(uid: string, crypticId: string, reveal: boolean): Promise<HintReply> {
-    const state = this.state;
-    if (!state) throw new AppError(409, 'not_live', 'La competencia no está en curso.');
-    const participant = this.requireParticipant(state, uid);
-    if (!state.config.crypticIds.includes(crypticId)) throw new AppError(400, 'unknown_cryptic', 'Criptico fuera de la competencia.');
-
+    const state = this.requireState();
+    const { used, maxAllowed } = applyHint(state, { uid, crypticId, reveal, now: Date.now() });
+    if (reveal) await this.commit();
     const hints = getCrypticSecret(crypticId)?.hints ?? [];
-    const used = participant.hintsByClue[crypticId] ?? 0;
-    const maxAllowed = Math.min(state.config.maxHintsPerClue, hints.length);
-
-    if (!reveal) return { hints: hints.slice(0, used), remaining: maxAllowed - used };
-
-    this.requireLive(Date.now());
-    if (participant.solvedIds.includes(crypticId)) throw new AppError(409, 'already_solved', 'Ya resolviste este criptico.');
-    if (used >= maxAllowed) throw new AppError(409, 'no_more_hints', 'No quedan pistas.');
-
-    participant.hintsByClue = { ...participant.hintsByClue, [crypticId]: used + 1 };
-    participant.hintsUsed += 1;
-    await this.persist();
-    this.broadcast({ type: 'participant', participant });
-    return { hints: hints.slice(0, used + 1), remaining: maxAllowed - used - 1 };
+    return { hints: hints.slice(0, used), remaining: Math.max(0, maxAllowed - used) };
   }
 
-  // ---------- Fin de partida ----------
+  // ---------- Persistencia, difusión y alarmas ----------
 
-  private evaluate(now: number): EndEvaluation {
-    const state = this.state!;
-    return evaluateEnd(
-      { ...state.config, endsAt: state.endsAt },
-      Object.values(state.participants),
-      now,
-    );
-  }
-
-  private evaluateOrTime(now: number): EndEvaluation {
-    const evaluation = this.evaluate(now);
-    return evaluation.finished ? evaluation : { finished: true, reason: 'time', winnerId: null };
-  }
-
-  private async finish(evaluation: EndEvaluation): Promise<void> {
+  /** Persiste, reprograma la alarma y difunde el estado. */
+  private async commit(): Promise<void> {
     const state = this.state;
-    if (!state || state.status === 'finished') return;
-    state.status = 'finished';
-    state.winnerId = evaluation.winnerId;
-    state.endReason = evaluation.reason;
-    await this.persist();
-    await this.ctx.storage.deleteAlarm();
-    this.broadcast({ type: 'finished', winnerId: evaluation.winnerId });
-    await this.syncResults();
+    if (!state) return;
+    await this.ctx.storage.put(STATE_KEY, state);
+    if (state.status === 'live') await this.ctx.storage.setAlarm(nextDeadline(state));
+    this.broadcast({ type: 'state', state });
   }
 
   /** Escribe resultados, rating y estadísticas en Firestore. Reintenta por alarma si falla. */
   private async syncResults(): Promise<void> {
     const state = this.state;
-    if (!state || state.synced) return;
+    if (!state || state.status !== 'finished' || this.sync.synced) return;
     try {
       const firestore = new FirestoreRest(this.env.FIREBASE_SERVICE_ACCOUNT);
-      const ranked = rankParticipants(Object.values(state.participants));
+      const ranked = rankState(state);
       const users = await firestore.batchGet<{ rating?: number }>(ranked.map((p) => `users/${p.uid}`));
       const ratings: Record<string, number> = {};
       users.forEach((user, uid) => {
         ratings[uid] = user.rating ?? 1200;
       });
-      const deltas = computeRatingDeltas(ranked, ratings);
-      const base = `competitions/${state.competitionId}`;
+      // El modo jefe es cooperativo: no altera el rating.
+      const competitive = state.config.mode !== 'boss' && ranked.length >= 2;
+      const deltas = competitive ? computeRatingDeltas(ranked, ratings) : {};
+      const bossDefeated = state.endReason === 'bossDefeated';
+      const isWinner = (playerId: string) => (state.boss ? bossDefeated : playerId === state.winnerId);
 
       const writes: Write[] = [
         {
           kind: 'update',
-          path: base,
+          path: `competitions/${state.competitionId}`,
           data: {
             status: 'finished',
-            finishedAt: Date.now(),
+            finishedAt: state.finishedAt ?? Date.now(),
             winnerId: state.winnerId,
             endReason: state.endReason,
+            bossDefeated: state.boss ? bossDefeated : null,
+            boss: state.boss,
             finalStandings: ranked.map((p) => ({
               uid: p.uid,
               displayName: p.displayName,
@@ -335,19 +291,29 @@ export class CompetitionRoom extends DurableObject<Env> {
             })),
           },
         },
-        ...ranked.map<Write>((p) => ({
-          kind: 'update',
-          path: `${base}/participants/${p.uid}`,
-          data: {
-            score: p.score,
-            solvedIds: p.solvedIds,
-            hintsByClue: p.hintsByClue,
-            hintsUsed: p.hintsUsed,
-            attempts: p.attempts,
-            lastSolvedAt: p.lastSolvedAt,
-            lastAttemptAt: p.lastAttemptAt,
-          },
-        })),
+        // Historial por jugador (partidas + evolución del rating).
+        ...ranked
+          .filter((p) => p.uid in ratings)
+          .map<Write>((p) => ({
+            kind: 'set',
+            path: `users/${p.uid}/history/${state.competitionId}`,
+            data: {
+              competitionId: state.competitionId,
+              title: state.title,
+              mode: state.config.mode,
+              flow: state.config.flow,
+              finishedAt: state.finishedAt ?? Date.now(),
+              rank: p.rank,
+              players: ranked.length,
+              score: p.score,
+              solved: p.solvedIds.length,
+              hintsUsed: p.hintsUsed,
+              won: isWinner(p.uid),
+              endReason: state.endReason,
+              ratingDelta: deltas[p.uid] ?? 0,
+              ratingAfter: (ratings[p.uid] ?? 1200) + (deltas[p.uid] ?? 0),
+            },
+          })),
         ...ranked
           .filter((p) => p.uid in ratings) // Usuarios borrados se omiten.
           .map<Write>((p) => ({
@@ -356,46 +322,28 @@ export class CompetitionRoom extends DurableObject<Env> {
             increments: {
               rating: deltas[p.uid] ?? 0,
               'stats.played': 1,
-              'stats.wins': p.uid === state.winnerId ? 1 : 0,
+              'stats.wins': isWinner(p.uid) ? 1 : 0,
               'stats.solved': p.solvedIds.length,
               'stats.hintsUsed': p.hintsUsed,
             },
           })),
       ];
-
       await firestore.commit(writes);
-      state.synced = true;
-      await this.persist();
+      this.sync = { synced: true, attempts: this.sync.attempts };
+      await this.ctx.storage.put(SYNC_KEY, this.sync);
     } catch (error) {
-      state.syncAttempts += 1;
-      await this.persist();
-      console.error(`[room] sync fallida (${state.syncAttempts})`, error);
-      if (state.syncAttempts < MAX_SYNC_ATTEMPTS) await this.ctx.storage.setAlarm(Date.now() + SYNC_RETRY_MS);
+      this.sync = { synced: false, attempts: this.sync.attempts + 1 };
+      await this.ctx.storage.put(SYNC_KEY, this.sync);
+      console.error(`[room] sync fallida (${this.sync.attempts})`, error);
+      if (this.sync.attempts < MAX_SYNC_ATTEMPTS) await this.ctx.storage.setAlarm(Date.now() + SYNC_RETRY_MS);
     }
-  }
-
-  // ---------- Utilidades ----------
-
-  private snapshot(): RoomSnapshot {
-    const state = this.state;
-    return {
-      status: state?.status ?? 'lobby',
-      startedAt: state?.startedAt ?? null,
-      endsAt: state?.endsAt ?? null,
-      participants: state ? Object.values(state.participants) : [],
-      serverTime: Date.now(),
-    };
-  }
-
-  private async persist(): Promise<void> {
-    if (this.state) await this.ctx.storage.put(STATE_KEY, this.state);
   }
 
   private send(ws: WebSocket, message: ServerMessage): void {
     try {
       ws.send(JSON.stringify(message));
     } catch {
-      // Socket cerrado: se ignora.
+      // Socket cerrado.
     }
   }
 
@@ -407,8 +355,14 @@ export class CompetitionRoom extends DurableObject<Env> {
       try {
         ws.send(payload);
       } catch {
-        // Socket cerrado: se ignora.
+        // Socket cerrado.
       }
     }
   }
+}
+
+function describeError(error: unknown): { code: string; message: string } {
+  if (error instanceof GameError || error instanceof AppError) return { code: error.code, message: error.message };
+  console.error('[room] error inesperado', error);
+  return { code: 'internal', message: 'Error interno.' };
 }

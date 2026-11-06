@@ -3,7 +3,8 @@ import { bearerToken, verifyFirebaseToken } from './auth';
 import { AppError, errorResponse, json } from './errors';
 import { FirestoreRest } from './firestore';
 import type { Env } from './env';
-import type { Competition, Participant } from '../shared/types';
+import type { Competition, CompetitionConfig, Participant } from '../shared/types';
+import { validateConfig } from '../shared/scoring';
 
 export { CompetitionRoom } from './competitionRoom';
 
@@ -26,7 +27,7 @@ async function readCompetitionId(request: Request): Promise<string> {
   return id;
 }
 
-/** POST /api/competitions/start — mismo contrato que la variante Vercel. */
+/** POST /api/competitions/start — el anfitrión inicia; el DO toma el control de la partida. */
 async function handleStart(request: Request, env: Env): Promise<Response> {
   const user = await verifyFirebaseToken(bearerToken(request), env.FIREBASE_PROJECT_ID);
   const competitionId = await readCompetitionId(request);
@@ -38,29 +39,48 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   if (competition.status === 'finished') throw new AppError(409, 'already_finished', 'La competencia ya terminó.');
 
   const participants = await firestore.listDocs<Participant>(`competitions/${competitionId}/participants`);
-  const minPlayers = competition.scoring === 'winByTwo' ? 2 : 1;
+  const minPlayers = competition.winByTwo ? 2 : 1;
   if (participants.length < minPlayers) {
     throw new AppError(409, 'not_enough_players', `Se necesitan al menos ${minPlayers} jugadores.`);
   }
 
   const startedAt = Date.now() + COUNTDOWN_MS;
+  const config: CompetitionConfig = {
+    mode: competition.mode,
+    scoring: competition.scoring,
+    flow: competition.flow,
+    durationSec: competition.durationSec,
+    targetCount: competition.targetCount,
+    winByTwo: competition.winByTwo === true,
+    difficultyVote: competition.difficultyVote === true,
+    rivalCountdownSec: Number(competition.rivalCountdownSec ?? 0),
+    comeback: competition.comeback,
+    extraTime: competition.extraTime,
+    bossLevel: competition.bossLevel,
+    maxHintsPerClue: competition.maxHintsPerClue,
+    wrongPenalty: competition.wrongPenalty,
+    tierMix: competition.tierMix,
+    hideScoreboard: competition.hideScoreboard === true,
+  };
+  const configErrors = validateConfig(config, competition.maxPlayers);
+  if (configErrors.length > 0) throw new AppError(400, 'bad_config', configErrors.join(' '));
+
   // El DO es idempotente: si ya inició (reintento), devuelve los tiempos originales.
-  const times = await roomStub(env, competitionId).start({
-    competitionId,
-    config: {
-      mode: competition.mode,
-      scoring: competition.scoring,
-      durationSec: competition.durationSec,
-      targetCount: competition.targetCount,
-      winByTwoMinScore: competition.winByTwoMinScore,
-      maxHintsPerClue: competition.maxHintsPerClue,
+  let times: { startedAt: number; endsAt: number };
+  try {
+    times = await roomStub(env, competitionId).start({
+      competitionId,
+      title: competition.title ?? '',
+      config,
+      participants: participants.map((p) => ({ ...p, uid: p.id })),
       crypticIds: competition.crypticIds,
-      hostId: competition.hostId,
-    },
-    participants: participants.map((p) => ({ ...p, uid: p.id })),
-    startedAt,
-    endsAt: startedAt + competition.durationSec * 1000,
-  });
+      pool: competition.pool ?? { easy: [], medium: [], hard: [] },
+      startedAt,
+    });
+  } catch (error) {
+    // Los errores del motor llegan del DO como Error genérico con el mensaje original.
+    throw new AppError(409, 'start_failed', error instanceof Error ? error.message : 'No se pudo iniciar.');
+  }
 
   // Los clientes escuchan este cambio en Firestore y abren el WebSocket.
   await firestore.commit([
