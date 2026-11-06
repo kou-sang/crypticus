@@ -18,9 +18,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install-scripts ls
-      - run: npm install-scripts approve esbuild workerd
-      - run: npm rebuild esbuild workerd
+      # Con npm < 11.16 los scripts de instalación corren por defecto; con npm >= 11.16
+      # solo corren los listados en `allowScripts` de package.json.
+      - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
