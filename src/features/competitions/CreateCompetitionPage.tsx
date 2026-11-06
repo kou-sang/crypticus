@@ -11,9 +11,11 @@ import {
   DEFAULT_MODE_SETTINGS,
   DUEL_HP_OPTIONS,
   formatTimeControl,
+  COOLDOWN_OPTIONS,
   RACE_TARGET_OPTIONS,
   ROYALE_PRESETS,
   SUDDEN_DEATH_OPTIONS,
+  SURRENDER_USES_OPTIONS,
   type ModeSettings,
 } from '../../../shared/gameModes';
 import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, validateConfig } from '../../../shared/scoring';
@@ -164,6 +166,14 @@ function NumberField({
   );
 }
 
+function CooldownOption({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return (
+    <Option title="Cooldown" info="Espera mínima entre una respuesta y la siguiente. Evita probar palabras a ciegas.">
+      <Chips<number> label="Cooldown" value={value} options={COOLDOWN_OPTIONS.map((n): [number, string] => [n, `${n} s`])} onChange={onChange} />
+    </Option>
+  );
+}
+
 // ---------- Paneles por modo ----------
 
 function RacePanel({ settings, update }: { settings: ModeSettings['race']; update: (patch: Partial<ModeSettings['race']>) => void }) {
@@ -219,39 +229,31 @@ function RacePanel({ settings, update }: { settings: ModeSettings['race']; updat
         <Toggle label="Diferencia de dos" checked={settings.winByTwo} onChange={(winByTwo) => update({ winByTwo })} />
       </Option>
       <Option
-        title="Añadir tiempo"
-        info="La carrera tiene un tope de 30 minutos. Si todos lo piden, se suman los segundos elegidos (con un límite de usos)."
+        title="Rendirse"
+        info="Cada jugador puede rendirse ante el criptico actual un número limitado de veces. En Hardcore, el resto tiene 5 segundos para acertarlo antes de pasar al siguiente. En Pacífico, solo tú pasas al siguiente."
       >
         <div className="flex flex-wrap items-center gap-2">
           <Toggle
-            label="Añadir tiempo"
-            checked={settings.extraTime.enabled}
-            onChange={(enabled) => update({ extraTime: { ...settings.extraTime, enabled } })}
+            label="Rendirse"
+            checked={settings.surrender.enabled}
+            onChange={(enabled) => update({ surrender: { ...settings.surrender, enabled } })}
           />
-          {settings.extraTime.enabled && (
-            <>
-              <NumberField
-                label="Segundos por uso"
-                value={settings.extraTime.seconds}
-                min={10}
-                max={300}
-                suffix="s"
-                onChange={(seconds) => update({ extraTime: { ...settings.extraTime, seconds } })}
-              />
-              <NumberField
-                label="Usos"
-                value={settings.extraTime.maxUses}
-                min={1}
-                max={5}
-                suffix="usos"
-                onChange={(maxUses) => update({ extraTime: { ...settings.extraTime, maxUses } })}
-              />
-            </>
+          {settings.surrender.enabled && (
+            <Chips<number>
+              label="Usos por jugador"
+              value={settings.surrender.maxUses}
+              options={SURRENDER_USES_OPTIONS.map((n): [number, string] => [n, `${n}×`])}
+              onChange={(maxUses) => update({ surrender: { ...settings.surrender, maxUses } })}
+            />
           )}
         </div>
       </Option>
-      <Option title="Pedir pista" info="Hasta 2 pistas por criptico. Cada pista resta 30 puntos del criptico.">
+      <Option title="Pedir pista" info="Hasta 2 pistas por criptico.">
         <Toggle label="Pedir pista" checked={settings.hints} onChange={(hints) => update({ hints })} />
+      </Option>
+      <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
+      <Option title="Duración" info="Una carrera dura como máximo 10 minutos. Si nadie llega a la meta, gana quien más cripticos resolvió.">
+        <span className="text-sm text-muted">10 min máx.</span>
       </Option>
     </>
   );
@@ -316,6 +318,7 @@ function RoyalePanel({ settings, update }: { settings: ModeSettings['royale']; u
           </div>
         )}
       </section>
+      <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option
         title="Cómo se juega"
         info="Primer número: minutos de tu reloj. Segundo: segundos que suma cada acierto. Los cripticos son siempre los mismos para todos y cada vez más difíciles (10 fáciles, 10 medios, después difíciles). Sin pausas: al acertar pasas al siguiente. Quien llega a 0 queda eliminado; gana el último en pie."
@@ -356,6 +359,7 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
       >
         <Chips<ComebackLevel> label="Remontada" value={settings.comeback} options={COMEBACK} onChange={(comeback) => update({ comeback })} />
       </Option>
+      <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option
         title="Cómo se juega"
         info="Solo 2 jugadores, sin pistas. Ambos ven el mismo criptico (dificultad al azar). El primero en acertar lo cierra al instante y se muestran respuesta y explicación durante 3 segundos."

@@ -1,4 +1,4 @@
-// Landing pública: estilo portada de periódico con una "cuadrícula" animada.
+// Landing pública: qué es un criptico, los modos y por qué el desafío es justo. Breve y sin adornos.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Logo } from '../../components/Logo';
@@ -6,38 +6,51 @@ import { useAuth } from '../../hooks/useAuth';
 import { GAME_LABELS } from '../../../shared/scoring';
 import { GAME_MODES } from '../../../shared/types';
 
-const RULES = [
-  { title: 'Clásico', text: 'Fácil, medio o difícil: más dificultad, más puntos.' },
-  { title: 'Menos pistas', text: 'Cada pista usada resta puntos.' },
-  { title: 'Velocidad', text: 'Bonus por resolver antes que el reloj.' },
-  { title: 'Diferencia de dos', text: 'Gana quien saque dos cripticos de ventaja. Si no, prórroga.' },
-  { title: 'Vota la dificultad', text: 'Cada ronda se elige el próximo. El que va perdiendo desempata.' },
-  { title: 'Remontada', text: 'Quien va atrás gana más, en proporción a la distancia.' },
-  { title: 'Tiempo extra', text: '¿Trabados? Si todos lo piden, el reloj suma segundos.' },
-  { title: 'Marcador oculto', text: 'Nadie sabe quién gana hasta el final.' },
+// Criptico de portada: definición críptica que se resuelve a sí misma.
+const DEMO = { clue: '¡Estás resolviendo uno en latín!', enumeration: '(9)', answer: 'CRYPTICUS' };
+
+const ANATOMY = [
+  {
+    label: 'Definición',
+    text: 'Siempre al principio o al final. Es la respuesta dicha de forma directa.',
+    sample: 'Reptil cambiante: lecho con felino',
+  },
+  {
+    label: 'Juego de palabras',
+    text: 'El resto de la pista lleva a la misma respuesta por otro camino.',
+    sample: 'lecho (CAMA) + felino (LEÓN)',
+  },
+  { label: 'Enumeración', text: 'Cuántas letras tiene, y en cuántas palabras.', sample: '(8) → CAMALEÓN' },
 ];
 
-const DEMO_ANSWER = 'CRYPTICUS';
+const REASONS = [
+  { title: 'Cada pista se puede explicar', text: 'Al cerrar un criptico ves la respuesta y por qué funciona. Si no se puede justificar, no entra.' },
+  { title: 'Nunca el mismo criptico', text: 'Lo que ya jugaste no vuelve a tus salas mientras queden cripticos nuevos.' },
+  { title: 'Sin atajos', text: 'Las respuestas se verifican en el servidor y el siguiente criptico no se envía hasta que abre.' },
+  { title: 'Un Elo por modo', text: 'Race, Royale y Duel miden cosas distintas. Cada uno tiene su propio ranking.' },
+];
 
 function DemoGrid() {
   const [revealed, setRevealed] = useState(0);
+  const letters = DEMO.answer.split('');
 
   useEffect(() => {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) {
-      setRevealed(DEMO_ANSWER.length);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setRevealed(letters.length);
       return;
     }
-    const id = window.setInterval(() => setRevealed((n) => (n >= DEMO_ANSWER.length + 6 ? 0 : n + 1)), 260);
+    const id = window.setInterval(() => setRevealed((n) => (n >= letters.length + 8 ? 0 : n + 1)), 240);
     return () => window.clearInterval(id);
-  }, []);
+  }, [letters.length]);
 
   return (
-    <div aria-hidden className="flex flex-wrap gap-1">
-      {DEMO_ANSWER.split('').map((letter, index) => (
+    <div aria-hidden className="flex gap-px bg-ink p-px">
+      {letters.map((letter, index) => (
         <span
           key={index}
-          className={`grid-cell transition-colors duration-150 ${index < revealed ? 'bg-ink text-paper' : 'text-transparent'}`}
+          className={`grid size-9 place-items-center font-mono text-lg font-semibold transition-colors duration-150 sm:size-10 ${
+            index < revealed ? 'bg-ink text-paper' : 'bg-paper text-transparent'
+          }`}
         >
           {letter}
         </span>
@@ -46,105 +59,107 @@ function DemoGrid() {
   );
 }
 
-const FEATURES = [
-  { title: 'Amigos', text: 'Agrega por @usuario, reta en privado y sigue su progreso.' },
-  { title: 'Chat', text: 'Sala global, mensajes directos y chat dentro de cada partida.' },
-  { title: 'Rankings', text: 'Rating Elo multijugador: sube ganando a rivales fuertes.' },
-  { title: 'En vivo', text: 'Marcador en tiempo real. Ves a tus rivales resolver al instante.' },
-];
-
 export function LandingPage() {
   const { user, profile } = useAuth();
-  const ctaTarget = user && profile ? '/inicio' : '/entrar';
-  const ctaLabel = user && profile ? 'Ir a mi panel' : 'Empezar a jugar';
+  const signedIn = Boolean(user && profile);
+  const ctaTarget = signedIn ? '/jugar' : '/entrar';
 
   return (
     <div className="min-h-dvh">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <Logo />
-        <Link to={ctaTarget} className="text-sm font-semibold underline decoration-accent decoration-2 underline-offset-4">
-          {user && profile ? 'Mi panel' : 'Entrar'}
+        <Link to={signedIn ? '/inicio' : '/entrar'} className="text-sm font-semibold underline decoration-accent decoration-2 underline-offset-4">
+          {signedIn ? 'Mi cuenta' : 'Entrar'}
         </Link>
       </header>
 
-      <section className="mx-auto max-w-6xl px-4 pb-16 pt-8 md:pt-16">
-        <p className="mb-4 border-y border-ink py-1 text-center text-[11px] font-semibold uppercase tracking-[0.3em]">
-          Edición diaria · Cripticos competitivos · Tiempo real
-        </p>
-        <div className="grid items-end gap-10 md:grid-cols-[1.4fr_1fr]">
+      <section className="mx-auto max-w-6xl px-4 pb-16 pt-6 md:pt-14">
+        <div className="grid items-center gap-12 md:grid-cols-[1.2fr_1fr]">
           <div>
-            <h1 className="font-display text-5xl font-semibold leading-[0.95] tracking-tight sm:text-7xl">
-              Resuelve antes
+            <h1 className="font-display text-5xl font-semibold leading-[0.95] tracking-tight sm:text-6xl">
+              Cada pista dice dos cosas.
               <br />
-              <em className="text-accent">que tus amigos.</em>
+              <span className="text-accent">Gana quien ve las dos primero.</span>
             </h1>
-            <p className="mt-6 max-w-lg text-lg text-muted">
-              Competencias de cripticos contra reloj o por cantidad, con reglas de puntaje a tu medida.
+            <p className="mt-6 max-w-xl text-lg text-muted">
+              Crypticus es una arena de cripticos en español, en tiempo real. Una definición, un juego de palabras y un rival que también lo
+              está pensando.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                to={ctaTarget}
-                className="inline-flex h-12 items-center bg-ink px-6 font-semibold text-paper transition-colors hover:bg-accent"
-              >
-                {ctaLabel} →
+              <Link to={ctaTarget} className="inline-flex h-12 items-center bg-ink px-6 font-semibold text-paper transition-colors hover:bg-accent">
+                Jugar ahora
               </Link>
-              <a href="#modos" className="inline-flex h-12 items-center border border-ink px-6 font-semibold hover:bg-paper-2">
-                Ver modos
+              <a href="#como" className="inline-flex h-12 items-center border border-ink px-6 font-semibold hover:bg-paper-2">
+                Cómo se lee un criptico
               </a>
             </div>
           </div>
-          <div className="border-2 border-ink p-5">
-            <p className="font-mono text-xs uppercase tracking-widest text-muted">1 horizontal</p>
-            <p className="mt-2 font-display text-2xl leading-snug">
-              Cifrado astuto que reta a la mente, en latín (9)
-            </p>
+
+          <figure className="border-2 border-ink p-6">
+            <p className="font-mono text-[11px] uppercase tracking-widest text-muted">Ejemplo</p>
+            <blockquote className="mt-2 font-display text-2xl leading-snug">
+              {DEMO.clue} <span className="text-muted">{DEMO.enumeration}</span>
+            </blockquote>
             <div className="mt-5">
               <DemoGrid />
             </div>
-          </div>
+            <figcaption className="mt-4 text-sm text-muted">Lo que estás resolviendo es un criptico. En latín: CRYPTICUS.</figcaption>
+          </figure>
         </div>
       </section>
 
-      <section id="modos" className="border-y-2 border-ink bg-paper-2/50">
-        <div className="mx-auto grid max-w-6xl gap-px bg-line sm:grid-cols-2 md:grid-cols-4">
-          {GAME_MODES.map((mode) => (
-            <div key={mode} className="bg-paper p-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">{GAME_LABELS[mode].tagline}</p>
-              <h2 className="mt-1 font-display text-3xl">{GAME_LABELS[mode].title}</h2>
-              <p className="mt-2 text-muted">{GAME_LABELS[mode].description}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="font-display text-4xl font-semibold">Reglas a tu medida</h2>
-        <p className="mt-2 text-muted">Combínalas antes de empezar: cada partida puede ser distinta.</p>
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {RULES.map((rule, index) => (
-            <article key={rule.title} className="border-t-2 border-ink pt-3">
+      <section id="como" className="border-y-2 border-ink">
+        <div className="mx-auto grid max-w-6xl md:grid-cols-3">
+          {ANATOMY.map((part, index) => (
+            <article key={part.label} className="border-b border-line p-6 last:border-0 md:border-b-0 md:border-r md:last:border-r-0">
               <p className="font-mono text-xs text-muted">{String(index + 1).padStart(2, '0')}</p>
-              <h3 className="mt-1 font-display text-xl">{rule.title}</h3>
-              <p className="mt-1 text-sm text-muted">{rule.text}</p>
+              <h2 className="mt-1 font-display text-2xl">{part.label}</h2>
+              <p className="mt-2 text-sm text-muted">{part.text}</p>
+              <p className="mt-3 font-mono text-sm">{part.sample}</p>
             </article>
           ))}
         </div>
       </section>
 
+      <section className="mx-auto max-w-6xl px-4 py-16">
+        <h2 className="font-display text-4xl font-semibold">Tres formas de competir</h2>
+        <div className="mt-8 grid gap-px border border-ink bg-ink sm:grid-cols-2 lg:grid-cols-4">
+          {GAME_MODES.map((mode) => {
+            const soon = mode === 'boss';
+            return (
+              <article key={mode} className={`bg-paper p-6 ${soon ? 'opacity-60' : ''}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">{GAME_LABELS[mode].tagline}</p>
+                <h3 className="mt-1 font-display text-3xl uppercase">{GAME_LABELS[mode].title}</h3>
+                <p className="mt-3 text-sm text-muted">{GAME_LABELS[mode].description}</p>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="bg-ink text-paper">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 sm:grid-cols-2 lg:grid-cols-4">
-          {FEATURES.map((feature) => (
-            <div key={feature.title}>
-              <h3 className="font-display text-2xl">{feature.title}</h3>
-              <p className="mt-2 text-sm opacity-70">{feature.text}</p>
-            </div>
-          ))}
+        <div className="mx-auto max-w-6xl px-4 py-16">
+          <h2 className="font-display text-4xl font-semibold">Difícil, pero justo</h2>
+          <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            {REASONS.map((reason) => (
+              <div key={reason.title} className="border-t border-paper/30 pt-3">
+                <h3 className="font-display text-xl">{reason.title}</h3>
+                <p className="mt-2 text-sm opacity-70">{reason.text}</p>
+              </div>
+            ))}
+          </div>
+          <Link
+            to={ctaTarget}
+            className="mt-12 inline-flex h-12 items-center bg-paper px-6 font-semibold text-ink transition-colors hover:bg-accent hover:text-paper"
+          >
+            Crear una sala
+          </Link>
         </div>
       </section>
 
       <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-10 text-sm text-muted">
         <Logo />
-        <span>Hecho para quienes leen las pistas dos veces.</span>
+        <span>Para quienes leen cada pista dos veces.</span>
       </footer>
     </div>
   );

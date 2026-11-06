@@ -21,22 +21,17 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { chunk, detectDevice, pairId } from './utils';
-import { TIER_SHARES } from '../../shared/selection';
 import {
-  DIFFICULTIES,
   type Competition,
   type CompetitionConfig,
   type CompetitionVisibility,
   type CrypticPublic,
-  type Difficulty,
-  type GameFlow,
   type HistoryEntry,
   type RankedMode,
   type Participant,
-  type TierMix,
   type UserProfile,
 } from '../../shared/types';
-import { LIMITS, validateConfig } from '../../shared/scoring';
+import { validateConfig } from '../../shared/scoring';
 
 // ---------- Perfil ----------
 
@@ -134,74 +129,6 @@ export async function updateDisplayName(uid: string, displayName: string): Promi
 
 // ---------- Cripticos ----------
 
-/** Muestreo aleatorio por dificultad usando el campo `rand` (índice tier + rand). */
-export async function pickRandomCryptics(tier: Difficulty, count: number): Promise<string[]> {
-  if (count <= 0) return [];
-  const pivot = Math.random();
-  const cryptics = collection(db, 'cryptics');
-  const first = await getDocs(
-    query(cryptics, where('tier', '==', tier), where('rand', '>=', pivot), orderBy('rand'), limit(count)),
-  );
-  const ids = first.docs.map((d) => d.id);
-  if (ids.length < count) {
-    const wrap = await getDocs(
-      query(cryptics, where('tier', '==', tier), where('rand', '<', pivot), orderBy('rand'), limit(count - ids.length)),
-    );
-    ids.push(...wrap.docs.map((d) => d.id));
-  }
-  return ids;
-}
-
-function shuffle<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
-  }
-  return copy;
-}
-
-/**
- * Selección al crear la sala.
- * - 'free': `clueCount` cripticos repartidos según `tierMix` (orden aleatorio o progresivo).
- * - 'rounds': hasta `clueCount` por dificultad, para que la votación siempre tenga opciones.
- */
-export async function selectCryptics(
-  flow: GameFlow,
-  tierMix: TierMix,
-  clueCount: number,
-): Promise<{ crypticIds: string[]; pool: Record<Difficulty, string[]> }> {
-  if (flow === 'rounds') {
-    const perTier = Math.min(clueCount, LIMITS.maxCluesPerTier);
-    const [easy, medium, hard] = await Promise.all(DIFFICULTIES.map((tier) => pickRandomCryptics(tier, perTier)));
-    const pool = { easy: easy ?? [], medium: medium ?? [], hard: hard ?? [] };
-    return { crypticIds: [...pool.easy, ...pool.medium, ...pool.hard], pool };
-  }
-
-  const shares = TIER_SHARES[tierMix];
-  const wanted = DIFFICULTIES.map((tier) => Math.round(clueCount * shares[tier]));
-  const [easy = [], medium = [], hard = []] = await Promise.all(DIFFICULTIES.map((tier, i) => pickRandomCryptics(tier, wanted[i] ?? 0)));
-  // Si una dificultad no alcanza, se completa con las otras.
-  let deficit = clueCount - easy.length - medium.length - hard.length;
-  if (deficit > 0) {
-    for (const tier of DIFFICULTIES) {
-      if (deficit <= 0) break;
-      const extra = await pickRandomCryptics(tier, deficit + (wanted[DIFFICULTIES.indexOf(tier)] ?? 0));
-      const bucket = tier === 'easy' ? easy : tier === 'medium' ? medium : hard;
-      for (const id of extra) {
-        if (deficit <= 0) break;
-        if (!bucket.includes(id)) {
-          bucket.push(id);
-          deficit -= 1;
-        }
-      }
-    }
-  }
-  const pool = { easy, medium, hard };
-  const crypticIds = tierMix === 'progressive' ? [...shuffle(easy), ...shuffle(medium), ...shuffle(hard)] : shuffle([...easy, ...medium, ...hard]);
-  return { crypticIds: crypticIds.slice(0, clueCount), pool };
-}
-
 export async function getCryptics(ids: string[]): Promise<Map<string, CrypticPublic>> {
   const results = await Promise.all(
     chunk(ids, 30).map((part) => getDocs(query(collection(db, 'cryptics'), where(documentId(), 'in', part)))),
@@ -225,8 +152,10 @@ export async function createCompetition(host: UserProfile, input: CreateCompetit
   const errors = validateConfig(input, input.maxPlayers);
   if (errors.length > 0) throw new Error(errors.join(' '));
 
-  const { crypticIds, pool } = await selectCryptics(input.flow, input.tierMix, input.clueCount);
-  if (crypticIds.length === 0) throw new Error('No hay cripticos cargados todavía.');
+  // El servidor elige los cripticos al iniciar (sin repetir y en secreto); aquí solo se guarda cuántos.
+  // Las reglas de Firestore exigen una lista no vacía: se guarda un marcador que el Worker reemplaza.
+  const crypticIds = ['pending'];
+  const pool = { easy: [], medium: [], hard: [] };
 
   const config: CompetitionConfig = {
     mode: input.mode,
@@ -249,6 +178,8 @@ export async function createCompetition(host: UserProfile, input: CreateCompetit
     ...(input.intervalSec !== undefined ? { intervalSec: input.intervalSec } : {}),
     ...(input.duel ? { duel: input.duel } : {}),
     ...(input.royale ? { royale: input.royale } : {}),
+    ...(input.cooldownSec !== undefined ? { cooldownSec: input.cooldownSec } : {}),
+    ...(input.surrender ? { surrender: input.surrender } : {}),
   };
   const competitionRef = doc(collection(db, 'competitions'));
   const batch = writeBatch(db);
@@ -268,6 +199,7 @@ export async function createCompetition(host: UserProfile, input: CreateCompetit
     endsAt: null,
     finishedAt: null,
     winnerId: null,
+    clueCount: input.clueCount,
     ...(input.invitedIds?.length ? { invitedIds: input.invitedIds.slice(0, 7) } : {}),
   } satisfies Omit<Competition, 'id'>);
   batch.set(doc(competitionRef, 'participants', host.uid), newParticipant(host));

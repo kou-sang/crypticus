@@ -7,7 +7,13 @@ function describe(event: GameEvent, state: LiveState): string | null {
   const name = event.uid ? (state.participants[event.uid]?.displayName ?? 'Alguien') : '';
   const tier = event.tier ? DIFFICULTY_LABELS[event.tier].toLowerCase() : '';
   switch (event.kind) {
+    case 'surrender':
+      return `${name} se rindió`;
     case 'solve':
+      if (state.config.game === 'race') {
+        const solved = event.uid ? (state.participants[event.uid]?.solvedIds.length ?? 0) : 0;
+        return `${name} acertó · ${solved}/${state.config.targetCount}`;
+      }
       if (state.config.royale) return `${name} acertó (+${event.seconds ?? 0}s)`;
       if (state.config.hideScoreboard) return `${name} resolvió uno ${tier}`;
       return state.boss ? `${name} golpeó al jefe (−${event.points})` : `${name} resolvió uno ${tier} (+${event.points})`;

@@ -12,6 +12,7 @@ export type ClientMessage =
   | { type: 'skip'; reqId: string }
   | { type: 'endVote'; reqId: string }
   | { type: 'pass'; reqId: string } // Royale: pasar al siguiente criptico
+  | { type: 'surrender'; reqId: string } // Race: rendirse ante el criptico actual
   | { type: 'ping'; sentAt?: number } // Eco en pong: el cliente mide RTT y desfase de reloj.
   | { type: 'probeAck'; id: number }; // Respuesta a `probe`: el servidor mide el RTT de este jugador.
 

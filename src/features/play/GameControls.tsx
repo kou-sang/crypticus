@@ -68,7 +68,8 @@ export function SharedRequests({ state, uid, actions }: { state: LiveState; uid:
   };
 
   const showExtra = config.extraTime.enabled;
-  const showSkip = config.flow === 'rounds' && state.round !== null;
+  // En Race no se saltea: siempre se resuelve el actual (o se usa "rendirse").
+  const showSkip = config.flow === 'rounds' && state.round !== null && config.game !== 'race';
   if (!showExtra && !showSkip) return null;
 
   const extraAsked = state.extraTime.votes.includes(uid);

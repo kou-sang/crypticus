@@ -11,6 +11,8 @@ import { CluePanel, ClueText } from './CluePanel';
 import { DifficultyVote, SharedRequests } from './GameControls';
 import { useCryptics } from './useCryptics';
 import { DuelAlerts, DuelBars, NextCountdown, RoyaleFlow } from './ModeViews';
+import { RaceTrack, SequentialRace, SurrenderButton } from './RaceView';
+import { cooldownMs, isSequential } from '../../../shared/engine';
 
 /** Coste visible de una pista según la regla de puntaje. */
 const hintCostOf = (state: LiveState) => (state.config.scoring === 'fewestHints' && state.boss === null ? HINT_PENALTY : 0);
@@ -158,12 +160,21 @@ function RoundsFlow({
             key={current.id}
             cryptic={current}
             me={me}
-            heading={`Ronda ${round.index}`}
+            heading={state.config.game ? `Criptico ${round.index}` : `Ronda ${round.index}`}
             maxHintsPerClue={state.config.maxHintsPerClue}
-            hintCost={hintCostOf(state)}
+            hintCost={state.config.game === 'race' ? 0 : hintCostOf(state)}
             wrongPenalty={state.config.wrongPenalty}
             isBoss={state.boss !== null}
             actions={actions}
+            successLabel={
+              state.config.duel
+                ? (points) => `−${points} de vida al rival`
+                : state.config.game === 'race'
+                  ? () => '¡Correcto!'
+                  : undefined
+            }
+            cooldownMs={cooldownMs(state.config)}
+            footer={state.config.surrender?.enabled ? <SurrenderButton state={state} uid={uid} actions={actions} /> : undefined}
           />
         ) : (
           <Spinner />
@@ -192,6 +203,18 @@ export const PlayView = memo(function PlayView({
   offsetMs: number;
 }) {
   if (state.config.royale) return <RoyaleFlow state={state} uid={uid} actions={actions} offsetMs={offsetMs} />;
+  if (state.config.game === 'race') {
+    return (
+      <div className="space-y-8">
+        <RaceTrack state={state} uid={uid} />
+        {isSequential(state.config) ? (
+          <SequentialRace state={state} uid={uid} actions={actions} offsetMs={offsetMs} />
+        ) : (
+          <RoundsFlow state={state} uid={uid} actions={actions} solutions={solutions} offsetMs={offsetMs} />
+        )}
+      </div>
+    );
+  }
   return state.config.flow === 'rounds' ? (
     <RoundsFlow state={state} uid={uid} actions={actions} solutions={solutions} offsetMs={offsetMs} />
   ) : (

@@ -42,6 +42,7 @@ export interface RoundState {
   solvedBy: string[]; // Orden de acierto en esta ronda.
   closesAt: number | null; // Cuenta atrás activa tras el primer acierto.
   opensAt?: number; // Intervalo entre cripticos: no se puede responder (ni se muestra) antes.
+  surrenderedBy?: string[]; // Jugadores que se rindieron en esta ronda.
 }
 
 export type GameEventKind =
@@ -54,7 +55,8 @@ export type GameEventKind =
   | 'heal'
   | 'countdown'
   | 'eliminated'
-  | 'damage';
+  | 'damage'
+  | 'surrender';
 
 export interface GameEvent {
   at: number;
@@ -134,7 +136,9 @@ export function createLiveState(input: CreateInput): LiveState {
       wrongAttempts: 0,
       lastSolvedAt: null,
       lastAttemptAt: null,
-      ...(royale ? { bankMs: royale.baseSec * 1000, eliminatedAt: null, cursor: 0 } : {}),
+      ...(royale ? { bankMs: royale.baseSec * 1000, eliminatedAt: null } : {}),
+      ...(isSequential(input.config) ? { cursor: 0, nextOpensAt: input.startedAt } : {}),
+      surrenders: 0,
     };
   }
   // Solo se conservan cripticos con secreto disponible en el catálogo.
@@ -189,6 +193,21 @@ export function rankMetric(config: CompetitionConfig): RankMetric {
   return config.winByTwo || config.mode === 'count' ? 'solved' : 'score';
 }
 
+// ---------- Secuencial (Race Pacífico y Royale) ----------
+
+/** Cada jugador avanza por la misma lista en orden, sin saltear ni ver los siguientes. */
+export function isSequential(config: CompetitionConfig): boolean {
+  return Boolean(config.royale) || (config.game === 'race' && config.flow === 'free');
+}
+
+/** Criptico actual de un jugador en modos secuenciales (null si terminó la lista). */
+export function currentFor(state: LiveState, participant: Participant): string | null {
+  return state.crypticIds[participant.cursor ?? 0] ?? null;
+}
+
+/** Segundos que los demás tienen para acertar cuando alguien se rinde. */
+export const SURRENDER_GRACE_MS = 5_000;
+
 // ---------- Duel ----------
 
 /**
@@ -236,7 +255,7 @@ function alivePlayers(state: LiveState): Participant[] {
 
 /** Criptico actual de un jugador en Royale (secuencial). */
 export function royaleCurrent(state: LiveState, participant: Participant): string | null {
-  return state.crypticIds[participant.cursor ?? 0] ?? null;
+  return currentFor(state, participant);
 }
 
 export function rankState(state: LiveState): RankedParticipant[] {
@@ -258,6 +277,9 @@ export function nextDeadline(state: LiveState, now = 0): number {
   if (round?.closesAt != null) candidates.push(round.closesAt);
   if (round?.opensAt != null && round.opensAt > now) candidates.push(round.opensAt);
   if (state.config.royale) for (const p of alivePlayers(state)) candidates.push(royaleDeadline(state, p));
+  if (isSequential(state.config)) {
+    for (const p of Object.values(state.participants)) if ((p.nextOpensAt ?? 0) > now) candidates.push(p.nextOpensAt!);
+  }
   return Math.min(...candidates);
 }
 
@@ -269,12 +291,18 @@ export function remainingRatio(state: LiveState, now: number): number {
 
 /** Criptico que el jugador puede intentar ahora (en 'free' cualquiera no resuelto de la lista). */
 function isPlayable(state: LiveState, participant: Participant, crypticId: string, now: number): boolean {
-  if (state.config.royale) {
-    return participant.eliminatedAt == null && royaleRemaining(state, participant, now) > 0 && royaleCurrent(state, participant) === crypticId;
+  if (isSequential(state.config)) {
+    if (state.config.royale && (participant.eliminatedAt != null || royaleRemaining(state, participant, now) <= 0)) return false;
+    return now >= (participant.nextOpensAt ?? 0) && currentFor(state, participant) === crypticId;
   }
   if (state.config.flow === 'rounds') {
     const round = state.round;
-    return round?.crypticId === crypticId && now >= (round.opensAt ?? 0) && !participant.solvedIds.includes(crypticId);
+    return (
+      round?.crypticId === crypticId &&
+      now >= (round.opensAt ?? 0) &&
+      !participant.solvedIds.includes(crypticId) &&
+      !(round.surrenderedBy ?? []).includes(participant.uid)
+    );
   }
   return state.crypticIds.includes(crypticId) && !participant.solvedIds.includes(crypticId);
 }
@@ -307,10 +335,15 @@ export function reserveAttempt(state: LiveState, uid: string, crypticId: string,
   const participant = requireParticipant(state, uid);
   if (!(crypticId in state.catalog)) throw new GameError('unknown_cryptic', 'Criptico fuera de la competencia.');
   if (!isPlayable(state, participant, crypticId, now)) throw new GameError('not_playable', 'Ese criptico ya no está en juego.');
-  if (participant.lastAttemptAt !== null && now - participant.lastAttemptAt < LIMITS.minAttemptIntervalMs) {
+  if (participant.lastAttemptAt !== null && now - participant.lastAttemptAt < cooldownMs(state.config)) {
     throw new GameError('too_fast', 'Espera un momento antes de volver a intentar.');
   }
   participant.lastAttemptAt = now;
+}
+
+/** Espera mínima entre respuestas: la del modo (cooldown) o el mínimo anti fuerza bruta. */
+export function cooldownMs(config: CompetitionConfig): number {
+  return Math.max(LIMITS.minAttemptIntervalMs, (config.cooldownSec ?? 0) * 1000);
 }
 
 export interface AnswerOutcome {
@@ -355,7 +388,7 @@ export function applyAnswer(
   // Royale: cada acierto suma segundos al reloj y avanza al siguiente criptico.
   if (state.config.royale) {
     participant.bankMs = (participant.bankMs ?? 0) + state.config.royale.incrementSec * 1000;
-    participant.cursor = (participant.cursor ?? 0) + 1;
+    advanceCursor(state, participant, now);
     participant.score += 1;
     participant.solvedIds = [...participant.solvedIds, crypticId];
     participant.lastSolvedAt = now;
@@ -411,6 +444,7 @@ export function applyAnswer(
   participant.solvedIds = [...participant.solvedIds, crypticId];
   participant.lastSolvedAt = now;
   pushEvent(state, { at: now, kind: 'solve', uid, crypticId, tier, points });
+  if (isSequential(state.config)) advanceCursor(state, participant, now);
 
   if (state.config.flow === 'rounds') onRoundSolved(state, uid, now, input.random ?? Math.random);
 
@@ -484,6 +518,7 @@ export function toggleSkip(state: LiveState, input: { uid: string; now: number; 
   requireLive(state, input.now);
   requireParticipant(state, input.uid);
   if (state.config.flow !== 'rounds' || !state.round) throw new GameError('skip_disabled', 'Solo disponible en rondas.');
+  if (state.config.game === 'race') throw new GameError('skip_disabled', 'En Race no se saltea: usa rendirse.');
 
   state.skipVotes = toggle(state.skipVotes, input.uid);
   if (!everyone(state, state.skipVotes)) return { skipped: false };
@@ -494,13 +529,65 @@ export function toggleSkip(state: LiveState, input: { uid: string; now: number; 
   return { skipped: true };
 }
 
+/** Avanza al siguiente criptico de la lista; se abre tras el intervalo del modo. */
+function advanceCursor(state: LiveState, participant: Participant, now: number): void {
+  participant.cursor = (participant.cursor ?? 0) + 1;
+  participant.nextOpensAt = now + (state.config.intervalSec ?? 0) * 1000;
+}
+
+/**
+ * Rendirse ante el criptico actual (usos limitados).
+ * - Rondas: los demás tienen 5 s para acertar; si nadie queda pendiente, se pasa al siguiente.
+ * - Secuencial: el jugador pasa a su siguiente criptico.
+ */
+export function surrender(state: LiveState, input: { uid: string; now: number; random?: () => number }): { applied: boolean } {
+  const { uid, now } = input;
+  requireLive(state, now);
+  const participant = requireParticipant(state, uid);
+  const rule = state.config.surrender;
+  if (!rule?.enabled) throw new GameError('surrender_disabled', 'Rendirse no está habilitado.');
+  if ((participant.surrenders ?? 0) >= rule.maxUses) throw new GameError('surrender_exhausted', 'No te quedan rendiciones.');
+
+  if (isSequential(state.config)) {
+    const id = currentFor(state, participant);
+    if (!id || !isPlayable(state, participant, id, now)) throw new GameError('not_playable', 'No hay criptico para rendirse.');
+    participant.surrenders = (participant.surrenders ?? 0) + 1;
+    pushEvent(state, { at: now, kind: 'surrender', uid, crypticId: id });
+    advanceCursor(state, participant, now);
+    evaluate(state, now);
+    return { applied: true };
+  }
+
+  const round = state.round;
+  if (!round || !isPlayable(state, participant, round.crypticId, now)) throw new GameError('not_playable', 'No hay criptico para rendirse.');
+  round.surrenderedBy = [...(round.surrenderedBy ?? []), uid];
+  participant.surrenders = (participant.surrenders ?? 0) + 1;
+  pushEvent(state, { at: now, kind: 'surrender', uid, crypticId: round.crypticId, seconds: SURRENDER_GRACE_MS / 1000 });
+  if (roundSettled(state)) {
+    advanceRound(state, now, input.random ?? Math.random);
+  } else {
+    const closes = now + SURRENDER_GRACE_MS;
+    round.closesAt = round.closesAt == null ? closes : Math.min(round.closesAt, closes);
+  }
+  evaluate(state, now);
+  return { applied: true };
+}
+
+/** Todos acertaron o se rindieron: no queda nadie por esperar en la ronda. */
+function roundSettled(state: LiveState): boolean {
+  const round = state.round;
+  if (!round) return true;
+  const done = new Set([...round.solvedBy, ...(round.surrenderedBy ?? [])]);
+  return Object.keys(state.participants).every((id) => done.has(id));
+}
+
 /** Royale: pasar al siguiente criptico (sin volver atrás y sin ganar tiempo). */
 export function passCryptic(state: LiveState, input: { uid: string; now: number }): { passed: boolean } {
   requireLive(state, input.now);
   const participant = requireParticipant(state, input.uid);
   if (!state.config.royale) throw new GameError('pass_disabled', 'Solo disponible en Royale.');
   if (participant.eliminatedAt != null) throw new GameError('eliminated', 'Ya fuiste eliminado.');
-  participant.cursor = (participant.cursor ?? 0) + 1;
+  advanceCursor(state, participant, input.now);
   evaluate(state, input.now);
   return { passed: true };
 }
@@ -598,8 +685,7 @@ function onRoundSolved(state: LiveState, uid: string, now: number, random: () =>
   const round = state.round;
   if (!round) return;
   round.solvedBy = [...round.solvedBy, uid];
-  const everyoneSolved = Object.keys(state.participants).every((id) => round.solvedBy.includes(id));
-  if (state.config.rivalCountdownSec <= 0 || everyoneSolved) {
+  if (state.config.rivalCountdownSec <= 0 || roundSettled(state)) {
     advanceRound(state, now, random);
     return;
   }
@@ -718,6 +804,7 @@ function evaluate(state: LiveState, now: number): { finished: boolean } {
 }
 
 function isExhausted(state: LiveState, players: Participant[]): boolean {
+  if (isSequential(state.config)) return players.length > 0 && players.every((p) => currentFor(state, p) === null);
   if (state.config.flow === 'rounds') return state.round === null;
   return players.length > 0 && players.every((p) => state.crypticIds.every((id) => p.solvedIds.includes(id)));
 }
@@ -731,9 +818,21 @@ function isExhausted(state: LiveState, players: Participant[]): boolean {
  * - 'free' en vivo: ninguno (los rivales podrían seguir con el mismo criptico).
  */
 export function revealableIds(state: LiveState): string[] {
+  const finishedAt = state.finishedAt ?? Number.POSITIVE_INFINITY;
   if (state.config.flow === 'rounds') {
-    const current = state.status === 'live' ? state.round?.crypticId : undefined;
-    return state.usedIds.filter((id) => id !== current);
+    const round = state.round;
+    // En vivo, la ronda actual sigue en juego; al terminar, una ronda que aún no había abierto nunca se jugó.
+    const hidden = round && (state.status === 'live' || (round.opensAt ?? 0) > finishedAt) ? round.crypticId : undefined;
+    return state.usedIds.filter((id) => id !== hidden);
   }
-  return state.status === 'finished' ? [...state.crypticIds] : [];
+  if (state.status !== 'finished') return [];
+  if (!isSequential(state.config)) return [...state.crypticIds];
+  // Secuencial: solo lo que algún jugador llegó a ver (su actual cuenta si ya había abierto).
+  let reached = 0;
+  for (const p of Object.values(state.participants)) {
+    const cursor = p.cursor ?? 0;
+    const opened = (p.nextOpensAt ?? 0) <= finishedAt ? cursor + 1 : cursor;
+    reached = Math.max(reached, Math.min(opened, state.crypticIds.length));
+  }
+  return state.crypticIds.slice(0, reached);
 }

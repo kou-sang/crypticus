@@ -17,6 +17,8 @@ import {
   toggleExtraTime,
   toggleEndVote,
   passCryptic,
+  surrender,
+  isSequential,
   toggleSkip,
   type LiveState,
 } from '../shared/engine';
@@ -71,13 +73,32 @@ interface RaceEntry {
  * Copia para difundir: durante el intervalo entre cripticos se oculta el siguiente
  * (id y dificultad), para que nadie pueda leerlo antes de que abra.
  */
-function publicState(state: LiveState, now: number): LiveState {
+function publicState(state: LiveState, now: number, uid: string | null): LiveState {
+  // Partida terminada: ya no hay nada que ocultar del juego en sí (las soluciones van aparte).
+  if (state.status === 'finished') return { ...state, pool: { easy: [], medium: [], hard: [] } };
+
   const round = state.round;
-  if (!round || round.opensAt == null || now >= round.opensAt) return state;
+  const pendingRound = round && round.opensAt != null && now < round.opensAt ? round.crypticId : null;
+  let visible: string[];
+  if (isSequential(state.config)) {
+    // Cada jugador solo recibe los cripticos que ya le abrieron (el siguiente es secreto).
+    const me = uid ? state.participants[uid] : undefined;
+    const cursor = me?.cursor ?? 0;
+    const opened = me && now >= (me.nextOpensAt ?? 0) ? cursor + 1 : cursor;
+    visible = state.crypticIds.slice(0, opened);
+  } else if (state.config.flow === 'rounds') {
+    visible = state.usedIds.filter((id) => id !== pendingRound);
+  } else {
+    visible = state.crypticIds; // Flujo libre clásico: la lista completa es parte del juego.
+  }
+  const allowed = new Set(visible);
   return {
     ...state,
-    round: { ...round, crypticId: '' },
-    usedIds: state.usedIds.filter((id) => id !== round.crypticId),
+    crypticIds: visible,
+    usedIds: state.usedIds.filter((id) => allowed.has(id)),
+    pool: { easy: [], medium: [], hard: [] },
+    catalog: Object.fromEntries(Object.entries(state.catalog).filter(([id]) => allowed.has(id))),
+    round: round && pendingRound ? { ...round, crypticId: '' } : round,
   };
 }
 
@@ -217,7 +238,7 @@ export class CompetitionRoom extends DurableObject<Env> {
       const user = await verifyFirebaseToken(typeof token === 'string' ? token : '', this.env.FIREBASE_PROJECT_ID);
       ws.serializeAttachment({ uid: user.uid } satisfies SocketAttachment);
       const solutions = this.state ? solutionsFor(this.state) : [];
-      const state = this.state ? publicState(this.state, Date.now()) : null;
+      const state = this.state ? publicState(this.state, Date.now(), user.uid) : null;
       this.send(ws, { type: 'ready', uid: user.uid, state, solutions, serverTime: Date.now() });
       this.probe(ws);
     } catch (error) {
@@ -260,6 +281,11 @@ export class CompetitionRoom extends DurableObject<Env> {
         const { ended } = toggleEndVote(state, { uid, now });
         this.markDirty(ended);
         return { ok: true, applied: ended };
+      }
+      case 'surrender': {
+        surrender(state, { uid, now });
+        this.markDirty(state.status === 'finished');
+        return { ok: true, applied: true };
       }
       case 'pass': {
         passCryptic(state, { uid, now });
@@ -396,7 +422,7 @@ export class CompetitionRoom extends DurableObject<Env> {
   private async commit(): Promise<void> {
     const state = this.state;
     if (!state) return;
-    this.broadcast({ type: 'state', state: publicState(state, Date.now()), solutions: solutionsFor(state) });
+    this.broadcastState(state);
     await this.ctx.storage.put(STATE_KEY, state);
     if (state.status === 'live') await this.ctx.storage.setAlarm(nextDeadline(state, Date.now()));
   }
@@ -547,11 +573,21 @@ export class CompetitionRoom extends DurableObject<Env> {
     }
   }
 
-  private broadcast(message: ServerMessage): void {
-    const payload = JSON.stringify(message);
+  /** Difunde el estado recortado para cada jugador (cada uno ve solo sus cripticos abiertos). */
+  private broadcastState(state: LiveState): void {
+    const now = Date.now();
+    const solutions = solutionsFor(state);
+    const cache = new Map<string, string>();
     for (const ws of this.ctx.getWebSockets()) {
-      const attachment = ws.deserializeAttachment() as SocketAttachment | null;
-      if (!attachment?.uid) continue;
+      const uid = (ws.deserializeAttachment() as SocketAttachment | null)?.uid;
+      if (!uid) continue;
+      // Sin modo secuencial el estado es igual para todos: se serializa una sola vez.
+      const key = isSequential(state.config) ? uid : '*';
+      let payload = cache.get(key);
+      if (!payload) {
+        payload = JSON.stringify({ type: 'state', state: publicState(state, now, uid), solutions } satisfies ServerMessage);
+        cache.set(key, payload);
+      }
       try {
         ws.send(payload);
       } catch {

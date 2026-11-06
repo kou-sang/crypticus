@@ -26,9 +26,15 @@ function toToast(event: GameEvent, state: LiveState): Toast | null {
         detail: `Te quitó ${event.points} de vida`,
         tone: 'rival',
       };
+    case 'surrender':
+      return state.config.flow === 'rounds'
+        ? { id, title: `${name} se rindió`, detail: `Tienes ${event.seconds ?? 5}s para acertar`, tone: 'warn' }
+        : null;
     case 'eliminated':
       return { id, title: `${name} se quedó sin tiempo`, detail: 'Eliminado', tone: 'warn' };
     case 'solve': {
+      // Race: el avance se ve en la pista de carrera; sin avisos por cada acierto.
+      if (state.config.game === 'race') return null;
       if (state.config.royale) return { id, title: `${name} acertó`, detail: `+${event.seconds ?? 0}s a su reloj`, tone: 'rival' };
       const tier = event.tier ? DIFFICULTY_LABELS[event.tier].toLowerCase() : '';
       const detail = state.boss ? `Golpeó al jefe (−${event.points})` : hidden ? `Resolvió uno ${tier}` : `Uno ${tier} · +${event.points}`;

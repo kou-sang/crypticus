@@ -94,6 +94,10 @@ export class GameChannel {
     return this.request<AckReply>({ type: 'skip', reqId: this.nextId() });
   }
 
+  surrender(): Promise<AckReply> {
+    return this.request<AckReply>({ type: 'surrender', reqId: this.nextId() });
+  }
+
   pass(): Promise<AckReply> {
     return this.request<AckReply>({ type: 'pass', reqId: this.nextId() });
   }

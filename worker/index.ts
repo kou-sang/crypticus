@@ -49,10 +49,13 @@ async function selectUnseen(
   const seenDocs = await firestore.batchGet<{ seen?: Record<string, number> }>(uids.map((uid) => `userSeen/${uid}`));
   const lastSeen = mergeLastSeen([...seenDocs.values()].map((d) => d.seen));
   const pool = competition.pool ?? { easy: [], medium: [], hard: [] };
+  // `clueCount` (v0.7+) evita que el cliente tenga que elegir cripticos; antes se deducía de la lista guardada.
+  const stored = typeof competition.clueCount === 'number' ? competition.clueCount : null;
   const count =
-    competition.flow === 'rounds'
+    stored ??
+    (competition.flow === 'rounds'
       ? Math.max(pool.easy.length, pool.medium.length, pool.hard.length, 1)
-      : Math.max(competition.crypticIds.length, 1);
+      : Math.max(competition.crypticIds.length, 1));
   const selection = selectCryptics({
     byTier: catalogByTier(),
     lastSeen,
@@ -105,6 +108,10 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
     ...(competition.royale
       ? { royale: { baseSec: Number(competition.royale.baseSec), incrementSec: Number(competition.royale.incrementSec) } }
       : {}),
+    ...(typeof competition.cooldownSec === 'number' ? { cooldownSec: competition.cooldownSec } : {}),
+    ...(competition.surrender
+      ? { surrender: { enabled: competition.surrender.enabled === true, maxUses: Number(competition.surrender.maxUses) } }
+      : {}),
   };
   const configErrors = validateConfig(config, competition.maxPlayers);
   if (configErrors.length > 0) throw new AppError(400, 'bad_config', configErrors.join(' '));
@@ -130,8 +137,9 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   }
 
   // Los clientes escuchan este cambio en Firestore y abren el WebSocket.
+  // La lista de cripticos no se publica: vive solo en el DO (el siguiente siempre es secreto).
   await firestore.commit([
-    { kind: 'update', path: `competitions/${competitionId}`, data: { status: 'live', crypticIds, pool, ...times } },
+    { kind: 'update', path: `competitions/${competitionId}`, data: { status: 'live', crypticIds: [], pool: { easy: [], medium: [], hard: [] }, ...times } },
   ]);
   return json({ ok: true, data: times });
 }

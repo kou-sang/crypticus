@@ -1,5 +1,6 @@
 // Panel de un criptico: enunciado, celdas editables, pistas, feedback y explicación al acertar.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useNow } from '../../hooks/useNow';
 import type { CrypticPublic, Participant } from '../../../shared/types';
 import { answerLengthFromEnumeration, splitClue } from '../../../shared/answer';
 import { DIFFICULTY_LABELS } from '../../../shared/scoring';
@@ -27,6 +28,14 @@ export function ClueText({ cryptic, className }: { cryptic: Pick<CrypticPublic, 
       {text} <span className="whitespace-nowrap text-muted">{cryptic.enumeration || enumeration}</span>
     </span>
   );
+}
+
+/** Segundos restantes de cooldown (se repinta solo, sin re-renderizar el panel). */
+function CooldownHint({ until }: { until: number }) {
+  const now = useNow(200);
+  const seconds = Math.ceil((until - now) / 1000);
+  if (seconds <= 0) return null;
+  return <span className="font-mono text-xs text-muted">Espera {seconds}s</span>;
 }
 
 /** Explosión de puntos de color al acertar (decorativa). */
@@ -59,6 +68,9 @@ export function CluePanel({
   isBoss,
   actions,
   onNext,
+  successLabel,
+  cooldownMs = 0,
+  footer,
 }: {
   cryptic: CrypticPublic;
   me: Participant;
@@ -69,6 +81,9 @@ export function CluePanel({
   isBoss: boolean;
   actions: GameActions;
   onNext?: () => void; // Flujo libre: pasar al siguiente tras leer la explicación.
+  successLabel?: (points: number) => string; // Texto al acertar (por defecto, puntos o daño al jefe).
+  cooldownMs?: number; // Espera tras un intento antes de poder enviar otro.
+  footer?: ReactNode; // Acciones extra del modo (p. ej. rendirse).
 }) {
   const length = answerLengthFromEnumeration(cryptic.enumeration);
   const [letters, setLetters] = useState<string[]>(() => Array.from({ length }, () => ''));
@@ -76,6 +91,7 @@ export function CluePanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'answer' | 'hint' | null>(null);
   const [hints, setHints] = useState<string[]>([]);
+  const [blockedUntil, setBlockedUntil] = useState(0);
 
   const solvedNow = feedback?.kind === 'correct';
   const solved = solvedNow || me.solvedIds.includes(cryptic.id);
@@ -104,8 +120,10 @@ export function CluePanel({
       setFeedback({ kind: 'incomplete' });
       return;
     }
+    if (Date.now() < blockedUntil) return;
     setBusy('answer');
     setError(null);
+    if (cooldownMs > 0) setBlockedUntil(Date.now() + cooldownMs);
     try {
       const result = await actions.answer(cryptic.id, letters.join(''));
       if (result.correct) {
@@ -164,7 +182,7 @@ export function CluePanel({
       <div className="mt-3 min-h-5 text-sm" aria-live="polite">
         {feedback?.kind === 'correct' && (
           <span className="font-semibold text-ok">
-            ✓ {isBoss ? `−${feedback.points} de vida al jefe` : `+${feedback.points} puntos`}
+            ✓ {successLabel ? successLabel(feedback.points) : isBoss ? `−${feedback.points} de vida al jefe` : `+${feedback.points} puntos`}
           </span>
         )}
         {solved && !solvedNow && <span className="font-semibold text-ok">✓ Resuelto</span>}
@@ -200,12 +218,14 @@ export function CluePanel({
             <Button onClick={handleSubmit} loading={busy === 'answer'} disabled={!complete} className="h-11 px-6">
               Enviar
             </Button>
+            <CooldownHint until={blockedUntil} />
             <Button variant="secondary" onClick={handleHint} loading={busy === 'hint'} disabled={hintsAvailable <= 0}>
               {hintsAvailable > 0 ? `Pista${hintCost > 0 ? ` (−${hintCost})` : ''}` : 'Sin pistas'}
               {hintsAvailable > 0 && <span className="font-mono text-xs opacity-70">· {hintsAvailable}</span>}
             </Button>
           </>
         )}
+        {!solved && footer}
         {solved && onNext && (
           <Button autoFocus onClick={onNext} className="h-11 px-6">
             Siguiente →

@@ -64,10 +64,12 @@ export default function CompetitionRoom() {
   const countdown = isLive && startedAt !== null && !started;
   const ended = live !== null && (live.status === 'finished' || expired);
   const total = live
-    ? live.config.flow === 'rounds' && live.config.mode === 'count'
+    ? live.config.mode === 'count'
       ? live.config.targetCount
       : live.crypticIds.length
-    : comp.crypticIds.length;
+    : comp.mode === 'count'
+      ? comp.targetCount
+      : (comp.clueCount ?? comp.crypticIds.length);
 
   return (
     <>
@@ -78,7 +80,15 @@ export default function CompetitionRoom() {
         <div className="sticky top-14 z-10 -mx-4 -mt-4 mb-6 flex items-center justify-end gap-3 border-b border-line bg-paper/95 px-4 py-2 backdrop-blur">
           {live?.participants[profile.uid] && !live.boss && !live.config.hideScoreboard && !live.config.royale && (
             <span className="mr-auto font-mono text-sm">
-              Tú: <strong>{live.participants[profile.uid]!.score}</strong> {live.config.duel ? 'de vida' : 'pts'}
+              {live.config.game === 'race' ? (
+                <>
+                  Tú: <strong>{live.participants[profile.uid]!.solvedIds.length}</strong>/{live.config.targetCount}
+                </>
+              ) : (
+                <>
+                  Tú: <strong>{live.participants[profile.uid]!.score}</strong> {live.config.duel ? 'de vida' : 'pts'}
+                </>
+              )}
             </span>
           )}
           {live?.overtimeEndsAt != null && <Badge tone="accent">Prórroga</Badge>}
@@ -130,7 +140,7 @@ export default function CompetitionRoom() {
         </div>
 
         <aside className="space-y-6">
-          {(comp.status !== 'lobby' || isLive) && (
+          {(comp.status !== 'lobby' || isLive) && !(live?.config.game === 'race' && live.status === 'live') && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Marcador</h3>
               <Scoreboard
