@@ -27,6 +27,7 @@ const REASONS: Record<string, string> = {
   exhausted: 'No quedan cripticos.',
   bossDefeated: 'El jefe cayó.',
   bossSurvived: 'El jefe resistió.',
+  voted: 'Terminada por votación.',
 };
 
 type FinishedCompetition = Competition & {
@@ -161,7 +162,7 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
         </section>
       )}
 
-      <Link to="/competencias/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
+      <Link to="/jugar/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
         Revancha
       </Link>
     </div>

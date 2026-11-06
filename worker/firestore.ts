@@ -20,7 +20,9 @@ interface RawDocument {
 export type Write =
   | { kind: 'update'; path: string; data: Record<string, unknown> } // merge de campos listados
   | { kind: 'set'; path: string; data: Record<string, unknown> } // crea o reemplaza el documento
-  | { kind: 'increment'; path: string; increments: Record<string, number> };
+  | { kind: 'increment'; path: string; increments: Record<string, number> }
+  // Agrega/actualiza claves de un campo mapa sin tocar el resto; crea el documento si no existe.
+  | { kind: 'mergeMap'; path: string; field: string; entries: Record<string, number> };
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
@@ -130,6 +132,13 @@ export class FirestoreRest {
     const body = writes.map((write) => {
       if (write.kind === 'set') {
         return { update: { name: this.name(write.path), fields: encodeFields(write.data) } };
+      }
+      if (write.kind === 'mergeMap') {
+        const keys = Object.keys(write.entries);
+        return {
+          update: { name: this.name(write.path), fields: encodeFields({ [write.field]: write.entries }) },
+          updateMask: { fieldPaths: keys.map((key) => `${write.field}.\`${key.replace(/[`\\]/g, '')}\``) },
+        };
       }
       if (write.kind === 'update') {
         return {

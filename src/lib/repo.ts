@@ -21,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { chunk, detectDevice, pairId } from './utils';
+import { TIER_SHARES } from '../../shared/selection';
 import {
   DIFFICULTIES,
   type Competition,
@@ -129,13 +130,6 @@ export async function pickRandomCryptics(tier: Difficulty, count: number): Promi
   }
   return ids;
 }
-
-const TIER_SHARES: Record<TierMix, Record<Difficulty, number>> = {
-  balanced: { easy: 1 / 3, medium: 1 / 3, hard: 1 / 3 },
-  progressive: { easy: 1 / 3, medium: 1 / 3, hard: 1 / 3 },
-  easy: { easy: 0.6, medium: 0.3, hard: 0.1 },
-  hard: { easy: 0.1, medium: 0.3, hard: 0.6 },
-};
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];

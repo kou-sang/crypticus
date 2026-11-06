@@ -8,8 +8,8 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    // Solo /api/* invoca el Worker; el resto son assets gratuitos e ilimitados.
-    "run_worker_first": ["/api/*"]
+    // Solo /api/* y el handler de Auth (/__/*) invocan el Worker; el resto son assets gratuitos e ilimitados.
+    "run_worker_first": ["/api/*", "/__/*"]
   },
   "durable_objects": {
     "bindings": [{ "name": "COMPETITION_ROOM", "class_name": "CompetitionRoom" }]
@@ -17,7 +17,9 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CompetitionRoom"] }],
   "vars": {
     // Id del proyecto Firebase (público).
-    "FIREBASE_PROJECT_ID": "crypticus-eh"
+    "FIREBASE_PROJECT_ID": "crypticus-eh",
+    // Región de las salas: 'sam' = Sudamérica. Opciones: wnam, enam, sam, weur, eeur, apac, oc, afr, me.
+    "DO_LOCATION_HINT": "sam"
   }
   // Secrets (no van aquí): `wrangler secret put FIREBASE_SERVICE_ACCOUNT` y `wrangler secret put ANSWER_HMAC_KEY`
 }

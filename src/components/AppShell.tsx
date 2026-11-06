@@ -10,9 +10,8 @@ import { prefetchAppRoutes, prefetchPath } from '../routes';
 // Historial vive en el perfil (botón de avatar); el navbar no repite accesos.
 const NAV_ITEMS = [
   { to: '/inicio', label: 'Inicio', glyph: '◧' },
-  { to: '/competencias', label: 'Competir', glyph: '▦' },
+  { to: '/jugar', label: 'Jugar', glyph: '▦' },
   { to: '/amigos', label: 'Amigos', glyph: '◎' },
-  { to: '/chat', label: 'Chat', glyph: '❝' },
   { to: '/rankings', label: 'Ranking', glyph: '▲' },
 ];
 
@@ -90,7 +89,7 @@ export function AppShell() {
         </Suspense>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

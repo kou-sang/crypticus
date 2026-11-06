@@ -12,8 +12,10 @@ import {
   nextDeadline,
   rankState,
   reserveAttempt,
+  revealableIds,
   tick,
   toggleExtraTime,
+  toggleEndVote,
   toggleSkip,
   type LiveState,
 } from '../shared/engine';
@@ -52,7 +54,22 @@ interface SyncMeta {
 
 interface SocketAttachment {
   uid: string | null;
+  rtts?: number[]; // Últimas muestras de RTT medidas por el servidor (probe/probeAck).
 }
+
+/** Respuesta correcta en espera de arbitraje (rondas). */
+interface RaceEntry {
+  uid: string;
+  receivedAt: number;
+  effectiveAt: number; // receivedAt - latencia de ida estimada (compensación)
+  resolve: (outcome: ReturnType<typeof applyAnswer>) => void;
+  reject: (error: unknown) => void;
+}
+
+const RTT_SAMPLES = 5;
+// Compensación máxima: limita lo que un cliente podría ganar inflando su latencia.
+const MAX_COMPENSATION_MS = 80;
+const RACE_JITTER_MS = 15;
 
 const STATE_KEY = 'state';
 const SYNC_KEY = 'sync';
@@ -129,7 +146,12 @@ export class CompetitionRoom extends DurableObject<Env> {
       return;
     }
 
-    if (message.type === 'ping') return this.send(ws, { type: 'pong', serverTime: Date.now() });
+    if (message.type === 'ping') {
+      const sentAt = typeof message.sentAt === 'number' ? message.sentAt : undefined;
+      this.send(ws, { type: 'pong', serverTime: Date.now(), sentAt });
+      return this.probe(ws);
+    }
+    if (message.type === 'probeAck') return this.recordRtt(ws, Number(message.id));
     if (message.type === 'auth') return this.handleAuth(ws, message.token);
 
     const uid = (ws.deserializeAttachment() as SocketAttachment | null)?.uid ?? null;
@@ -141,6 +163,9 @@ export class CompetitionRoom extends DurableObject<Env> {
     } catch (error) {
       const { code, message: text } = describeError(error);
       this.send(ws, { type: 'reply', reqId, ok: false, error: { code, message: text } });
+    } finally {
+      // La respuesta sale antes de persistir: el jugador no espera a la escritura en disco.
+      await this.flush();
     }
   }
 
@@ -178,6 +203,7 @@ export class CompetitionRoom extends DurableObject<Env> {
       ws.serializeAttachment({ uid: user.uid } satisfies SocketAttachment);
       const solutions = this.state ? solutionsFor(this.state) : [];
       this.send(ws, { type: 'ready', uid: user.uid, state: this.state, solutions, serverTime: Date.now() });
+      this.probe(ws);
     } catch (error) {
       this.send(ws, { type: 'error', code: 'unauthenticated', message: describeError(error).message });
       ws.close(4401, 'unauthenticated');
@@ -196,11 +222,8 @@ export class CompetitionRoom extends DurableObject<Env> {
     // Si venció el plazo, se evalúa primero (cierre o prórroga).
     if (state.status === 'live' && now >= nextDeadline(state)) {
       const result = tick(state, now);
-      await this.commit();
-      if (result.finished) {
-        await this.syncResults();
-        throw new GameError('time_up', 'Se acabó el tiempo.');
-      }
+      this.markDirty(result.finished);
+      if (result.finished) throw new GameError('time_up', 'Se acabó el tiempo.');
     }
 
     switch (message.type) {
@@ -210,17 +233,21 @@ export class CompetitionRoom extends DurableObject<Env> {
         return this.handleHint(uid, String(message.crypticId ?? ''), message.reveal === true);
       case 'vote':
         applyDifficultyVote(state, { uid, tier: message.tier, now });
-        await this.commit();
+        this.markDirty();
         return { ok: true };
       case 'extraTime': {
         const { applied } = toggleExtraTime(state, { uid, now });
-        await this.commit();
+        this.markDirty();
         return { ok: true, applied };
+      }
+      case 'endVote': {
+        const { ended } = toggleEndVote(state, { uid, now });
+        this.markDirty(ended);
+        return { ok: true, applied: ended };
       }
       case 'skip': {
         const { skipped } = toggleSkip(state, { uid, now });
-        await this.commit();
-        if (state.status === 'finished') await this.syncResults();
+        this.markDirty(state.status === 'finished');
         return { ok: true, applied: skipped };
       }
       default:
@@ -230,36 +257,127 @@ export class CompetitionRoom extends DurableObject<Env> {
 
   private async handleAnswer(uid: string, crypticId: string, guess: string): Promise<AnswerReply> {
     const state = this.requireState();
-    const now = Date.now();
-    reserveAttempt(state, uid, crypticId, now); // Valida y reserva la ventana anti fuerza bruta.
+    const receivedAt = Date.now();
+    reserveAttempt(state, uid, crypticId, receivedAt); // Valida y reserva la ventana anti fuerza bruta.
     const secret = getCrypticSecret(crypticId);
     if (!secret) throw new GameError('missing_cryptic', 'Criptico no encontrado.');
 
     const correct = await verifyAnswer(this.env.ANSWER_HMAC_KEY, crypticId, guess, secret.hash);
-    // applyAnswer revalida: durante el await pudo cerrarse la ronda.
-    const outcome = applyAnswer(state, { uid, crypticId, correct, now: Date.now() });
-    await this.commit();
-    if (outcome.finished) await this.syncResults();
+    // En rondas, varios aciertos casi simultáneos se arbitran con compensación de latencia.
+    const contested = correct && state.config.flow === 'rounds' && state.status === 'live' && state.round?.crypticId === crypticId;
+    // applyAnswer revalida: durante el await pudo cerrarse la ronda. Se usa la hora de llegada, no la de fin de verificación.
+    const outcome = contested
+      ? await this.joinRace(uid, crypticId, receivedAt)
+      : applyAnswer(state, { uid, crypticId, correct, now: receivedAt });
+    this.markDirty(outcome.finished);
     return { ...outcome, explanation: outcome.correct ? (secret.explanation ?? null) : null };
+  }
+
+  // ---------- Arbitraje de aciertos simultáneos ----------
+
+  private race: { crypticId: string; entries: RaceEntry[] } | null = null;
+
+  /** Latencia de ida estimada de un jugador (mitad del menor RTT reciente), acotada. */
+  private oneWayMs(uid: string): number {
+    let best = Infinity;
+    for (const ws of this.ctx.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as SocketAttachment | null;
+      if (attachment?.uid === uid && attachment.rtts?.length) best = Math.min(best, ...attachment.rtts);
+    }
+    return Number.isFinite(best) ? Math.min(best / 2, MAX_COMPENSATION_MS) : 0;
+  }
+
+  /**
+   * Abre (o se une a) la ventana de arbitraje. La ventana dura lo justo para que llegue un rival
+   * más lento que haya respondido antes: (su latencia de ida - la mía) + margen. Gana el menor `effectiveAt`.
+   */
+  private joinRace(uid: string, crypticId: string, receivedAt: number): Promise<ReturnType<typeof applyAnswer>> {
+    const mine = this.oneWayMs(uid);
+    const entry: Omit<RaceEntry, 'resolve' | 'reject'> = { uid, receivedAt, effectiveAt: receivedAt - mine };
+    return new Promise((resolve, reject) => {
+      if (this.race?.crypticId === crypticId) {
+        this.race.entries.push({ ...entry, resolve, reject });
+        return;
+      }
+      const others = Object.keys(this.state?.participants ?? {}).filter((id) => id !== uid);
+      const slowest = Math.max(0, ...others.map((id) => this.oneWayMs(id)));
+      const windowMs = Math.min(MAX_COMPENSATION_MS, Math.max(0, slowest - mine)) + RACE_JITTER_MS;
+      this.race = { crypticId, entries: [{ ...entry, resolve, reject }] };
+      setTimeout(() => this.settleRace(), windowMs);
+    });
+  }
+
+  private settleRace(): void {
+    const race = this.race;
+    this.race = null;
+    const state = this.state;
+    if (!race) return;
+    race.entries.sort((a, b) => a.effectiveAt - b.effectiveAt || a.receivedAt - b.receivedAt);
+    for (const entry of race.entries) {
+      try {
+        if (!state) throw new GameError('not_live', 'La competencia no ha iniciado.');
+        // El primero gana la ronda; para los demás applyAnswer devuelve `stale` (o puntúa si hay cuenta atrás).
+        entry.resolve(applyAnswer(state, { uid: entry.uid, crypticId: race.crypticId, correct: true, now: entry.receivedAt }));
+      } catch (error) {
+        entry.reject(error);
+      }
+    }
+  }
+
+  // ---------- Latencia ----------
+
+  private probe(ws: WebSocket): void {
+    this.send(ws, { type: 'probe', id: Date.now() });
+  }
+
+  private recordRtt(ws: WebSocket, sentAt: number): void {
+    const rtt = Date.now() - sentAt;
+    if (!Number.isFinite(rtt) || rtt < 0 || rtt > 10_000) return;
+    const attachment = (ws.deserializeAttachment() as SocketAttachment | null) ?? { uid: null };
+    const rtts = [...(attachment.rtts ?? []), rtt].slice(-RTT_SAMPLES);
+    ws.serializeAttachment({ ...attachment, rtts } satisfies SocketAttachment);
   }
 
   private async handleHint(uid: string, crypticId: string, reveal: boolean): Promise<HintReply> {
     const state = this.requireState();
     const { used, maxAllowed } = applyHint(state, { uid, crypticId, reveal, now: Date.now() });
-    if (reveal) await this.commit();
+    if (reveal) this.markDirty();
     const hints = getCrypticSecret(crypticId)?.hints ?? [];
     return { hints: hints.slice(0, used), remaining: Math.max(0, maxAllowed - used) };
   }
 
   // ---------- Persistencia, difusión y alarmas ----------
 
-  /** Persiste, reprograma la alarma y difunde el estado. */
+  private dirty = false;
+  private needsSync = false;
+
+  /** Marca cambios para persistir y difundir después de responder (ver `flush`). */
+  private markDirty(finished = false): void {
+    this.dirty = true;
+    if (finished || this.state?.status === 'finished') this.needsSync = true;
+  }
+
+  private async flush(): Promise<void> {
+    if (this.dirty) {
+      this.dirty = false;
+      await this.commit();
+    }
+    if (this.needsSync) {
+      this.needsSync = false;
+      await this.syncResults();
+    }
+  }
+
+  /**
+   * Difunde y luego persiste. Difundir primero evita que el "output gate" del DO retenga
+   * los mensajes hasta confirmar la escritura en disco.
+   */
   private async commit(): Promise<void> {
     const state = this.state;
     if (!state) return;
+    this.broadcast({ type: 'state', state, solutions: solutionsFor(state) });
     await this.ctx.storage.put(STATE_KEY, state);
     if (state.status === 'live') await this.ctx.storage.setAlarm(nextDeadline(state));
-    this.broadcast({ type: 'state', state, solutions: solutionsFor(state) });
   }
 
   /** Escribe resultados, rating y estadísticas en Firestore. Reintenta por alarma si falla. */
@@ -338,6 +456,8 @@ export class CompetitionRoom extends DurableObject<Env> {
               'stats.hintsUsed': p.hintsUsed,
             },
           })),
+        // Cripticos vistos: no se repetirán en futuras salas con este jugador.
+        ...this.seenWrites(state, ranked.map((p) => p.uid)),
       ];
       await firestore.commit(writes);
       this.sync = { synced: true, attempts: this.sync.attempts };
@@ -348,6 +468,14 @@ export class CompetitionRoom extends DurableObject<Env> {
       console.error(`[room] sync fallida (${this.sync.attempts})`, error);
       if (this.sync.attempts < MAX_SYNC_ATTEMPTS) await this.ctx.storage.setAlarm(Date.now() + SYNC_RETRY_MS);
     }
+  }
+
+  private seenWrites(state: LiveState, uids: string[]): Write[] {
+    const at = state.finishedAt ?? Date.now();
+    const played = revealableIds(state);
+    if (played.length === 0) return [];
+    const entries = Object.fromEntries(played.map((id) => [id, at]));
+    return uids.map((uid) => ({ kind: 'mergeMap', path: `userSeen/${uid}`, field: 'seen', entries }));
   }
 
   private send(ws: WebSocket, message: ServerMessage): void {

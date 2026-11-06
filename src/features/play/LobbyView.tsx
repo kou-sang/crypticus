@@ -90,7 +90,7 @@ export function LobbyView({
               onClick={() =>
                 run('delete', async () => {
                   await deleteCompetition(competition.id, profile.uid);
-                  navigate('/competencias');
+                  navigate('/jugar');
                 })
               }
             >

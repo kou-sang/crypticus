@@ -20,6 +20,16 @@ export function getCrypticSecret(crypticId: string): WorkerCrypticSecret | null 
   return Object.prototype.hasOwnProperty.call(secrets, crypticId) ? (secrets[crypticId] ?? null) : null;
 }
 
+/** Todos los cripticos empaquetados, por dificultad (base de la selección sin repetir). */
+let byTierCache: Record<Difficulty, string[]> | null = null;
+export function catalogByTier(): Record<Difficulty, string[]> {
+  if (!byTierCache) {
+    byTierCache = { easy: [], medium: [], hard: [] };
+    for (const [id, secret] of Object.entries(secrets)) byTierCache[secret.tier]?.push(id);
+  }
+  return byTierCache;
+}
+
 /** Catálogo (dificultad + nº de pistas) de los ids que tengan secreto disponible. */
 export function buildCatalog(ids: string[]): Record<string, CatalogEntry> {
   const catalog: Record<string, CatalogEntry> = {};

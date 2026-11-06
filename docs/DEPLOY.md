@@ -169,9 +169,22 @@ $hmac | npx wrangler secret put ANSWER_HMAC_KEY
 
 Si cerraste la ventana y perdiste `$hmac`, vuelve a asignarla con el valor guardado: `$hmac = "<tu clave>"`.
 
-### 4.3 Autorizar el dominio en Firebase
+### 4.3 Autorizar el dominio en Firebase (necesario para Google)
 
 *Firebase → Authentication → Configuración → Dominios autorizados → Agregar dominio* → `crypticus.<tu-subdominio>.workers.dev`
+
+Sin este paso, el correo y la contraseña funcionan, pero **Google falla** con `auth/unauthorized-domain`. Revisa además que *Authentication → Método de acceso → Google* esté **Habilitado** y tenga un correo de asistencia.
+
+### 4.4 Google en el mismo dominio (recomendado para móviles y Safari)
+
+Safari, Brave y algunos navegadores móviles bloquean las cookies de terceros, y eso rompe el login de Google aunque el dominio esté autorizado. El Worker ya hace de proxy de `/__/auth/*`. Para activarlo:
+
+1. *Google Cloud Console* (proyecto `crypticus-eh`) → *APIs y servicios → Credenciales* → abre **Web client (auto created by Google Service)**.
+2. En *URI de redireccionamiento autorizados*, agrega `https://crypticus.<tu-subdominio>.workers.dev/__/auth/handler` y guarda.
+3. En `.env.local`, agrega `VITE_AUTH_SAME_ORIGIN=true`.
+4. `npm run deploy`.
+
+Si algo falla, el mensaje de error ahora incluye el código entre paréntesis (por ejemplo `auth/unauthorized-domain`). Ese código indica la causa.
 
 ---
 
@@ -240,6 +253,8 @@ npm run dev:worker    # http://localhost:8787
 | --- | --- | --- |
 | `FIREBASE_SERVICE_ACCOUNT no es JSON válido` | base64 en UTF-16 o con salto de línea | Regenerar con el paso 1.3 |
 | `auth/unauthorized-domain` | Dominio no autorizado | Paso 4.3 |
+| Google se cierra sin entrar (móvil o Safari) | Cookies de terceros bloqueadas | Paso 4.4 |
+| `redirect_uri_mismatch` al usar Google | Falta la URI del paso 4.4.2 | Paso 4.4 |
 | Error de índice al crear partida | Índices construyéndose | Esperar al paso 2 |
 | `No hay cripticos cargados todavía` | No se importaron | Paso 3 |
 | `No hay cripticos disponibles` al iniciar | `worker\generated\cryptic-secrets.json` vacío al desplegar | Paso 3 (`--secrets-only` basta) → `npm run deploy` |

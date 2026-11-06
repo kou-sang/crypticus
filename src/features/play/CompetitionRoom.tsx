@@ -22,6 +22,7 @@ import { LobbyView } from './LobbyView';
 import { PlayView } from './PlayView';
 import { ResultsView } from './ResultsView';
 import { Scoreboard } from './Scoreboard';
+import { EndVote } from './EndVote';
 import { GameClock, StartCountdown } from './GameClock';
 
 export default function CompetitionRoom() {
@@ -31,15 +32,17 @@ export default function CompetitionRoom() {
 
   const competition = useLiveDoc<Competition>(doc(db, 'competitions', competitionId), [competitionId]);
   const comp = competition.data;
-  const isLive = comp?.status === 'live';
+  const isMember = comp?.participantIds.includes(profile.uid) ?? false;
+  // El WebSocket se abre ya en el lobby: al iniciar, el estado llega directo del DO (sin esperar a Firestore).
+  const game = useGameChannel(competitionId, comp !== null && comp.status !== 'finished' && (isMember || comp.status === 'live'));
+  const offset = game.clockOffsetMs;
+  const isLive = comp?.status === 'live' || (comp?.status === 'lobby' && game.state !== null);
 
   // Lobby y resultados leen Firestore; en vivo, todo llega por WebSocket.
   const lobbyParticipants = useLiveQuery<Participant>(
     isLive ? null : collection(db, 'competitions', competitionId, 'participants'),
     [competitionId, isLive],
   );
-  const game = useGameChannel(competitionId, isLive);
-  const offset = game.clockOffsetMs;
 
   const live = isLive ? game.state : null;
   const startedAt = live?.startedAt ?? comp?.startedAt ?? null;
@@ -83,6 +86,11 @@ export default function CompetitionRoom() {
             title={game.connection === 'open' ? 'Conectado' : 'Reconectando'}
             className={cx('size-2 rounded-full', game.connection === 'open' ? 'bg-ok' : 'animate-pulse bg-accent')}
           />
+          {game.rttMs !== null && (
+            <span className="font-mono text-[11px] text-muted" title="Latencia con el servidor">
+              {game.rttMs} ms
+            </span>
+          )}
           {deadline !== null && <GameClock deadline={deadline} offsetMs={offset} />}
         </div>
       )}
@@ -90,7 +98,7 @@ export default function CompetitionRoom() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-6">
           {comp.status !== 'finished' && <DeviceNotice participants={participants} />}
-          {comp.status === 'lobby' && (
+          {comp.status === 'lobby' && !isLive && (
             <LobbyView competition={comp} participants={participants} profile={profile} canJoin={canJoin} />
           )}
 
@@ -121,7 +129,7 @@ export default function CompetitionRoom() {
         </div>
 
         <aside className="space-y-6">
-          {comp.status !== 'lobby' && (
+          {(comp.status !== 'lobby' || isLive) && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Marcador</h3>
               <Scoreboard
@@ -135,6 +143,9 @@ export default function CompetitionRoom() {
             </section>
           )}
           {live && <EventFeed state={live} />}
+          {live?.status === 'live' && !ended && live.participants[profile.uid] && (
+            <EndVote state={live} uid={profile.uid} actions={game.actions} />
+          )}
           {isParticipant && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Chat de sala</h3>

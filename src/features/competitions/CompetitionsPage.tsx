@@ -57,7 +57,7 @@ export default function CompetitionsPage() {
         kicker="Competir"
         title="Salas abiertas"
         action={
-          <Link to="/competencias/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
+          <Link to="/jugar/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
             + Crear
           </Link>
         }

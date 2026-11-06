@@ -7,7 +7,6 @@ const loaders = {
   createCompetition: () => import('./features/competitions/CreateCompetitionPage'),
   room: () => import('./features/play/CompetitionRoom'),
   friends: () => import('./features/friends/FriendsPage'),
-  chat: () => import('./features/chat/ChatPage'),
   rankings: () => import('./features/rankings/RankingsPage'),
   profile: () => import('./features/profile/ProfilePage'),
   settings: () => import('./features/settings/SettingsPage'),
@@ -18,11 +17,10 @@ export { loaders };
 
 const PATH_TO_ROUTE: [prefix: string, key: RouteKey][] = [
   ['/inicio', 'dashboard'],
-  ['/competencias/nueva', 'createCompetition'],
-  ['/competencias', 'competitions'],
+  ['/jugar/nueva', 'createCompetition'],
+  ['/jugar', 'competitions'],
   ['/c/', 'room'],
   ['/amigos', 'friends'],
-  ['/chat', 'chat'],
   ['/rankings', 'rankings'],
   ['/u/', 'profile'],
   ['/ajustes', 'settings'],

@@ -16,7 +16,6 @@ const CompetitionsPage = lazy(loaders.competitions);
 const CreateCompetitionPage = lazy(loaders.createCompetition);
 const CompetitionRoom = lazy(loaders.room);
 const FriendsPage = lazy(loaders.friends);
-const ChatPage = lazy(loaders.chat);
 const RankingsPage = lazy(loaders.rankings);
 const ProfilePage = lazy(loaders.profile);
 const SettingsPage = lazy(loaders.settings);
@@ -36,12 +35,12 @@ export function App() {
               <Route element={<RequireAuth />}>
                 <Route element={<AppShell />}>
                   <Route path="/inicio" element={<DashboardPage />} />
-                  <Route path="/competencias" element={<CompetitionsPage />} />
-                  <Route path="/competencias/nueva" element={<CreateCompetitionPage />} />
+                  <Route path="/jugar" element={<CompetitionsPage />} />
+                  <Route path="/jugar/nueva" element={<CreateCompetitionPage />} />
+                  <Route path="/competencias/*" element={<Navigate to="/jugar" replace />} />
                   <Route path="/c/:competitionId" element={<CompetitionRoom />} />
                   <Route path="/amigos" element={<FriendsPage />} />
-                  <Route path="/chat" element={<ChatPage />} />
-                  <Route path="/chat/:chatId" element={<ChatPage />} />
+                  <Route path="/chat/*" element={<Navigate to="/amigos" replace />} />
                   <Route path="/rankings" element={<RankingsPage />} />
                   <Route path="/u/:uid" element={<ProfilePage />} />
                   <Route path="/historial" element={<OwnProfileRedirect />} />
