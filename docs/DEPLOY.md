@@ -191,8 +191,8 @@ Si algo falla, el mensaje de error ahora incluye el código entre paréntesis (p
 ## 5. Prueba rápida
 
 1. Abre la URL, crea una cuenta y elige tu `@usuario`.
-2. *Competir → Crear* → preset **Rápida** → *Crear sala* → *Iniciar*. Puedes jugar solo para probar.
-3. Responde, por ejemplo, «Capital italiana con amor alterado (4)». Deberías ver la animación, oír el sonido y sumar puntos.
+2. *Jugar → + Crear* → *Crear sala* → *Iniciar*. Puedes jugar solo para probar.
+3. Responde un criptico escribiendo en las casillas. Deberías ver la animación, oír el sonido, sumar puntos y leer la explicación.
 4. Prueba con dos navegadores (o PC + móvil):
    - **Duelo:** rondas, votación de dificultad, cuenta atrás con efecto desmayo y aviso de partida mixta móvil/PC.
    - **Jefe:** golpes, curación al fallar y figura animada.
