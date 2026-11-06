@@ -45,10 +45,11 @@ export function prefetchPath(path: string): void {
 /** Precarga todas las secciones de la app autenticada cuando el navegador está ocioso. */
 export function prefetchAppRoutes(): () => void {
   const run = () => PATH_TO_ROUTE.forEach(([, key]) => prefetchRoute(key));
-  if ('requestIdleCallback' in window) {
+  // Safari no implementa requestIdleCallback: se usa un retardo fijo.
+  if (typeof window.requestIdleCallback === 'function') {
     const id = window.requestIdleCallback(run, { timeout: 4000 });
     return () => window.cancelIdleCallback(id);
   }
-  const id = window.setTimeout(run, 2000);
-  return () => window.clearTimeout(id);
+  const id = globalThis.setTimeout(run, 2000);
+  return () => globalThis.clearTimeout(id);
 }
