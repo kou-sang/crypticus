@@ -20,7 +20,12 @@ function toToast(event: GameEvent, state: LiveState): Toast | null {
   const hidden = state.config.hideScoreboard;
   switch (event.kind) {
     case 'damage':
-      return { id, title: `${name} acertó primero`, detail: `Te quitó ${event.points} de vida`, tone: 'rival' };
+      return {
+        id,
+        title: (event.combo ?? 1) >= 2 ? `${name} · COMBO ×${event.combo}` : `${name} acertó primero`,
+        detail: `Te quitó ${event.points} de vida`,
+        tone: 'rival',
+      };
     case 'eliminated':
       return { id, title: `${name} se quedó sin tiempo`, detail: 'Eliminado', tone: 'warn' };
     case 'solve': {

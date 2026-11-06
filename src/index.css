@@ -150,3 +150,15 @@ body {
   animation-iteration-count: 1 !important;
   transition-duration: 1ms !important;
 }
+
+/* Duel: destello al recibir un golpe que cruza un umbral de vida. */
+@keyframes damage-flash {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.damage-flash {
+  animation: damage-flash 600ms ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .damage-flash { animation-duration: 1ms; }
+}

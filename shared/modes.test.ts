@@ -4,6 +4,7 @@ import {
   createLiveState,
   nextDeadline,
   passCryptic,
+  duelOneHitFromDeath,
   rankState,
   reserveAttempt,
   royaleRemaining,
@@ -99,6 +100,28 @@ describe('Duel', () => {
     // Durante el intervalo no se puede responder.
     expect(() => reserveAttempt(state, 'b', state.round!.crypticId, 3000)).toThrow();
     expect(nextDeadline(state, 3000)).toBe(4000);
+  });
+
+  it('combo: aciertos seguidos pegan más fuerte; el acierto del rival lo corta', () => {
+    const state = start({ ...duel, duel: { ...duel.duel, damage: 'speed' } });
+    const hit = (uid: string) => {
+      const before = Object.values(state.participants).find((p) => p.uid !== uid)!.score;
+      const at = state.round!.opensAt!;
+      answer(state, uid, state.round!.crypticId, true, at); // respuesta instantánea: base 40
+      return before - Object.values(state.participants).find((p) => p.uid !== uid)!.score;
+    };
+    expect(hit('a')).toBe(40);
+    expect(hit('a')).toBe(50); // ×1.25
+    expect(state.participants.a!.streak).toBe(2);
+    expect(hit('b')).toBe(40); // b corta el combo de a
+    expect(state.participants.a!.streak).toBe(0);
+  });
+
+  it('avisa cuando un jugador está a un golpe de perder', () => {
+    const state = start(duel);
+    expect(duelOneHitFromDeath(state, 'b')).toBe(false);
+    state.participants.b!.score = 40; // un difícil quita 40
+    expect(duelOneHitFromDeath(state, 'b')).toBe(true);
   });
 
   it('nocaut: gana quien deja al rival sin vida', () => {

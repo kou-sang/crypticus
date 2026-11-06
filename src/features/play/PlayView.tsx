@@ -10,7 +10,7 @@ import { ErrorBanner, Spinner } from '../../components/ui';
 import { CluePanel, ClueText } from './CluePanel';
 import { DifficultyVote, SharedRequests } from './GameControls';
 import { useCryptics } from './useCryptics';
-import { DuelBars, NextCountdown, RoyaleFlow } from './ModeViews';
+import { DuelAlerts, DuelBars, NextCountdown, RoyaleFlow } from './ModeViews';
 
 /** Coste visible de una pista según la regla de puntaje. */
 const hintCostOf = (state: LiveState) => (state.config.scoring === 'fewestHints' && state.boss === null ? HINT_PENALTY : 0);
@@ -142,7 +142,12 @@ function RoundsFlow({
   return (
     <div className="grid gap-8 md:grid-cols-[1fr_220px]">
       <section className="min-w-0 space-y-6">
-        {state.config.duel && <DuelBars state={state} uid={uid} />}
+        {state.config.duel && (
+          <>
+            <DuelBars state={state} uid={uid} />
+            <DuelAlerts state={state} uid={uid} />
+          </>
+        )}
         {waiting ? (
           <div className="space-y-4">
             {round.opensAt != null && <NextCountdown opensAt={round.opensAt} offsetMs={offsetMs} />}

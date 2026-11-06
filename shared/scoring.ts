@@ -70,6 +70,7 @@ export const DUEL_DAMAGE_LABELS: Record<DuelDamage, { title: string; description
   difficulty: { title: 'Dificultad', description: 'Fácil 20, medio 30, difícil 40 de daño.' },
   speed: { title: 'Velocidad', description: 'Hasta 40 de daño; baja cuanto más tardas (mín. 10).' },
 };
+export const DUEL_COMBO_INFO = 'Combo: acertar primero varias veces seguidas suma +25 % de daño por golpe (máx. ×2). Se corta cuando el rival acierta.';
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil' };
 
@@ -174,6 +175,13 @@ export const DUEL_TIER_DAMAGE: Record<Difficulty, number> = { easy: 20, medium: 
 const DUEL_SPEED_MAX = 40;
 const DUEL_SPEED_WINDOW_MS = 90_000; // A los 90 s el daño por velocidad llega a su mínimo.
 const DUEL_SPEED_MIN_RATIO = 0.25;
+/** Combo: cada acierto consecutivo (sin que el rival acierte en medio) suma +25 % de daño, hasta ×2. */
+export const DUEL_COMBO_STEP = 0.25;
+export const DUEL_COMBO_MAX = 5;
+
+export function duelComboMultiplier(streak: number): number {
+  return 1 + DUEL_COMBO_STEP * (Math.min(Math.max(streak, 1), DUEL_COMBO_MAX) - 1);
+}
 
 /**
  * Daño que recibe el rival en un duelo. La remontada usa la vida como puntaje:
@@ -186,12 +194,15 @@ export function computeDuelDamage(input: {
   comeback: ComebackLevel;
   hp: number;
   rivalHp: number;
+  streak?: number; // Aciertos consecutivos incluido este (1 = aislado).
 }): number {
   const base =
     input.rule === 'speed'
       ? DUEL_SPEED_MAX * Math.max(DUEL_SPEED_MIN_RATIO, 1 - Math.max(0, input.elapsedMs) / DUEL_SPEED_WINDOW_MS)
       : DUEL_TIER_DAMAGE[input.tier];
-  return Math.round(base * comebackFactor(input.comeback, input.tier, input.hp, input.rivalHp));
+  return Math.round(
+    base * comebackFactor(input.comeback, input.tier, input.hp, input.rivalHp) * duelComboMultiplier(input.streak ?? 1),
+  );
 }
 
 function clamp01(value: number): number {

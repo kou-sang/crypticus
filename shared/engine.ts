@@ -64,6 +64,7 @@ export interface GameEvent {
   tier?: Difficulty;
   points?: number;
   seconds?: number;
+  combo?: number; // Duel: aciertos consecutivos del atacante.
 }
 
 export type EndReason =
@@ -186,6 +187,34 @@ export function rankMetric(config: CompetitionConfig): RankMetric {
   if (config.game === 'royale') return 'survival';
   if (config.game === 'duel') return 'score';
   return config.winByTwo || config.mode === 'count' ? 'solved' : 'score';
+}
+
+// ---------- Duel ----------
+
+/**
+ * Daño máximo que podría recibir `uid` en el próximo golpe del rival:
+ * criptico difícil, respuesta instantánea y el combo que el rival tendría.
+ */
+export function duelMaxIncoming(state: LiveState, uid: string): number {
+  const duel = state.config.duel;
+  const me = state.participants[uid];
+  const rival = Object.values(state.participants).find((p) => p.uid !== uid);
+  if (!duel || !me || !rival) return 0;
+  return computeDuelDamage({
+    rule: duel.damage,
+    tier: 'hard',
+    elapsedMs: 0,
+    comeback: state.config.comeback,
+    hp: rival.score,
+    rivalHp: me.score,
+    streak: (rival.streak ?? 0) + 1,
+  });
+}
+
+/** `uid` está a un golpe de perder: el próximo acierto del rival puede dejarlo sin vida. */
+export function duelOneHitFromDeath(state: LiveState, uid: string): boolean {
+  const me = state.participants[uid];
+  return Boolean(state.config.duel && me && me.score > 0 && me.score <= duelMaxIncoming(state, uid));
 }
 
 // ---------- Royale ----------
@@ -334,9 +363,12 @@ export function applyAnswer(
     return { correct: true, points: state.config.royale.incrementSec, finished: evaluate(state, now).finished, stale: false };
   }
 
-  // Duel: acertar primero le quita vida al rival.
+  // Duel: acertar primero le quita vida al rival; los aciertos seguidos forman combo.
   if (state.config.duel) {
     const rival = Object.values(state.participants).find((p) => p.uid !== uid);
+    const streak = (participant.streak ?? 0) + 1;
+    participant.streak = streak;
+    if (rival) rival.streak = 0;
     const damage = rival
       ? Math.min(
           rival.score,
@@ -347,13 +379,14 @@ export function applyAnswer(
             comeback: state.config.comeback,
             hp: participant.score,
             rivalHp: rival.score,
+            streak,
           }),
         )
       : 0;
     if (rival) rival.score = Math.max(0, rival.score - damage);
     participant.solvedIds = [...participant.solvedIds, crypticId];
     participant.lastSolvedAt = now;
-    pushEvent(state, { at: now, kind: 'damage', uid, crypticId, tier, points: damage });
+    pushEvent(state, { at: now, kind: 'damage', uid, crypticId, tier, points: damage, combo: streak });
     onRoundSolved(state, uid, now, input.random ?? Math.random);
     return { correct: true, points: damage, finished: evaluate(state, now).finished, stale: false };
   }

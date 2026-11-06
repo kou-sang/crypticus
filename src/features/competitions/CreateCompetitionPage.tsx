@@ -16,7 +16,7 @@ import {
   SUDDEN_DEATH_OPTIONS,
   type ModeSettings,
 } from '../../../shared/gameModes';
-import { DUEL_DAMAGE_LABELS, GAME_LABELS, validateConfig } from '../../../shared/scoring';
+import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, validateConfig } from '../../../shared/scoring';
 import { GAME_MODES, type ComebackLevel, type CompetitionVisibility, type DuelDamage, type GameMode } from '../../../shared/types';
 import { Button, ErrorBanner, PageHeader } from '../../components/ui';
 
@@ -346,6 +346,9 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
           ]}
           onChange={(damage) => update({ damage })}
         />
+      </Option>
+      <Option title="Combo" info={DUEL_COMBO_INFO}>
+        <span className="text-sm text-muted">Siempre activo</span>
       </Option>
       <Option
         title="Remontada"

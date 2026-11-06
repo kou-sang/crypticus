@@ -143,6 +143,8 @@ export interface Participant {
   bankMs?: number; // Tiempo total del reloj (base + incrementos ganados). Restante = bankMs - (ahora - inicio).
   eliminatedAt?: number | null;
   cursor?: number; // Posición en la lista de cripticos (avance secuencial).
+  // ---- DUEL ----
+  streak?: number; // Aciertos consecutivos ganados (combo).
 }
 
 /** Estadísticas por modo (escritas por el servidor). */

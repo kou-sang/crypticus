@@ -1,7 +1,20 @@
 // Efectos de sonido sintetizados con Web Audio (sin archivos: carga cero y sin licencias).
 import { getSettings, type SoundGroup } from './settings';
 
-type Cue = 'success' | 'wrong' | 'rival' | 'hit' | 'heal' | 'tick' | 'victory' | 'defeat' | 'lowTime' | 'eliminated';
+type Cue =
+  | 'success'
+  | 'wrong'
+  | 'rival'
+  | 'hit'
+  | 'heal'
+  | 'tick'
+  | 'victory'
+  | 'defeat'
+  | 'lowTime'
+  | 'eliminated'
+  | 'lowHealth'
+  | 'danger'
+  | 'combo';
 
 const CUE_GROUP: Record<Cue, SoundGroup> = {
   success: 'answers',
@@ -14,6 +27,9 @@ const CUE_GROUP: Record<Cue, SoundGroup> = {
   defeat: 'results',
   lowTime: 'lowTime',
   eliminated: 'rivals',
+  lowHealth: 'lowTime',
+  danger: 'lowTime',
+  combo: 'answers',
 };
 
 let context: AudioContext | null = null;
@@ -99,6 +115,22 @@ const CUES: Record<Cue, Note[]> = {
     { freq: 1760, start: 0.12, duration: 0.07, type: 'square', gain: 0.18 },
   ],
   eliminated: [{ freq: 330, start: 0, duration: 0.4, type: 'sawtooth', gain: 0.3, slideTo: 110 }],
+  // Vida baja: dos notas descendentes.
+  lowHealth: [
+    { freq: 523.25, start: 0, duration: 0.15, type: 'triangle', gain: 0.5 },
+    { freq: 392, start: 0.14, duration: 0.25, type: 'triangle', gain: 0.5 },
+  ],
+  // A un golpe de perder: latido grave doble.
+  danger: [
+    { freq: 70, start: 0, duration: 0.14, type: 'sine', gain: 1 },
+    { freq: 60, start: 0.2, duration: 0.18, type: 'sine', gain: 0.9 },
+  ],
+  // Combo: arpegio corto y agudo.
+  combo: [
+    { freq: 1046.5, start: 0, duration: 0.08, type: 'square', gain: 0.2 },
+    { freq: 1318.5, start: 0.06, duration: 0.08, type: 'square', gain: 0.2 },
+    { freq: 1568, start: 0.12, duration: 0.14, type: 'square', gain: 0.2 },
+  ],
   victory: [
     { freq: 523.25, start: 0, duration: 0.2, type: 'triangle' },
     { freq: 659.25, start: 0.15, duration: 0.2, type: 'triangle' },

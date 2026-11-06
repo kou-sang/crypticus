@@ -1,6 +1,6 @@
 // Vistas específicas de cada modo: relojes de Royale, barras de vida de Duel y pausa entre cripticos.
-import { memo, useEffect, useMemo, useRef } from 'react';
-import { royaleCurrent, royaleRemaining, type LiveState } from '../../../shared/engine';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { duelOneHitFromDeath, royaleCurrent, royaleRemaining, type LiveState } from '../../../shared/engine';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { useNow } from '../../hooks/useNow';
 import { playCue } from '../../lib/sound';
@@ -120,28 +120,103 @@ export function RoyaleFlow({ state, uid, actions, offsetMs }: { state: LiveState
 
 // ---------- Duel ----------
 
+/** Vida baja: por debajo del 30 % la barra late. */
+const LOW_HEALTH_RATIO = 0.3;
+
 export const DuelBars = memo(function DuelBars({ state, uid }: { state: LiveState; uid: string }) {
   const maxHp = state.config.duel?.hp ?? 100;
   const players = Object.values(state.participants).sort((a, b) => Number(b.uid === uid) - Number(a.uid === uid));
   return (
     <div className="grid grid-cols-2 gap-3" aria-label="Vida">
       {players.map((p, index) => {
-        const ratio = Math.max(0, p.score) / maxHp;
+        const hp = Math.max(0, p.score);
+        const ratio = hp / maxHp;
+        const low = hp > 0 && ratio <= LOW_HEALTH_RATIO;
+        const lethal = duelOneHitFromDeath(state, p.uid);
+        const streak = p.streak ?? 0;
         return (
           <div key={p.uid} className={cx(index === 1 && 'text-right')}>
-            <p className="truncate text-xs font-semibold">
-              {p.uid === uid ? 'Tú' : p.displayName} · <span className="font-mono">{Math.max(0, p.score)}</span>
+            <p className={cx('flex items-center gap-1.5 text-xs font-semibold', index === 1 && 'justify-end')}>
+              <span className="truncate">{p.uid === uid ? 'Tú' : p.displayName}</span>
+              <span className={cx('font-mono', low && 'text-accent')}>{hp}</span>
+              {streak >= 2 && (
+                <span key={streak} className="cell-pop bg-ink px-1.5 font-mono text-[10px] text-paper" title="Aciertos seguidos">
+                  COMBO ×{streak}
+                </span>
+              )}
             </p>
-            <div className={cx('mt-1 flex h-3 border border-ink', index === 1 && 'justify-end')}>
+            <div
+              className={cx(
+                'mt-1 flex h-3 border',
+                index === 1 && 'justify-end',
+                lethal ? 'animate-pulse border-accent ring-2 ring-accent' : low ? 'animate-pulse border-accent' : 'border-ink',
+              )}
+            >
               <div
-                className={cx('h-full transition-[width] duration-500', ratio > 0.5 ? 'bg-ok' : ratio > 0.25 ? 'bg-ink' : 'bg-accent')}
+                className={cx('h-full transition-[width] duration-500', ratio > 0.5 ? 'bg-ok' : ratio > LOW_HEALTH_RATIO ? 'bg-ink' : 'bg-accent')}
                 style={{ width: `${ratio * 100}%` }}
               />
             </div>
+            {lethal && (
+              <p className="mt-1 animate-pulse text-[11px] font-bold uppercase tracking-widest text-accent">☠ A un golpe</p>
+            )}
           </div>
         );
       })}
     </div>
+  );
+});
+
+/**
+ * Avisos propios del duelo: sonido y destello al bajar de la mitad y del 30 % de vida,
+ * viñeta roja con latido mientras estás a un golpe de perder, y sonido al encadenar combo.
+ */
+export const DuelAlerts = memo(function DuelAlerts({ state, uid }: { state: LiveState; uid: string }) {
+  const me = state.participants[uid];
+  const maxHp = state.config.duel?.hp ?? 100;
+  const hp = Math.max(0, me?.score ?? 0);
+  const ratio = hp / maxHp;
+  const lethal = duelOneHitFromDeath(state, uid);
+  const streak = me?.streak ?? 0;
+  const previous = useRef({ ratio, lethal, streak });
+  const [flash, setFlash] = useState(0);
+
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = { ratio, lethal, streak };
+    if (lethal && !before.lethal) {
+      playCue('danger');
+      setFlash((n) => n + 1);
+    } else if ((before.ratio > 0.5 && ratio <= 0.5) || (before.ratio > LOW_HEALTH_RATIO && ratio <= LOW_HEALTH_RATIO)) {
+      playCue('lowHealth');
+      setFlash((n) => n + 1);
+    }
+    if (streak >= 2 && streak > before.streak) playCue('combo');
+  }, [ratio, lethal, streak]);
+
+  // Latido periódico mientras dure el peligro.
+  useEffect(() => {
+    if (!lethal) return;
+    const id = window.setInterval(() => playCue('danger'), 2500);
+    return () => window.clearInterval(id);
+  }, [lethal]);
+
+  return (
+    <>
+      {flash > 0 && (
+        <div key={flash} aria-hidden className="damage-flash pointer-events-none fixed inset-0 z-30 bg-accent/25" />
+      )}
+      {lethal && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-30 animate-pulse"
+          style={{ boxShadow: 'inset 0 0 90px 25px color-mix(in srgb, var(--accent) 55%, transparent)' }}
+        />
+      )}
+      <p className="sr-only" aria-live="assertive">
+        {lethal ? 'Estás a un golpe de perder.' : ratio <= LOW_HEALTH_RATIO ? 'Vida baja.' : ''}
+      </p>
+    </>
   );
 });
 

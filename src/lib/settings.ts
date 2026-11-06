@@ -9,7 +9,7 @@ export type SoundGroup = 'answers' | 'rivals' | 'lowTime' | 'countdown' | 'resul
 export const SOUND_GROUPS: Record<SoundGroup, { title: string; description: string }> = {
   answers: { title: 'Aciertos y errores', description: 'Al responder.' },
   rivals: { title: 'Rivales', description: 'Cuando un rival acierta o te golpea.' },
-  lowTime: { title: 'Poco tiempo', description: 'Alarma cuando tu reloj se agota (Royale).' },
+  lowTime: { title: 'Peligro', description: 'Reloj por agotarse (Royale), vida baja y a un golpe de perder (Duel).' },
   countdown: { title: 'Cuenta atrás', description: 'Inicio de partida y siguiente criptico.' },
   results: { title: 'Resultado final', description: 'Victoria o derrota.' },
 };

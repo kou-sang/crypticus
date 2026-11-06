@@ -42,7 +42,7 @@ export function describeMode(c: ModeFields): string {
 export function describeModifiers(c: ModeFields): string[] {
   if (c.game === 'royale') return ['Progresiva', 'Último en pie'];
   if (c.game === 'duel') {
-    const tags = [`Daño por ${DUEL_DAMAGE_LABELS[c.duel?.damage ?? 'difficulty'].title.toLowerCase()}`];
+    const tags = [`Daño por ${DUEL_DAMAGE_LABELS[c.duel?.damage ?? 'difficulty'].title.toLowerCase()}`, 'Combo'];
     if (c.comeback && c.comeback !== 'off') tags.push(COMEBACK_LABELS[c.comeback]);
     return tags;
   }
