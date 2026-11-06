@@ -76,7 +76,15 @@ Copia el archivo `cryptics.seed.json` que te envié a la carpeta `data\` del rep
 Copy-Item "$HOME\Downloads\cryptics.seed.json" .\data\
 ```
 
-Son 530 cripticos originales (222 fáciles, 192 medios, 116 difíciles), verificados por script. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición o combinación). La dificultad sigue el estándar del proyecto: una sola operación con una palabra común es fácil; varias operaciones o una palabra poco común es medio; si además hace falta conocimiento externo, es difícil. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
+Son 1030 cripticos originales (422 fáciles, 392 medios, 216 difíciles), verificados por script. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición o combinación). La dificultad sigue el estándar del proyecto: una sola operación con una palabra común es fácil; varias operaciones o una palabra poco común es medio; si además hace falta conocimiento externo, es difícil. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
+
+Antes de importar, revisa el archivo (no toca Firestore):
+
+```powershell
+npx tsx scripts/validate-cryptics.ts data/cryptics.seed.json
+```
+
+Comprueba enumeraciones, dificultad, que cada criptico tenga explicación y que no se repitan respuestas ni enunciados (la Ñ cuenta como N, igual que al jugar).
 
 ### 1.3 Regenerar la clave en base64 (importante)
 
