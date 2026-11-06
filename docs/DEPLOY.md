@@ -183,7 +183,7 @@ Si cerraste la ventana y perdiste `$hmac`, vuelve a asignarla con el valor guard
 4. Prueba con dos navegadores (o PC + móvil):
    - **Duelo:** rondas, votación de dificultad, cuenta atrás con efecto desmayo y aviso de partida mixta móvil/PC.
    - **Jefe:** golpes, curación al fallar y figura animada.
-5. Al terminar, revisa *Historial*, tu *Perfil* (gráfico de rating) y *Ranking*.
+5. Al terminar, revisa tu *Perfil* (botón del avatar: historial y gráfico de rating) y *Ranking*.
 
 Logs en vivo del Worker:
 
