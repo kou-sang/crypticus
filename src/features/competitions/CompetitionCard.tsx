@@ -26,6 +26,8 @@ type ModeFields = Pick<
   | 'duel'
   | 'royale'
   | 'maxHintsPerClue'
+  | 'surrender'
+  | 'cooldownSec'
 >;
 
 export function describeMode(c: ModeFields): string {
@@ -50,8 +52,10 @@ export function describeModifiers(c: ModeFields): string[] {
     const tags = [c.flow === 'rounds' ? `Hardcore · muerte súbita ${c.rivalCountdownSec}s` : 'Pacífico'];
     if (c.difficultyVote) tags.push('Vota dificultad');
     if (c.winByTwo) tags.push('Diferencia de dos');
-    if (c.extraTime?.enabled) tags.push(`+${c.extraTime.seconds}s ×${c.extraTime.maxUses}`);
+    if (c.surrender?.enabled) tags.push(`Rendirse ×${c.surrender.maxUses}`);
     tags.push(c.maxHintsPerClue > 0 ? 'Con pistas' : 'Sin pistas');
+    if (c.cooldownSec) tags.push(`Cooldown ${c.cooldownSec}s`);
+    tags.push('10 min');
     return tags;
   }
   const tags: string[] = [FLOW_LABELS[c.flow]?.title ?? 'Libre'];

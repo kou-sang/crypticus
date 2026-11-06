@@ -1,6 +1,6 @@
 // Vistas específicas de cada modo: relojes de Royale, barras de vida de Duel y pausa entre cripticos.
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { duelOneHitFromDeath, royaleCurrent, royaleRemaining, type LiveState } from '../../../shared/engine';
+import { cooldownMs, duelOneHitFromDeath, royaleCurrent, royaleRemaining, type LiveState } from '../../../shared/engine';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { useNow } from '../../hooks/useNow';
 import { playCue } from '../../lib/sound';
@@ -103,6 +103,8 @@ export function RoyaleFlow({ state, uid, actions, offsetMs }: { state: LiveState
             cryptic={current}
             me={me}
             heading={`Criptico ${cursor + 1} · +${state.config.royale?.incrementSec ?? 0}s por acierto`}
+            successLabel={(seconds) => `+${seconds}s a tu reloj`}
+            cooldownMs={cooldownMs(state.config)}
             maxHintsPerClue={0}
             hintCost={0}
             wrongPenalty={0}

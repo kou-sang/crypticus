@@ -56,14 +56,22 @@ export const LIMITS = {
 // ---------- Etiquetas para la UI ----------
 
 export const GAME_LABELS: Record<GameMode, { title: string; tagline: string; description: string }> = {
-  race: { title: 'Race', tagline: 'A cuánto se gana', description: 'Hasta 8 jugadores. Gana el primero en llegar a la meta.' },
+  race: {
+    title: 'Race',
+    tagline: 'Primero a la meta',
+    description: 'Hasta ocho jugadores, la misma meta y diez minutos. No se saltea: cada criptico se resuelve o se entrega.',
+  },
   royale: {
     title: 'Royale',
     tagline: 'Reloj de ajedrez',
-    description: 'Hasta 8 jugadores. Cada uno con su reloj; acertar suma segundos. Gana el último en pie.',
+    description: 'Cada acierto suma segundos a tu reloj; cada duda los consume. La dificultad sube sin pausa. Queda uno solo.',
   },
-  duel: { title: 'Duel', tagline: 'Vida contra vida', description: '1 contra 1. Acertar primero le quita vida al rival.' },
-  boss: { title: 'Boss', tagline: 'Próximamente', description: 'Hasta 4 jugadores contra un jefe.' },
+  duel: {
+    title: 'Duel',
+    tagline: 'Uno contra uno',
+    description: 'El mismo criptico para los dos. Quien lo resuelve primero golpea, y los aciertos seguidos golpean más fuerte.',
+  },
+  boss: { title: 'Boss', tagline: 'Próximamente', description: 'Hasta cuatro jugadores contra un mismo adversario. En preparación.' },
 };
 
 export const DUEL_DAMAGE_LABELS: Record<DuelDamage, { title: string; description: string }> = {
@@ -256,6 +264,10 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
     if (royale && (royale.incrementSec < 0 || royale.incrementSec > 60)) errors.push('El incremento debe estar entre 0 y 60 s.');
   }
   if ((config.intervalSec ?? 0) < 0 || (config.intervalSec ?? 0) > 30) errors.push('El intervalo debe estar entre 0 y 30 s.');
+  if ((config.cooldownSec ?? 0) < 0 || (config.cooldownSec ?? 0) > 10) errors.push('El cooldown debe estar entre 0 y 10 s.');
+  if (config.surrender?.enabled && (config.surrender.maxUses < 1 || config.surrender.maxUses > 10)) {
+    errors.push('Las rendiciones deben estar entre 1 y 10.');
+  }
   return errors;
 }
 

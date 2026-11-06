@@ -73,6 +73,8 @@ export interface CompetitionConfig {
   intervalSec?: number; // 'rounds': pausa entre cripticos (se revela la solución anterior).
   duel?: DuelConfig;
   royale?: RoyaleConfig;
+  cooldownSec?: number; // Espera mínima entre respuestas (anti spam).
+  surrender?: { enabled: boolean; maxUses: number }; // Race: rendirse ante un criptico.
 }
 
 /** Datos públicos de un criptico (colección `cryptics`). */
@@ -124,6 +126,7 @@ export interface Competition extends CompetitionConfig {
   finishedAt: number | null;
   winnerId: string | null;
   invitedIds?: string[]; // Desafío: amigos invitados (ven la sala en Amigos).
+  clueCount?: number; // Cantidad pedida al crear; el servidor elige los cripticos al iniciar.
 }
 
 export interface Participant {
@@ -145,6 +148,9 @@ export interface Participant {
   cursor?: number; // Posición en la lista de cripticos (avance secuencial).
   // ---- DUEL ----
   streak?: number; // Aciertos consecutivos ganados (combo).
+  // ---- Secuencial (Race Pacífico, Royale) ----
+  nextOpensAt?: number; // El criptico en `cursor` no se muestra ni se puede responder antes.
+  surrenders?: number; // Rendiciones usadas.
 }
 
 /** Estadísticas por modo (escritas por el servidor). */

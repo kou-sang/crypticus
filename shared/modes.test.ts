@@ -4,6 +4,9 @@ import {
   createLiveState,
   nextDeadline,
   passCryptic,
+  revealableIds,
+  surrender,
+  toggleEndVote,
   duelOneHitFromDeath,
   rankState,
   reserveAttempt,
@@ -144,5 +147,64 @@ describe('Race hardcore', () => {
     expect(state.round!.closesAt).toBe(6000);
     answer(state, 'b', id, true, 3000);
     expect(state.round!.index).toBe(2);
+  });
+});
+
+describe('Race Pacífico (secuencial)', () => {
+  const peaceful = { race: { ...DEFAULT_MODE_SETTINGS.race, intensity: 'peaceful' as const, target: 2 } };
+
+  it('siempre el actual: no se puede responder el siguiente ni durante la pausa', () => {
+    const state = start(peaceful);
+    expect(() => reserveAttempt(state, 'a', 'e2', 1000)).toThrow();
+    answer(state, 'a', 'e1', true, 1000);
+    expect(state.participants.a!.cursor).toBe(1);
+    expect(() => reserveAttempt(state, 'a', 'e2', 2000)).toThrow(); // pausa de 3 s
+    expect(nextDeadline(state, 2000)).toBe(4000);
+    answer(state, 'a', 'e2', true, 4500);
+    expect(state.status).toBe('finished');
+    expect(state.winnerId).toBe('a');
+  });
+
+  it('al terminar solo se revelan los cripticos que se llegaron a jugar', () => {
+    const state = start(peaceful);
+    answer(state, 'a', 'e1', true, 1000);
+    answer(state, 'a', 'e2', true, 4500);
+    expect(revealableIds(state)).toEqual(['e1', 'e2']);
+  });
+
+  it('rendirse pasa al siguiente y tiene usos limitados', () => {
+    const state = start({ race: { ...peaceful.race, surrender: { enabled: true, maxUses: 1 } } });
+    surrender(state, { uid: 'b', now: 1000 });
+    expect(state.participants.b!.cursor).toBe(1);
+    expect(() => surrender(state, { uid: 'b', now: 5000 })).toThrow();
+  });
+
+  it('cooldown entre respuestas', () => {
+    const state = start({ race: { ...peaceful.race, cooldownSec: 3 } });
+    answer(state, 'a', 'e1', false, 1000);
+    expect(() => reserveAttempt(state, 'a', 'e1', 3000)).toThrow();
+    expect(() => reserveAttempt(state, 'a', 'e1', 4000)).not.toThrow();
+  });
+});
+
+describe('Race Hardcore: rendirse', () => {
+  it('da 5 s al resto; si todos se rinden, pasa al siguiente', () => {
+    const state = start({ race: { ...DEFAULT_MODE_SETTINGS.race, intensity: 'hardcore', suddenDeathSec: 0 } }, ['a', 'b', 'c']);
+    surrender(state, { uid: 'a', now: 1000 });
+    expect(state.round!.closesAt).toBe(6000);
+    expect(() => reserveAttempt(state, 'a', state.round!.crypticId, 1500)).toThrow();
+    surrender(state, { uid: 'b', now: 2000 });
+    surrender(state, { uid: 'c', now: 2500 });
+    expect(state.round!.index).toBe(2);
+    expect(state.round!.opensAt).toBe(5500);
+  });
+
+  it('una ronda que no llegó a abrir no se revela al terminar', () => {
+    const state = start({ race: { ...DEFAULT_MODE_SETTINGS.race, intensity: 'hardcore', suddenDeathSec: 0 } });
+    const first = state.round!.crypticId;
+    answer(state, 'a', first, true, 1000);
+    toggleEndVote(state, { uid: 'a', now: 1500 });
+    toggleEndVote(state, { uid: 'b', now: 1600 });
+    expect(revealableIds(state)).toEqual([first]);
   });
 });
