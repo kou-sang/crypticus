@@ -76,7 +76,7 @@ Copia el archivo `cryptics.seed.json` que te envié a la carpeta `data\` del rep
 Copy-Item "$HOME\Downloads\cryptics.seed.json" .\data\
 ```
 
-Son 130 cripticos originales (45 fáciles, 51 medios, 34 difíciles), verificados por script: anagramas, inversiones, palabras ocultas, sumas, contenedores y eliminaciones. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
+Son 330 cripticos originales (222 fáciles, 92 medios, 16 difíciles), verificados por script. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición o combinación). La dificultad sigue el estándar del proyecto: una sola operación con una palabra común es fácil; varias operaciones o una palabra poco común es medio; si además hace falta conocimiento externo, es difícil. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
 
 ### 1.3 Regenerar la clave en base64 (importante)
 
