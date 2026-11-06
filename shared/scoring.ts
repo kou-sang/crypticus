@@ -7,7 +7,9 @@ import type {
   CompetitionConfig,
   CompetitionMode,
   Difficulty,
+  DuelDamage,
   GameFlow,
+  GameMode,
   Participant,
   RankedParticipant,
   ScoringRule,
@@ -48,9 +50,27 @@ export const LIMITS = {
   minAttemptIntervalMs: 800, // Anti fuerza bruta.
   overtimeRatio: 0.5, // Prórroga máxima de "diferencia de dos": 50 % de la duración.
   winByTwoMargin: 2,
+  maxModePlayers: 8, // Race y Royale.
 } as const;
 
 // ---------- Etiquetas para la UI ----------
+
+export const GAME_LABELS: Record<GameMode, { title: string; tagline: string; description: string }> = {
+  race: { title: 'Race', tagline: 'A cuánto se gana', description: 'Hasta 8 jugadores. Gana el primero en llegar a la meta.' },
+  royale: {
+    title: 'Royale',
+    tagline: 'Reloj de ajedrez',
+    description: 'Hasta 8 jugadores. Cada uno con su reloj; acertar suma segundos. Gana el último en pie.',
+  },
+  duel: { title: 'Duel', tagline: 'Vida contra vida', description: '1 contra 1. Acertar primero le quita vida al rival.' },
+  boss: { title: 'Boss', tagline: 'Próximamente', description: 'Hasta 4 jugadores contra un jefe.' },
+};
+
+export const DUEL_DAMAGE_LABELS: Record<DuelDamage, { title: string; description: string }> = {
+  difficulty: { title: 'Dificultad', description: 'Fácil 20, medio 30, difícil 40 de daño.' },
+  speed: { title: 'Velocidad', description: 'Hasta 40 de daño; baja cuanto más tardas (mín. 10).' },
+};
+export const DUEL_COMBO_INFO = 'Combo: acertar primero varias veces seguidas suma +25 % de daño por golpe (máx. ×2). Se corta cuando el rival acierta.';
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil' };
 
@@ -149,6 +169,42 @@ export function bossMaxHp(level: BossLevel, players: number): number {
   return BOSS_HP_PER_PLAYER[level] * Math.max(1, players);
 }
 
+// ---------- Duelo ----------
+
+export const DUEL_TIER_DAMAGE: Record<Difficulty, number> = { easy: 20, medium: 30, hard: 40 };
+const DUEL_SPEED_MAX = 40;
+const DUEL_SPEED_WINDOW_MS = 90_000; // A los 90 s el daño por velocidad llega a su mínimo.
+const DUEL_SPEED_MIN_RATIO = 0.25;
+/** Combo: cada acierto consecutivo (sin que el rival acierte en medio) suma +25 % de daño, hasta ×2. */
+export const DUEL_COMBO_STEP = 0.25;
+export const DUEL_COMBO_MAX = 5;
+
+export function duelComboMultiplier(streak: number): number {
+  return 1 + DUEL_COMBO_STEP * (Math.min(Math.max(streak, 1), DUEL_COMBO_MAX) - 1);
+}
+
+/**
+ * Daño que recibe el rival en un duelo. La remontada usa la vida como puntaje:
+ * quien tiene menos vida golpea más fuerte (en medio y difícil).
+ */
+export function computeDuelDamage(input: {
+  rule: DuelDamage;
+  tier: Difficulty;
+  elapsedMs: number;
+  comeback: ComebackLevel;
+  hp: number;
+  rivalHp: number;
+  streak?: number; // Aciertos consecutivos incluido este (1 = aislado).
+}): number {
+  const base =
+    input.rule === 'speed'
+      ? DUEL_SPEED_MAX * Math.max(DUEL_SPEED_MIN_RATIO, 1 - Math.max(0, input.elapsedMs) / DUEL_SPEED_WINDOW_MS)
+      : DUEL_TIER_DAMAGE[input.tier];
+  return Math.round(
+    base * comebackFactor(input.comeback, input.tier, input.hp, input.rivalHp) * duelComboMultiplier(input.streak ?? 1),
+  );
+}
+
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
 }
@@ -186,19 +242,39 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
   if (config.wrongPenalty < 0 || config.wrongPenalty > LIMITS.maxWrongPenalty) {
     errors.push(`La penalización debe estar entre 0 y ${LIMITS.maxWrongPenalty}.`);
   }
+  if (config.game === 'boss') errors.push('El modo Boss estará disponible próximamente.');
+  if (config.game === 'duel') {
+    if (maxPlayers !== 2) errors.push('Duel es solo para 2 jugadores.');
+    if (!config.duel || config.duel.hp < 50 || config.duel.hp > 500) errors.push('La vida del duelo debe estar entre 50 y 500.');
+  }
+  if ((config.game === 'race' || config.game === 'royale') && maxPlayers > LIMITS.maxModePlayers) {
+    errors.push(`Este modo admite hasta ${LIMITS.maxModePlayers} jugadores.`);
+  }
+  if (config.game === 'royale') {
+    const royale = config.royale;
+    if (!royale || royale.baseSec < 30 || royale.baseSec > 30 * 60) errors.push('El tiempo de Royale debe estar entre 30 s y 30 min.');
+    if (royale && (royale.incrementSec < 0 || royale.incrementSec > 60)) errors.push('El incremento debe estar entre 0 y 60 s.');
+  }
+  if ((config.intervalSec ?? 0) < 0 || (config.intervalSec ?? 0) > 30) errors.push('El intervalo debe estar entre 0 y 30 s.');
   return errors;
 }
 
 // ---------- Ranking ----------
 
-export type RankMetric = 'score' | 'solved';
+export type RankMetric = 'score' | 'solved' | 'survival';
 
 /**
- * Orden: métrica principal (puntos, o resueltos en "diferencia de dos") > puntos > menos pistas
+ * Orden: métrica principal (puntos; resueltos en carreras; supervivencia en Royale) > puntos > menos pistas
  * > resolvió antes > se unió antes. Empates exactos comparten posición.
+ * Supervivencia: los que siguen en pie primero; entre eliminados, quien cayó más tarde.
  */
 export function rankParticipants(participants: Participant[], metric: RankMetric = 'score'): RankedParticipant[] {
-  const primary = (p: Participant) => (metric === 'solved' ? p.solvedIds.length : p.score);
+  const primary = (p: Participant) =>
+    metric === 'solved'
+      ? p.solvedIds.length
+      : metric === 'survival'
+        ? (p.eliminatedAt == null ? 1e15 : p.eliminatedAt * 100) + Math.min(99, p.solvedIds.length)
+        : p.score;
   const sorted = [...participants].sort((a, b) => {
     if (primary(b) !== primary(a)) return primary(b) - primary(a);
     if (b.score !== a.score) return b.score - a.score;

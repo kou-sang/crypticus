@@ -14,6 +14,7 @@ export interface GameActions {
   extraTime: () => Promise<AckReply>;
   skip: () => Promise<AckReply>;
   endVote: () => Promise<AckReply>;
+  pass: () => Promise<AckReply>;
 }
 
 export interface GameChannelState {
@@ -77,8 +78,9 @@ export function useGameChannel(competitionId: string, enabled: boolean): GameCha
             extraTime: () => channel.extraTime(),
             skip: () => channel.skip(),
             endVote: () => channel.endVote(),
+            pass: () => channel.pass(),
           }
-        : { answer: offline, hint: offline, vote: offline, extraTime: offline, skip: offline, endVote: offline },
+        : { answer: offline, hint: offline, vote: offline, extraTime: offline, skip: offline, endVote: offline, pass: offline },
     [channel],
   );
 

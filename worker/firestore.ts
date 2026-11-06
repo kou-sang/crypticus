@@ -22,7 +22,9 @@ export type Write =
   | { kind: 'set'; path: string; data: Record<string, unknown> } // crea o reemplaza el documento
   | { kind: 'increment'; path: string; increments: Record<string, number> }
   // Agrega/actualiza claves de un campo mapa sin tocar el resto; crea el documento si no existe.
-  | { kind: 'mergeMap'; path: string; field: string; entries: Record<string, number> };
+  | { kind: 'mergeMap'; path: string; field: string; entries: Record<string, number> }
+  // Asigna campos anidados por ruta con puntos ("a.b.c") sin tocar el resto del documento.
+  | { kind: 'setFields'; path: string; fields: Record<string, unknown> };
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
@@ -132,6 +134,23 @@ export class FirestoreRest {
     const body = writes.map((write) => {
       if (write.kind === 'set') {
         return { update: { name: this.name(write.path), fields: encodeFields(write.data) } };
+      }
+      if (write.kind === 'setFields') {
+        const nested: Record<string, unknown> = {};
+        for (const [dotted, value] of Object.entries(write.fields)) {
+          const parts = dotted.split('.');
+          let node = nested;
+          parts.slice(0, -1).forEach((part) => {
+            node[part] = (node[part] as Record<string, unknown> | undefined) ?? {};
+            node = node[part] as Record<string, unknown>;
+          });
+          node[parts[parts.length - 1]!] = value;
+        }
+        return {
+          update: { name: this.name(write.path), fields: encodeFields(nested) },
+          updateMask: { fieldPaths: Object.keys(write.fields) },
+          currentDocument: { exists: true },
+        };
       }
       if (write.kind === 'mergeMap') {
         const keys = Object.keys(write.entries);

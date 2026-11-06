@@ -76,7 +76,7 @@ Copia el archivo `cryptics.seed.json` que te envié a la carpeta `data\` del rep
 Copy-Item "$HOME\Downloads\cryptics.seed.json" .\data\
 ```
 
-Son 330 cripticos originales (222 fáciles, 92 medios, 16 difíciles), verificados por script. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición o combinación). La dificultad sigue el estándar del proyecto: una sola operación con una palabra común es fácil; varias operaciones o una palabra poco común es medio; si además hace falta conocimiento externo, es difícil. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
+Son 530 cripticos originales (222 fáciles, 192 medios, 116 difíciles), verificados por script. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición o combinación). La dificultad sigue el estándar del proyecto: una sola operación con una palabra común es fácil; varias operaciones o una palabra poco común es medio; si además hace falta conocimiento externo, es difícil. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
 
 ### 1.3 Regenerar la clave en base64 (importante)
 
@@ -194,8 +194,9 @@ Si algo falla, el mensaje de error ahora incluye el código entre paréntesis (p
 2. *Jugar → + Crear* → *Crear sala* → *Iniciar*. Puedes jugar solo para probar.
 3. Responde un criptico escribiendo en las casillas. Deberías ver la animación, oír el sonido, sumar puntos y leer la explicación.
 4. Prueba con dos navegadores (o PC + móvil):
-   - **Duelo:** rondas, votación de dificultad, cuenta atrás con efecto desmayo y aviso de partida mixta móvil/PC.
-   - **Jefe:** golpes, curación al fallar y figura animada.
+   - **Race Hardcore:** muerte súbita, pausa de 3 s con la solución y votación de dificultad.
+   - **Royale 1+5:** relojes de todos, alarma de poco tiempo y eliminación.
+   - **Duel:** barras de vida, daño al acertar primero y nocaut.
 5. Al terminar, revisa tu *Perfil* (botón del avatar: historial y gráfico de rating) y *Ranking*.
 
 Logs en vivo del Worker:

@@ -2,7 +2,7 @@
 import { memo } from 'react';
 import { Link } from 'react-router';
 import { formatRelative } from '../lib/utils';
-import { MODE_LABELS } from '../../shared/scoring';
+import { GAME_LABELS, MODE_LABELS } from '../../shared/scoring';
 import type { HistoryEntry } from '../../shared/types';
 import { Badge } from './ui';
 
@@ -29,7 +29,9 @@ export const HistoryTable = memo(function HistoryTable({ entries }: { entries: H
                 <span className="block text-xs text-muted">{formatRelative(entry.finishedAt)}</span>
               </td>
               <td className="py-2.5">
-                <Badge tone={entry.won ? 'ok' : 'neutral'}>{entry.won ? 'Victoria' : MODE_LABELS[entry.mode]?.title}</Badge>
+                <Badge tone={entry.won ? 'ok' : 'neutral'}>
+                  {entry.outcome === 'draw' ? 'Empate' : entry.won ? 'Victoria' : (entry.game ? GAME_LABELS[entry.game].title : MODE_LABELS[entry.mode]?.title)}
+                </Badge>
               </td>
               <td className="py-2.5 text-right font-mono">
                 {entry.rank}/{entry.players}

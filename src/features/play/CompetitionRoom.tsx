@@ -76,9 +76,9 @@ export default function CompetitionRoom() {
       {/* Barra fija: el tiempo sigue a la vista al hacer scroll o con el teclado del móvil abierto. */}
       {isLive && !countdown && (
         <div className="sticky top-14 z-10 -mx-4 -mt-4 mb-6 flex items-center justify-end gap-3 border-b border-line bg-paper/95 px-4 py-2 backdrop-blur">
-          {live?.participants[profile.uid] && !live.boss && !live.config.hideScoreboard && (
+          {live?.participants[profile.uid] && !live.boss && !live.config.hideScoreboard && !live.config.royale && (
             <span className="mr-auto font-mono text-sm">
-              Tú: <strong>{live.participants[profile.uid]!.score}</strong> pts
+              Tú: <strong>{live.participants[profile.uid]!.score}</strong> {live.config.duel ? 'de vida' : 'pts'}
             </span>
           )}
           {live?.overtimeEndsAt != null && <Badge tone="accent">Prórroga</Badge>}
@@ -91,7 +91,8 @@ export default function CompetitionRoom() {
               {game.rttMs} ms
             </span>
           )}
-          {deadline !== null && <GameClock deadline={deadline} offsetMs={offset} />}
+          {/* En Royale cada jugador tiene su reloj (ver ChessClocks); el tope global no se muestra. */}
+          {deadline !== null && !live?.config.royale && <GameClock deadline={deadline} offsetMs={offset} />}
         </div>
       )}
 
@@ -116,7 +117,7 @@ export default function CompetitionRoom() {
             ) : (
               <>
                 {live.boss && <BossBar hp={live.boss.hp} maxHp={live.boss.maxHp} level={live.config.bossLevel} />}
-                <PlayView state={live} uid={profile.uid} actions={game.actions} solutions={game.solutions} />
+                <PlayView state={live} uid={profile.uid} actions={game.actions} solutions={game.solutions} offsetMs={offset} />
                 <RivalToasts state={live} uid={profile.uid} />
                 {live.round?.closesAt != null && !live.round.solvedBy.includes(profile.uid) && (
                   <FaintOverlay closesAt={live.round.closesAt} totalMs={live.config.rivalCountdownSec * 1000} offsetMs={offset} />
@@ -139,6 +140,7 @@ export default function CompetitionRoom() {
                 metric={live ? rankMetric(live.config) : 'score'}
                 hideScores={live !== null && live.config.hideScoreboard && live.status === 'live'}
                 isBoss={comp.mode === 'boss'}
+                unit={comp.game === 'duel' ? 'vida' : undefined}
               />
             </section>
           )}

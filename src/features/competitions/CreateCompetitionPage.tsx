@@ -1,153 +1,397 @@
-// Configuración de la partida antes de empezar: modo, flujo, puntaje y modificadores.
+// Crear partida: un modo, su parámetro principal y opciones compactas con botón de información.
+// La configuración de cada modo se recuerda entre visitas. Con ?rival=uid&name=... crea un desafío privado.
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useSession } from '../../hooks/useAuth';
-import { createCompetition, type CreateCompetitionInput } from '../../lib/repo';
+import { createCompetition } from '../../lib/repo';
 import { cx, errorMessage } from '../../lib/utils';
 import { loadJson, saveJson } from '../../lib/storage';
 import {
-  BOSS_LABELS,
-  COMEBACK_LABELS,
-  DEFAULT_CONFIG,
-  FLOW_LABELS,
-  LIMITS,
-  MODE_LABELS,
-  SCORING_LABELS,
-  TIER_MIX_LABELS,
-  validateConfig,
-} from '../../../shared/scoring';
-import type {
-  BossLevel,
-  ComebackLevel,
-  CompetitionMode,
-  CompetitionVisibility,
-  GameFlow,
-  ScoringRule,
-  TierMix,
-} from '../../../shared/types';
-import { Button, ErrorBanner, Input, PageHeader, Select } from '../../components/ui';
+  buildConfig,
+  DEFAULT_MODE_SETTINGS,
+  DUEL_HP_OPTIONS,
+  formatTimeControl,
+  RACE_TARGET_OPTIONS,
+  ROYALE_PRESETS,
+  SUDDEN_DEATH_OPTIONS,
+  type ModeSettings,
+} from '../../../shared/gameModes';
+import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, validateConfig } from '../../../shared/scoring';
+import { GAME_MODES, type ComebackLevel, type CompetitionVisibility, type DuelDamage, type GameMode } from '../../../shared/types';
+import { Button, ErrorBanner, PageHeader } from '../../components/ui';
 
-// La última configuración usada se recuerda entre visitas.
-const FORM_KEY = 'crypticus.createForm.v1';
+const STORAGE_KEY = 'crypticus.newGame.v2';
 
-function defaultForm(): CreateCompetitionInput {
+interface Stored {
+  settings: ModeSettings;
+  visibility: CompetitionVisibility;
+}
+
+const DEFAULT_STORED: Stored = { settings: DEFAULT_MODE_SETTINGS, visibility: 'public' };
+
+function loadStored(): Stored {
+  const stored = loadJson<Stored>(STORAGE_KEY, DEFAULT_STORED);
+  // Mezcla profunda: versiones guardadas antes de agregar un campo no lo pierden.
+  const settings = stored.settings ?? DEFAULT_MODE_SETTINGS;
   return {
-    ...DEFAULT_CONFIG,
-    title: 'Mi competencia',
-    visibility: 'public',
-    maxPlayers: 8,
-    clueCount: 10,
+    visibility: stored.visibility ?? 'public',
+    settings: {
+      game: settings.game === 'boss' ? 'race' : (settings.game ?? 'race'),
+      race: { ...DEFAULT_MODE_SETTINGS.race, ...settings.race },
+      royale: { ...DEFAULT_MODE_SETTINGS.royale, ...settings.royale },
+      duel: { ...DEFAULT_MODE_SETTINGS.duel, ...settings.duel },
+    },
   };
 }
 
-const VISIBILITY_OPTIONS: Array<{ value: CompetitionVisibility; title: string; description: string }> = [
-  { value: 'public', title: 'Pública', description: 'Aparece en Jugar para todos.' },
-  { value: 'friends', title: 'Amigos', description: 'Solo la ven tus amigos.' },
-  { value: 'private', title: 'Privada', description: 'Solo con el enlace.' },
+const VISIBILITY: Array<[CompetitionVisibility, string]> = [
+  ['public', 'Pública'],
+  ['friends', 'Amigos'],
+  ['private', 'Privada'],
 ];
 
-function Choice<T extends string>({
+const COMEBACK: Array<[ComebackLevel, string]> = [
+  ['off', 'No'],
+  ['low', 'Suave'],
+  ['high', 'Fuerte'],
+];
+
+// ---------- Piezas de UI ----------
+
+function Chips<T extends string | number>({
   value,
   options,
   onChange,
-  columns = 2,
+  label,
 }: {
   value: T;
-  options: Array<{ value: T; title: string; description?: string; disabled?: boolean }>;
+  options: Array<[T, string]>;
   onChange: (value: T) => void;
-  columns?: 2 | 3;
+  label: string;
 }) {
   return (
-    <div className={cx('grid gap-2', columns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
-      {options.map((option) => (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+      {options.map(([option, text]) => (
         <button
+          key={String(option)}
           type="button"
-          key={option.value}
-          disabled={option.disabled}
-          onClick={() => onChange(option.value)}
-          aria-pressed={value === option.value}
+          role="radio"
+          aria-checked={value === option}
+          onClick={() => onChange(option)}
           className={cx(
-            'border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-            value === option.value ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink',
+            'min-w-11 border px-3 py-1.5 text-sm font-semibold transition-colors',
+            value === option ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink',
           )}
         >
-          <span className="block font-semibold">{option.title}</span>
-          {option.description && (
-            <span className={cx('block text-xs', value === option.value ? 'opacity-70' : 'text-muted')}>{option.description}</span>
-          )}
+          {text}
         </button>
       ))}
     </div>
   );
 }
 
-function Toggle({
-  label,
-  description,
-  checked,
-  disabled,
-  onChange,
-  children,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (value: boolean) => void;
-  children?: ReactNode;
-}) {
+/** Fila compacta: título, botón ⓘ que despliega la explicación, y el control a la derecha (abajo en móvil). */
+function Option({ title, info, children }: { title: string; info: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className={cx('border border-line p-3', disabled && 'opacity-40')}>
-      <label className="flex cursor-pointer items-start gap-3">
-        <input
-          type="checkbox"
-          className="mt-1 size-4 accent-[var(--accent)]"
-          checked={checked && !disabled}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <span>
-          <span className="block font-semibold">{label}</span>
-          <span className="block text-xs text-muted">{description}</span>
+    <div className="border-b border-line py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-sm font-semibold">
+          {title}
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-label={`Qué es ${title}`}
+            className={cx(
+              'inline-flex size-5 items-center justify-center rounded-full border text-[11px] font-bold leading-none',
+              open ? 'border-ink bg-ink text-paper' : 'border-muted text-muted hover:border-ink hover:text-ink',
+            )}
+          >
+            i
+          </button>
         </span>
-      </label>
-      {checked && !disabled && children && <div className="mt-3 grid gap-3 sm:grid-cols-2">{children}</div>}
+        <div>{children}</div>
+      </div>
+      {open && <p className="mt-2 text-xs text-muted fade-in">{info}</p>}
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
   return (
-    <fieldset className="grid gap-3">
-      <legend className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">{title}</legend>
-      {children}
-    </fieldset>
+    <Chips<'on' | 'off'>
+      label={label}
+      value={checked ? 'on' : 'off'}
+      options={[
+        ['off', 'No'],
+        ['on', 'Sí'],
+      ]}
+      onChange={(v) => onChange(v === 'on')}
+    />
   );
 }
+
+function NumberField({
+  value,
+  onChange,
+  min,
+  max,
+  suffix,
+  label,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min: number;
+  max: number;
+  suffix?: string;
+  label: string;
+}) {
+  return (
+    <label className="inline-flex items-center gap-1.5 text-sm">
+      <input
+        type="number"
+        inputMode="numeric"
+        aria-label={label}
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))}
+        className="h-9 w-16 border border-line bg-paper px-2 text-center font-mono focus:border-ink focus:outline-none"
+      />
+      {suffix && <span className="text-muted">{suffix}</span>}
+    </label>
+  );
+}
+
+// ---------- Paneles por modo ----------
+
+function RacePanel({ settings, update }: { settings: ModeSettings['race']; update: (patch: Partial<ModeSettings['race']>) => void }) {
+  const custom = !RACE_TARGET_OPTIONS.includes(settings.target as (typeof RACE_TARGET_OPTIONS)[number]);
+  const hardcore = settings.intensity === 'hardcore';
+  return (
+    <>
+      <section className="py-2">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">A cuánto se gana</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Chips<number>
+            label="Meta"
+            value={custom ? -1 : settings.target}
+            options={RACE_TARGET_OPTIONS.map((n): [number, string] => [n, String(n)])}
+            onChange={(target) => update({ target })}
+          />
+          <NumberField label="Meta personalizada" value={settings.target} min={1} max={30} onChange={(target) => update({ target })} />
+        </div>
+      </section>
+      <Option
+        title="Intensidad"
+        info="Pacífico: cada uno avanza a su ritmo por la misma lista. Hardcore: todos ven el mismo criptico; el primero en acertar se lo lleva y el resto tiene la muerte súbita para acertar también."
+      >
+        <Chips
+          label="Intensidad"
+          value={settings.intensity}
+          options={[
+            ['peaceful', 'Pacífico'],
+            ['hardcore', 'Hardcore'],
+          ]}
+          onChange={(intensity) => update({ intensity })}
+        />
+      </Option>
+      {hardcore && (
+        <>
+          <Option title="Muerte súbita" info="Segundos que tiene el resto para acertar después del primero. 0 = el criptico se cierra al instante.">
+            <Chips<number>
+              label="Muerte súbita"
+              value={settings.suddenDeathSec}
+              options={SUDDEN_DEATH_OPTIONS.map((n): [number, string] => [n, n === 0 ? '0' : `${n} s`])}
+              onChange={(suddenDeathSec) => update({ suddenDeathSec })}
+            />
+          </Option>
+          <Option
+            title="Votar dificultad"
+            info="Durante cada criptico se vota la dificultad del siguiente. Si hay empate, decide quien va perdiendo. Desactivado: es aleatoria."
+          >
+            <Toggle label="Votar dificultad" checked={settings.difficultyVote} onChange={(difficultyVote) => update({ difficultyVote })} />
+          </Option>
+        </>
+      )}
+      <Option title="Diferencia de dos" info="Para ganar hay que llegar a la meta con 2 cripticos de ventaja. Si no, hay prórroga.">
+        <Toggle label="Diferencia de dos" checked={settings.winByTwo} onChange={(winByTwo) => update({ winByTwo })} />
+      </Option>
+      <Option
+        title="Añadir tiempo"
+        info="La carrera tiene un tope de 30 minutos. Si todos lo piden, se suman los segundos elegidos (con un límite de usos)."
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Toggle
+            label="Añadir tiempo"
+            checked={settings.extraTime.enabled}
+            onChange={(enabled) => update({ extraTime: { ...settings.extraTime, enabled } })}
+          />
+          {settings.extraTime.enabled && (
+            <>
+              <NumberField
+                label="Segundos por uso"
+                value={settings.extraTime.seconds}
+                min={10}
+                max={300}
+                suffix="s"
+                onChange={(seconds) => update({ extraTime: { ...settings.extraTime, seconds } })}
+              />
+              <NumberField
+                label="Usos"
+                value={settings.extraTime.maxUses}
+                min={1}
+                max={5}
+                suffix="usos"
+                onChange={(maxUses) => update({ extraTime: { ...settings.extraTime, maxUses } })}
+              />
+            </>
+          )}
+        </div>
+      </Option>
+      <Option title="Pedir pista" info="Hasta 2 pistas por criptico. Cada pista resta 30 puntos del criptico.">
+        <Toggle label="Pedir pista" checked={settings.hints} onChange={(hints) => update({ hints })} />
+      </Option>
+    </>
+  );
+}
+
+function RoyalePanel({ settings, update }: { settings: ModeSettings['royale']; update: (patch: Partial<ModeSettings['royale']>) => void }) {
+  const presetIndex = ROYALE_PRESETS.findIndex((p) => p.baseSec === settings.baseSec && p.incrementSec === settings.incrementSec);
+  const [custom, setCustom] = useState(presetIndex === -1);
+  return (
+    <>
+      <section className="py-2">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Control de tiempo</p>
+        <div className="grid grid-cols-3 gap-2">
+          {ROYALE_PRESETS.map((preset, index) => {
+            const active = !custom && index === presetIndex;
+            return (
+              <button
+                key={index}
+                type="button"
+                aria-pressed={active}
+                onClick={() => {
+                  setCustom(false);
+                  update({ baseSec: preset.baseSec, incrementSec: preset.incrementSec });
+                }}
+                className={cx(
+                  'flex flex-col items-center border py-3 transition-colors',
+                  active ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink',
+                )}
+              >
+                <span className="font-mono text-2xl font-semibold">{formatTimeControl(preset.baseSec, preset.incrementSec)}</span>
+                <span className={cx('text-[11px]', active ? 'opacity-70' : 'text-muted')}>{preset.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          aria-pressed={custom}
+          onClick={() => setCustom(true)}
+          className={cx('mt-2 w-full border py-2 text-sm font-semibold', custom ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink')}
+        >
+          Personalizado{custom ? `: ${formatTimeControl(settings.baseSec, settings.incrementSec)}` : ''}
+        </button>
+        {custom && (
+          <div className="mt-3 flex flex-wrap gap-4">
+            <NumberField
+              label="Minutos"
+              value={Math.round(settings.baseSec / 60)}
+              min={1}
+              max={30}
+              suffix="min"
+              onChange={(minutes) => update({ baseSec: minutes * 60 })}
+            />
+            <NumberField
+              label="Segundos por acierto"
+              value={settings.incrementSec}
+              min={0}
+              max={60}
+              suffix="s por acierto"
+              onChange={(incrementSec) => update({ incrementSec })}
+            />
+          </div>
+        )}
+      </section>
+      <Option
+        title="Cómo se juega"
+        info="Primer número: minutos de tu reloj. Segundo: segundos que suma cada acierto. Los cripticos son siempre los mismos para todos y cada vez más difíciles (10 fáciles, 10 medios, después difíciles). Sin pausas: al acertar pasas al siguiente. Quien llega a 0 queda eliminado; gana el último en pie."
+      >
+        <span className="text-sm text-muted">Hasta 8 jugadores</span>
+      </Option>
+    </>
+  );
+}
+
+function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; update: (patch: Partial<ModeSettings['duel']>) => void }) {
+  return (
+    <>
+      <section className="py-2">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Vida</p>
+        <Chips<number> label="Vida" value={settings.hp} options={DUEL_HP_OPTIONS.map((hp): [number, string] => [hp, `${hp}`])} onChange={(hp) => update({ hp })} />
+      </section>
+      <Option
+        title="Puntaje"
+        info={`Cuánta vida pierde el rival cuando aciertas primero. ${DUEL_DAMAGE_LABELS.difficulty.title}: ${DUEL_DAMAGE_LABELS.difficulty.description} ${DUEL_DAMAGE_LABELS.speed.title}: ${DUEL_DAMAGE_LABELS.speed.description}`}
+      >
+        <Chips<DuelDamage>
+          label="Puntaje"
+          value={settings.damage}
+          options={[
+            ['difficulty', DUEL_DAMAGE_LABELS.difficulty.title],
+            ['speed', DUEL_DAMAGE_LABELS.speed.title],
+          ]}
+          onChange={(damage) => update({ damage })}
+        />
+      </Option>
+      <Option title="Combo" info={DUEL_COMBO_INFO}>
+        <span className="text-sm text-muted">Siempre activo</span>
+      </Option>
+      <Option
+        title="Remontada"
+        info="Quien tiene menos vida golpea más fuerte con cripticos medios y difíciles, en proporción a la diferencia de vida."
+      >
+        <Chips<ComebackLevel> label="Remontada" value={settings.comeback} options={COMEBACK} onChange={(comeback) => update({ comeback })} />
+      </Option>
+      <Option
+        title="Cómo se juega"
+        info="Solo 2 jugadores, sin pistas. Ambos ven el mismo criptico (dificultad al azar). El primero en acertar lo cierra al instante y se muestran respuesta y explicación durante 3 segundos."
+      >
+        <span className="text-sm text-muted">1 contra 1</span>
+      </Option>
+    </>
+  );
+}
+
+// ---------- Página ----------
 
 export default function CreateCompetitionPage() {
   const { profile } = useSession();
   const navigate = useNavigate();
-  const [form, setForm] = useState<CreateCompetitionInput>(() => loadJson(FORM_KEY, defaultForm()));
-  useEffect(() => saveJson(FORM_KEY, form), [form]);
+  const [params] = useSearchParams();
+  const rivalId = params.get('rival');
+  const rivalName = params.get('name') ?? 'tu amigo';
+
+  const [stored, setStored] = useState<Stored>(loadStored);
+  const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => saveJson(STORAGE_KEY, stored), [stored]);
 
-  const set = <K extends keyof CreateCompetitionInput>(key: K, value: CreateCompetitionInput[K]) =>
-    setForm((prev) => {
-      const next = { ...prev, [key]: value };
-      // Coherencia automática entre opciones dependientes.
-      if (key === 'mode' && value === 'boss') next.winByTwo = false;
-      if (key === 'flow' && value === 'free') {
-        next.difficultyVote = false;
-        next.rivalCountdownSec = 0;
-      }
-      return next;
-    });
+  const { settings } = stored;
+  const visibility: CompetitionVisibility = rivalId ? 'private' : stored.visibility;
+  const built = useMemo(() => buildConfig(settings), [settings]);
+  const validation = useMemo(() => validateConfig(built.config, built.maxPlayers), [built]);
 
-  const validation = useMemo(() => validateConfig(form, form.maxPlayers), [form]);
-  const isBoss = form.mode === 'boss';
-  const isRounds = form.flow === 'rounds';
+  const setGame = (game: GameMode) => setStored((prev) => ({ ...prev, settings: { ...prev.settings, game } }));
+  const updateSettings = (next: (current: ModeSettings) => ModeSettings) =>
+    setStored((prev) => ({ ...prev, settings: next(prev.settings) }));
+  const patchRace = (value: Partial<ModeSettings['race']>) => updateSettings((c) => ({ ...c, race: { ...c.race, ...value } }));
+  const patchRoyale = (value: Partial<ModeSettings['royale']>) => updateSettings((c) => ({ ...c, royale: { ...c.royale, ...value } }));
+  const patchDuel = (value: Partial<ModeSettings['duel']>) => updateSettings((c) => ({ ...c, duel: { ...c.duel, ...value } }));
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -155,7 +399,14 @@ export default function CreateCompetitionPage() {
     setError(null);
     setBusy(true);
     try {
-      const id = await createCompetition(profile, form);
+      const id = await createCompetition(profile, {
+        ...built.config,
+        title: (title.trim() || (rivalId ? `Desafío · ${built.title}` : built.title)).slice(0, 60),
+        visibility,
+        maxPlayers: built.maxPlayers,
+        clueCount: built.clueCount,
+        ...(rivalId ? { invitedIds: [rivalId] } : {}),
+      });
       navigate(`/c/${id}`);
     } catch (err) {
       setError(errorMessage(err));
@@ -164,199 +415,74 @@ export default function CreateCompetitionPage() {
   };
 
   return (
-    <>
-      <PageHeader kicker="Nueva" title="Configura la partida" />
+    <div className="mx-auto max-w-2xl">
+      <PageHeader kicker="Jugar" title={rivalId ? `Desafiar a ${rivalName}` : 'Nueva partida'} />
 
-      <form onSubmit={handleSubmit} className="grid max-w-3xl gap-10">
-        <Input label="Título" value={form.title} onChange={(e) => set('title', e.target.value)} minLength={3} maxLength={60} required />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div role="tablist" aria-label="Modo de juego" className="grid grid-cols-4 border border-ink">
+          {GAME_MODES.map((game) => {
+            const soon = game === 'boss';
+            const active = settings.game === game;
+            return (
+              <button
+                key={game}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                disabled={soon}
+                onClick={() => setGame(game)}
+                className={cx(
+                  'flex flex-col items-center py-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                  active ? 'bg-ink text-paper' : 'hover:bg-paper-2',
+                )}
+              >
+                <span className="font-display text-lg font-semibold uppercase tracking-wide">{GAME_LABELS[game].title}</span>
+                <span className={cx('text-[10px] uppercase tracking-widest', active ? 'opacity-70' : 'text-muted')}>
+                  {soon ? 'Pronto' : GAME_LABELS[game].tagline}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-sm text-muted">{GAME_LABELS[settings.game].description}</p>
 
-        <Section title="Sala">
-          <Choice<CompetitionVisibility> value={form.visibility} onChange={(v) => set('visibility', v)} columns={3} options={VISIBILITY_OPTIONS} />
-        </Section>
+        <div>
+          {settings.game === 'race' && <RacePanel settings={settings.race} update={patchRace} />}
+          {settings.game === 'royale' && <RoyalePanel settings={settings.royale} update={patchRoyale} />}
+          {settings.game === 'duel' && <DuelPanel settings={settings.duel} update={patchDuel} />}
 
-        <Section title="Modo de juego">
-          <Choice<CompetitionMode>
-            value={form.mode}
-            onChange={(v) => set('mode', v)}
-            columns={3}
-            options={(Object.keys(MODE_LABELS) as CompetitionMode[]).map((mode) => ({ value: mode, ...MODE_LABELS[mode] }))}
-          />
-          {isBoss && (
-            <Select label="Nivel del jefe" value={form.bossLevel} onChange={(e) => set('bossLevel', e.target.value as BossLevel)}>
-              {(Object.keys(BOSS_LABELS) as BossLevel[]).map((level) => (
-                <option key={level} value={level}>
-                  {BOSS_LABELS[level]}
-                </option>
-              ))}
-            </Select>
+          {rivalId ? (
+            <p className="border-b border-line py-3 text-sm">
+              Sala <strong>privada</strong>: {rivalName} la verá en su pestaña Amigos y podrás compartirle el enlace.
+            </p>
+          ) : (
+            <Option title="Sala" info="Pública: aparece en Jugar para todos. Amigos: solo la ven tus amigos. Privada: solo se entra con el enlace.">
+              <Chips<CompetitionVisibility>
+                label="Sala"
+                value={visibility}
+                options={VISIBILITY}
+                onChange={(value) => setStored((prev) => ({ ...prev, visibility: value }))}
+              />
+            </Option>
           )}
-        </Section>
 
-        <Section title="Flujo">
-          <Choice<GameFlow>
-            value={form.flow}
-            onChange={(v) => set('flow', v)}
-            options={(Object.keys(FLOW_LABELS) as GameFlow[]).map((flow) => ({ value: flow, ...FLOW_LABELS[flow] }))}
-          />
-        </Section>
-
-        {!isBoss && (
-          <Section title="Puntaje">
-            <Choice<ScoringRule>
-              value={form.scoring}
-              onChange={(v) => set('scoring', v)}
-              columns={3}
-              options={(Object.keys(SCORING_LABELS) as ScoringRule[]).map((rule) => ({ value: rule, ...SCORING_LABELS[rule] }))}
+          <label className="block border-b border-line py-3">
+            <span className="text-sm font-semibold">Nombre de la sala</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={built.title}
+              maxLength={60}
+              className="mt-1 h-10 w-full border border-line bg-paper px-3 text-sm focus:border-ink focus:outline-none"
             />
-            <Choice<ComebackLevel>
-              value={form.comeback}
-              onChange={(v) => set('comeback', v)}
-              columns={3}
-              options={(Object.keys(COMEBACK_LABELS) as ComebackLevel[]).map((level) => ({
-                value: level,
-                title: COMEBACK_LABELS[level],
-                description:
-                  level === 'off' ? 'Puntos fijos por dificultad.' : 'Quien va atrás gana más con medios y difíciles, en proporción a la distancia.',
-              }))}
-            />
-          </Section>
-        )}
-
-        <Section title="Modificadores">
-          <Toggle
-            label="Diferencia de dos"
-            description="Para ganar hay que sacar 2 cripticos de ventaja. Si no, hay prórroga."
-            checked={form.winByTwo}
-            disabled={isBoss}
-            onChange={(v) => set('winByTwo', v)}
-          />
-          <Toggle
-            label="Votar dificultad del próximo criptico"
-            description="Cada ronda se vota fácil, medio o difícil. En empate gana el voto de quien va perdiendo."
-            checked={form.difficultyVote}
-            disabled={!isRounds}
-            onChange={(v) => set('difficultyVote', v)}
-          />
-          <Toggle
-            label="Cuenta atrás tras un acierto"
-            description="Cuando alguien acierta, el resto tiene unos segundos para acertar también. La pantalla se oscurece."
-            checked={form.rivalCountdownSec > 0}
-            disabled={!isRounds}
-            onChange={(v) => set('rivalCountdownSec', v ? 15 : 0)}
-          >
-            <Input
-              label="Segundos"
-              type="number"
-              min={1}
-              max={LIMITS.maxRivalCountdownSec}
-              value={form.rivalCountdownSec}
-              onChange={(e) => set('rivalCountdownSec', Number(e.target.value))}
-            />
-          </Toggle>
-          <Toggle
-            label="Permitir añadir tiempo"
-            description="Si todos lo piden (p. ej. están trabados), se suma tiempo al reloj."
-            checked={form.extraTime.enabled}
-            onChange={(v) => set('extraTime', { ...form.extraTime, enabled: v })}
-          >
-            <Input
-              label="Segundos por uso"
-              type="number"
-              min={LIMITS.minExtraSeconds}
-              max={LIMITS.maxExtraSeconds}
-              value={form.extraTime.seconds}
-              onChange={(e) => set('extraTime', { ...form.extraTime, seconds: Number(e.target.value) })}
-            />
-            <Input
-              label="Usos máximos"
-              type="number"
-              min={1}
-              max={LIMITS.maxExtraUses}
-              value={form.extraTime.maxUses}
-              onChange={(e) => set('extraTime', { ...form.extraTime, maxUses: Number(e.target.value) })}
-            />
-          </Toggle>
-          <Toggle
-            label="Marcador oculto"
-            description="Los puntajes se revelan al final. Solo se ve el progreso."
-            checked={form.hideScoreboard}
-            onChange={(v) => set('hideScoreboard', v)}
-          />
-        </Section>
-
-        <Section title="Reglas">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Input
-              label={form.mode === 'timed' || isBoss ? 'Duración (min)' : 'Tiempo máximo (min)'}
-              type="number"
-              min={1}
-              max={180}
-              value={Math.round(form.durationSec / 60)}
-              onChange={(e) => set('durationSec', Number(e.target.value) * 60)}
-            />
-            <Input
-              label={isRounds ? 'Cripticos por dificultad' : 'Cripticos'}
-              type="number"
-              min={1}
-              max={isRounds ? LIMITS.maxCluesPerTier : 50}
-              value={form.clueCount}
-              onChange={(e) => set('clueCount', Number(e.target.value))}
-            />
-            {form.mode === 'count' && (
-              <Input
-                label={isRounds ? 'Rondas para ganar' : 'Meta'}
-                type="number"
-                min={1}
-                max={LIMITS.maxTargetCount}
-                value={form.targetCount}
-                onChange={(e) => set('targetCount', Number(e.target.value))}
-              />
-            )}
-            <Input
-              label="Jugadores máx."
-              type="number"
-              min={1}
-              max={50}
-              value={form.maxPlayers}
-              onChange={(e) => set('maxPlayers', Number(e.target.value))}
-            />
-            <Input
-              label="Pistas por criptico"
-              type="number"
-              min={0}
-              max={10}
-              value={form.maxHintsPerClue}
-              onChange={(e) => set('maxHintsPerClue', Number(e.target.value))}
-            />
-            {!isBoss && (
-              <Input
-                label="Penalización por error"
-                type="number"
-                min={0}
-                max={LIMITS.maxWrongPenalty}
-                value={form.wrongPenalty}
-                onChange={(e) => set('wrongPenalty', Number(e.target.value))}
-              />
-            )}
-            {!isRounds && (
-              <Select label="Dificultades" value={form.tierMix} onChange={(e) => set('tierMix', e.target.value as TierMix)}>
-                {(Object.keys(TIER_MIX_LABELS) as TierMix[]).map((mix) => (
-                  <option key={mix} value={mix}>
-                    {TIER_MIX_LABELS[mix]}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </div>
-        </Section>
+          </label>
+        </div>
 
         <ErrorBanner error={error ?? (validation.length > 0 ? validation.join(' ') : null)} />
-        <div>
-          <Button type="submit" loading={busy} disabled={validation.length > 0}>
-            Crear sala
-          </Button>
-        </div>
+        <Button type="submit" loading={busy} disabled={validation.length > 0} className="h-12 w-full text-base">
+          {rivalId ? 'Crear desafío' : 'Crear sala'}
+        </Button>
       </form>
-    </>
+    </div>
   );
 }

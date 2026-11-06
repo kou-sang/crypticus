@@ -1,13 +1,21 @@
-// Amigos: buscar por @usuario, solicitudes entrantes/salientes y lista.
+// Amigos: desafíos recibidos, lista al estilo Lichess (ratings por modo + Desafiar), búsqueda y solicitudes.
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { collection, limit, query, where } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { useLiveQuery } from '../../hooks/useFirestore';
 import { useSession } from '../../hooks/useAuth';
 import { useFriends, type FriendRequest } from '../../hooks/useFriends';
 import { useUsers } from '../../hooks/useUsers';
 import { acceptFriendRequest, findUserByHandle, removeFriendRequest, sendFriendRequest } from '../../lib/repo';
 import { errorMessage, pairId } from '../../lib/utils';
 import { Avatar, Button, EmptyState, ErrorBanner, Input, PageHeader, Spinner } from '../../components/ui';
-import type { UserProfile } from '../../../shared/types';
+import type { Competition, UserProfile } from '../../../shared/types';
+import { ModeRatings } from '../../components/ModeRatings';
+import { describeMode } from '../competitions/CompetitionCard';
+
+const challengeLink = (user: UserProfile) =>
+  `/jugar/nueva?rival=${encodeURIComponent(user.uid)}&name=${encodeURIComponent(user.displayName)}`;
 
 function PersonRow({ profile, children }: { profile: UserProfile | undefined; children?: ReactNode }) {
   return (
@@ -21,11 +29,14 @@ function PersonRow({ profile, children }: { profile: UserProfile | undefined; ch
         ) : (
           <span className="text-muted">…</span>
         )}
-        <span className="font-mono text-xs text-muted">
-          @{profile?.handle} · {profile?.rating}
-        </span>
+        {profile && (
+          <>
+            <span className="block font-mono text-xs text-muted">@{profile.handle}</span>
+            <ModeRatings user={profile} compact />
+          </>
+        )}
       </div>
-      <div className="flex gap-2">{children}</div>
+      <div className="flex shrink-0 gap-2">{children}</div>
     </li>
   );
 }
@@ -42,6 +53,13 @@ export default function FriendsPage() {
   const [busy, setBusy] = useState<string | null>(null);
 
   const other = (r: FriendRequest) => users.get(r.from === profile.uid ? r.to : r.from);
+
+  // Desafíos: salas privadas donde un amigo me invitó (el estado se filtra aquí para no requerir índice compuesto).
+  const invites = useLiveQuery<Competition>(
+    query(collection(db, 'competitions'), where('invitedIds', 'array-contains', profile.uid), limit(10)),
+    [profile.uid],
+  );
+  const challenges = invites.data.filter((c) => c.status === 'lobby');
 
   const run = async (key: string, action: () => Promise<void>) => {
     setBusy(key);
@@ -69,8 +87,27 @@ export default function FriendsPage() {
   return (
     <>
       <PageHeader kicker="Amigos" title="Tu círculo" />
-      <div className="grid gap-10 lg:grid-cols-[1fr_1.3fr]">
-        <section>
+
+      {challenges.length > 0 && (
+        <section className="mb-8 border-2 border-accent p-4">
+          <h2 className="mb-2 font-display text-xl">Desafíos para ti</h2>
+          <ul className="divide-y divide-line">
+            {challenges.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-3 py-2">
+                <span className="min-w-0 flex-1 text-sm">
+                  <strong>{c.hostName}</strong> te desafía · {describeMode(c)}
+                </span>
+                <Link to={`/c/${c.id}`} className="inline-flex h-9 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
+                  Aceptar
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <div className="grid gap-10 lg:grid-cols-[1.3fr_1fr]">
+        <section className="lg:order-2">
           <h2 className="mb-3 font-display text-xl">Agregar</h2>
           <form onSubmit={handleSearch} className="flex items-end gap-2">
             <div className="flex-1">
@@ -137,7 +174,7 @@ export default function FriendsPage() {
           )}
         </section>
 
-        <section>
+        <section className="lg:order-1">
           <h2 className="mb-3 font-display text-xl">Amigos ({friends.length})</h2>
           {loading ? (
             <Spinner />
@@ -147,9 +184,14 @@ export default function FriendsPage() {
             <ul>
               {friends.map((r) => (
                 <PersonRow key={r.id} profile={other(r)}>
-                  <Link to={`/chat/${r.id}`} className="inline-flex h-10 items-center border border-ink px-3 text-sm font-semibold hover:bg-ink hover:text-paper">
-                    Chat
-                  </Link>
+                  {other(r) && (
+                    <Link
+                      to={challengeLink(other(r)!)}
+                      className="inline-flex h-10 items-center bg-ink px-3 text-sm font-semibold text-paper hover:bg-accent"
+                    >
+                      Desafiar
+                    </Link>
+                  )}
                   <Button variant="ghost" onClick={() => run(r.id, () => removeFriendRequest(r.id))} aria-label="Eliminar amigo">
                     ✕
                   </Button>

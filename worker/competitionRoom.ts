@@ -16,6 +16,7 @@ import {
   tick,
   toggleExtraTime,
   toggleEndVote,
+  passCryptic,
   toggleSkip,
   type LiveState,
 } from '../shared/engine';
@@ -64,6 +65,20 @@ interface RaceEntry {
   effectiveAt: number; // receivedAt - latencia de ida estimada (compensación)
   resolve: (outcome: ReturnType<typeof applyAnswer>) => void;
   reject: (error: unknown) => void;
+}
+
+/**
+ * Copia para difundir: durante el intervalo entre cripticos se oculta el siguiente
+ * (id y dificultad), para que nadie pueda leerlo antes de que abra.
+ */
+function publicState(state: LiveState, now: number): LiveState {
+  const round = state.round;
+  if (!round || round.opensAt == null || now >= round.opensAt) return state;
+  return {
+    ...state,
+    round: { ...round, crypticId: '' },
+    usedIds: state.usedIds.filter((id) => id !== round.crypticId),
+  };
 }
 
 const RTT_SAMPLES = 5;
@@ -202,7 +217,8 @@ export class CompetitionRoom extends DurableObject<Env> {
       const user = await verifyFirebaseToken(typeof token === 'string' ? token : '', this.env.FIREBASE_PROJECT_ID);
       ws.serializeAttachment({ uid: user.uid } satisfies SocketAttachment);
       const solutions = this.state ? solutionsFor(this.state) : [];
-      this.send(ws, { type: 'ready', uid: user.uid, state: this.state, solutions, serverTime: Date.now() });
+      const state = this.state ? publicState(this.state, Date.now()) : null;
+      this.send(ws, { type: 'ready', uid: user.uid, state, solutions, serverTime: Date.now() });
       this.probe(ws);
     } catch (error) {
       this.send(ws, { type: 'error', code: 'unauthenticated', message: describeError(error).message });
@@ -220,7 +236,7 @@ export class CompetitionRoom extends DurableObject<Env> {
     const now = Date.now();
 
     // Si venció el plazo, se evalúa primero (cierre o prórroga).
-    if (state.status === 'live' && now >= nextDeadline(state)) {
+    if (state.status === 'live' && now >= nextDeadline(state, now)) {
       const result = tick(state, now);
       this.markDirty(result.finished);
       if (result.finished) throw new GameError('time_up', 'Se acabó el tiempo.');
@@ -244,6 +260,11 @@ export class CompetitionRoom extends DurableObject<Env> {
         const { ended } = toggleEndVote(state, { uid, now });
         this.markDirty(ended);
         return { ok: true, applied: ended };
+      }
+      case 'pass': {
+        passCryptic(state, { uid, now });
+        this.markDirty(state.status === 'finished');
+        return { ok: true, applied: true };
       }
       case 'skip': {
         const { skipped } = toggleSkip(state, { uid, now });
@@ -375,9 +396,9 @@ export class CompetitionRoom extends DurableObject<Env> {
   private async commit(): Promise<void> {
     const state = this.state;
     if (!state) return;
-    this.broadcast({ type: 'state', state, solutions: solutionsFor(state) });
+    this.broadcast({ type: 'state', state: publicState(state, Date.now()), solutions: solutionsFor(state) });
     await this.ctx.storage.put(STATE_KEY, state);
-    if (state.status === 'live') await this.ctx.storage.setAlarm(nextDeadline(state));
+    if (state.status === 'live') await this.ctx.storage.setAlarm(nextDeadline(state, Date.now()));
   }
 
   /** Escribe resultados, rating y estadísticas en Firestore. Reintenta por alarma si falla. */
@@ -387,11 +408,23 @@ export class CompetitionRoom extends DurableObject<Env> {
     try {
       const firestore = new FirestoreRest(this.env.FIREBASE_SERVICE_ACCOUNT);
       const ranked = rankState(state);
-      const users = await firestore.batchGet<{ rating?: number }>(ranked.map((p) => `users/${p.uid}`));
+      const users = await firestore.batchGet<{ rating?: number; modeStats?: Record<string, { rating?: number }> }>(
+        ranked.map((p) => `users/${p.uid}`),
+      );
       const ratings: Record<string, number> = {};
       users.forEach((user, uid) => {
         ratings[uid] = user.rating ?? 1200;
       });
+      // Elo propio de cada modo (Race, Royale, Duel).
+      const game = state.config.game;
+      const rankedMode = game === 'race' || game === 'royale' || game === 'duel' ? game : null;
+      const modeRatings: Record<string, number> = {};
+      users.forEach((user, uid) => {
+        modeRatings[uid] = (rankedMode ? user.modeStats?.[rankedMode]?.rating : undefined) ?? 1200;
+      });
+      const modeDeltas = rankedMode && ranked.length >= 2 ? computeRatingDeltas(ranked, modeRatings) : {};
+      const outcomeOf = (p: { uid: string; rank: number }): 'win' | 'loss' | 'draw' =>
+        state.winnerId ? (p.uid === state.winnerId ? 'win' : 'loss') : p.rank === 1 ? 'draw' : 'loss';
       // El modo jefe es cooperativo: no altera el rating.
       const competitive = state.config.mode !== 'boss' && ranked.length >= 2;
       const deltas = competitive ? computeRatingDeltas(ranked, ratings) : {};
@@ -430,6 +463,8 @@ export class CompetitionRoom extends DurableObject<Env> {
               competitionId: state.competitionId,
               title: state.title,
               mode: state.config.mode,
+              ...(game ? { game } : {}),
+              outcome: outcomeOf(p),
               flow: state.config.flow,
               finishedAt: state.finishedAt ?? Date.now(),
               rank: p.rank,
@@ -456,6 +491,32 @@ export class CompetitionRoom extends DurableObject<Env> {
               'stats.hintsUsed': p.hintsUsed,
             },
           })),
+        // Estadísticas y Elo por modo (solo partidas de 2 o más).
+        ...(rankedMode && ranked.length >= 2
+          ? ranked
+              .filter((p) => p.uid in ratings)
+              .flatMap<Write>((p) => {
+                const outcome = outcomeOf(p);
+                const prefix = `modeStats.${rankedMode}`;
+                return [
+                  {
+                    kind: 'setFields',
+                    path: `users/${p.uid}`,
+                    fields: { [`${prefix}.rating`]: (modeRatings[p.uid] ?? 1200) + (modeDeltas[p.uid] ?? 0) },
+                  },
+                  {
+                    kind: 'increment',
+                    path: `users/${p.uid}`,
+                    increments: {
+                      [`${prefix}.played`]: 1,
+                      [`${prefix}.wins`]: outcome === 'win' ? 1 : 0,
+                      [`${prefix}.losses`]: outcome === 'loss' ? 1 : 0,
+                      [`${prefix}.draws`]: outcome === 'draw' ? 1 : 0,
+                    },
+                  },
+                ];
+              })
+          : []),
         // Cripticos vistos: no se repetirán en futuras salas con este jugador.
         ...this.seenWrites(state, ranked.map((p) => p.uid)),
       ];
