@@ -20,13 +20,34 @@ Guía para **Windows + PowerShell**, con los datos del proyecto Firebase `crypti
 
 ## 0. Requisitos (una vez)
 
+Primero comprueba si ya tienes Node y Git:
+
+```powershell
+node -v          # debe ser v20.6 o superior (v22 recomendado)
+git --version
+```
+
+Si alguno no está instalado, elige **una** de estas opciones.
+
+**Opción A — instaladores oficiales (sin winget):**
+
+1. **Node.js:** descarga el instalador *LTS* para Windows (`.msi`) desde <https://nodejs.org/es/download> y ejecútalo con las opciones por defecto.
+2. **Git:** descarga el instalador desde <https://git-scm.com/download/win> y ejecútalo con las opciones por defecto.
+
+**Opción B — activar `winget`:** el error *"El término 'winget' no se reconoce"* significa que falta el **Instalador de aplicación** (*App Installer*) de Microsoft. Instálalo o actualízalo desde Microsoft Store, abre una nueva ventana de PowerShell y ejecuta:
+
 ```powershell
 winget install OpenJS.NodeJS.LTS
 winget install Git.Git
-node -v    # debe ser 20.6 o superior (22 recomendado)
 ```
 
-Cierra y vuelve a abrir PowerShell después de instalar.
+**Después de instalar, cierra y vuelve a abrir PowerShell** y repite `node -v` y `git --version`.
+
+**Permitir `npx` en PowerShell:** si al usar `npx` o `npm` aparece *"la ejecución de scripts está deshabilitada en este sistema"*, ejecuta una vez:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
 
 ---
 
@@ -205,6 +226,9 @@ npm run dev:worker    # http://localhost:8787
 | Siempre «No es correcto» | Clave HMAC distinta entre import y Worker | Usar la misma clave, reimportar y redesplegar |
 | `invalid_token` | `FIREBASE_PROJECT_ID` incorrecto | Revisar `wrangler.jsonc` y redesplegar |
 | `--env-file` no reconocido | Node anterior a 20.6 | Actualizar Node (paso 0) |
+| `'winget' no se reconoce…` | Falta el Instalador de aplicación | Paso 0, opción A u opción B |
+| `la ejecución de scripts está deshabilitada` | Política de ejecución de PowerShell | `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` |
+| `'node' / 'git' no se reconoce` tras instalar | PowerShell abierto antes de instalar | Cerrar y abrir PowerShell |
 
 ## Límites del plan gratuito
 
