@@ -21,3 +21,9 @@ export function GuestOnly() {
   if (user && !profile) return <Navigate to="/bienvenida" replace />;
   return <Outlet />;
 }
+
+/** Compatibilidad: /historial ahora vive en el perfil propio. */
+export function OwnProfileRedirect() {
+  const { profile } = useAuth();
+  return <Navigate to={profile ? `/u/${profile.uid}` : '/inicio'} replace />;
+}

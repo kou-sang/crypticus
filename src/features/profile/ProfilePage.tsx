@@ -1,6 +1,9 @@
-// Perfil público de un jugador con historial reciente.
+// Perfil de un jugador: estadísticas, rating e historial. Para el propio usuario reemplaza a la antigua página Historial.
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+
+const OWN_HISTORY = 50;
+const OTHER_HISTORY = 10;
+import { useParams } from 'react-router';
 import { doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
@@ -8,10 +11,10 @@ import { useLiveDoc } from '../../hooks/useFirestore';
 import { useFriends } from '../../hooks/useFriends';
 import { getHistory, sendFriendRequest } from '../../lib/repo';
 import { errorMessage, pairId } from '../../lib/utils';
-import { Avatar, Button, EmptyState, ErrorBanner, PageLoader } from '../../components/ui';
+import { Avatar, Button, EmptyState, ErrorBanner, PageLoader, Spinner } from '../../components/ui';
 import type { HistoryEntry, UserProfile } from '../../../shared/types';
 import { RatingChart } from '../../components/RatingChart';
-import { HistoryTable } from '../history/HistoryPage';
+import { HistoryTable } from '../../components/HistoryTable';
 
 export default function ProfilePage() {
   const { uid = '' } = useParams();
@@ -21,25 +24,29 @@ export default function ProfilePage() {
   const [busy, setBusy] = useState(false);
 
   const user = useLiveDoc<UserProfile>(uid ? doc(db, 'users', uid) : null, [uid]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[] | null>(null);
+  const isMe = me.uid === uid;
 
   useEffect(() => {
     if (!uid) return;
     let cancelled = false;
-    getHistory(uid, 20)
+    setHistory(null);
+    getHistory(uid, isMe ? OWN_HISTORY : OTHER_HISTORY)
       .then((list) => !cancelled && setHistory(list))
-      .catch((err: unknown) => console.error('[perfil] historial', err));
+      .catch((err: unknown) => {
+        console.error('[perfil] historial', err);
+        if (!cancelled) setHistory([]);
+      });
     return () => {
       cancelled = true;
     };
-  }, [uid]);
+  }, [uid, isMe]);
 
   if (user.loading) return <PageLoader />;
   if (!user.data) return <EmptyState title="Jugador no encontrado" />;
 
   const profile = user.data;
   const relation = all.find((r) => r.id === pairId(me.uid, profile.uid));
-  const isMe = me.uid === profile.uid;
 
   const handleAdd = async () => {
     setBusy(true);
@@ -87,21 +94,20 @@ export default function ProfilePage() {
         ))}
       </dl>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-        <section>
-          <div className="mb-4 flex items-baseline justify-between">
-            <h2 className="font-display text-2xl">Historial</h2>
-            {isMe && (
-              <Link to="/historial" className="text-sm font-semibold underline underline-offset-4">
-                Ver todo
-              </Link>
-            )}
-          </div>
-          {history.length === 0 ? <EmptyState title="Sin partidas todavía" /> : <HistoryTable entries={history.slice(0, 10)} />}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="min-w-0">
+          <h2 className="mb-4 font-display text-2xl">Historial</h2>
+          {history === null ? (
+            <Spinner />
+          ) : history.length === 0 ? (
+            <EmptyState title="Sin partidas todavía" />
+          ) : (
+            <HistoryTable entries={history} />
+          )}
         </section>
         <section>
           <h2 className="mb-4 font-display text-2xl">Rating</h2>
-          <RatingChart history={history} />
+          <RatingChart history={history ?? []} />
         </section>
       </div>
     </>

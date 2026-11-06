@@ -12,6 +12,7 @@ export function useCryptics(ids: string[]): { cryptics: Map<string, CrypticPubli
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setError(null);
     const missing = ids.filter((id) => !cache.has(id));
     if (missing.length === 0) return;
     let cancelled = false;

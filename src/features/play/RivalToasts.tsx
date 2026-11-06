@@ -1,5 +1,5 @@
 // Notificaciones a la derecha cuando un rival acierta, abre cuenta atrás o cura al jefe.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import type { GameEvent, LiveState } from '../../../shared/engine';
 import { DIFFICULTY_LABELS } from '../../../shared/scoring';
 import { playCue } from '../../lib/sound';
@@ -33,7 +33,7 @@ function toToast(event: GameEvent, state: LiveState): Toast | null {
   }
 }
 
-export function RivalToasts({ state, uid }: { state: LiveState; uid: string }) {
+export const RivalToasts = memo(function RivalToasts({ state, uid }: { state: LiveState; uid: string }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seen = useRef<number>(Date.now()); // Solo eventos posteriores al montaje.
   const timers = useRef<number[]>([]);
@@ -76,4 +76,4 @@ export function RivalToasts({ state, uid }: { state: LiveState; uid: string }) {
       ))}
     </div>
   );
-}
+});

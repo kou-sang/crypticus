@@ -61,10 +61,11 @@ Clona el repo **en una carpeta distinta** de donde tienes `clave.json`. Ejemplo:
 cd D:\EH\EH\Personal
 git clone https://github.com/kou-sang/crypticus.git crypticus-app
 cd crypticus-app
-git checkout feat/cloudflare-durable-objects   # o main, después de hacer merge del PR #2
-npm install
+npm ci
 ```
 
+> `package.json` ya declara en `allowScripts` los scripts de instalación que se necesitan (`esbuild`, `workerd`). Con npm ≥ 11.16 no hace falta aprobar nada a mano. Los avisos de `@firebase/util` y `protobufjs` se pueden ignorar.
+>
 > `clave.json` y `encoded.txt` están en `.gitignore` como protección extra, pero lo más seguro es mantenerlos **fuera** de la carpeta del repo. Nunca los compartas ni los subas.
 
 ### 1.2 Lista de cripticos
@@ -75,7 +76,7 @@ Copia el archivo `cryptics.seed.json` que te envié a la carpeta `data\` del rep
 Copy-Item "$HOME\Downloads\cryptics.seed.json" .\data\
 ```
 
-Son 30 cripticos originales (10 fáciles, 11 medios, 9 difíciles). Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
+Son 130 cripticos originales (45 fáciles, 51 medios, 34 difíciles), verificados por script: anagramas, inversiones, palabras ocultas, sumas, contenedores y eliminaciones. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
 
 ### 1.3 Regenerar la clave en base64 (importante)
 
@@ -134,8 +135,10 @@ Espera a que todos los índices estén **Habilitados** en *Firebase → Firestor
 
 ```powershell
 npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json --dry-run
-npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json
+npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json --replace
 ```
+
+`--replace` deja el archivo como la lista completa: borra de Firestore y de los secretos los cripticos que ya no estén (por ejemplo, los de prueba). Sin esa opción, la importación solo agrega o actualiza.
 
 Esto hace dos cosas:
 
@@ -180,7 +183,7 @@ Si cerraste la ventana y perdiste `$hmac`, vuelve a asignarla con el valor guard
 4. Prueba con dos navegadores (o PC + móvil):
    - **Duelo:** rondas, votación de dificultad, cuenta atrás con efecto desmayo y aviso de partida mixta móvil/PC.
    - **Jefe:** golpes, curación al fallar y figura animada.
-5. Al terminar, revisa *Historial*, tu *Perfil* (gráfico de rating) y *Ranking*.
+5. Al terminar, revisa tu *Perfil* (botón del avatar: historial y gráfico de rating) y *Ranking*.
 
 Logs en vivo del Worker:
 
@@ -194,8 +197,9 @@ npx wrangler tail
 
 | Cambio | Qué ejecutar |
 | --- | --- |
-| Código nuevo | `git pull` → `npm install` → `npm run deploy` |
+| Código nuevo | `git pull` → `npm ci` → `npm run deploy` |
 | Cripticos nuevos | Importar (paso 3) → `npm run deploy` |
+| Quitar cripticos | Borrarlos del archivo → importar con `--replace` → `npm run deploy` |
 | Reglas o índices | Paso 2 |
 
 > **Despliega siempre desde tu PC** (`npm run deploy`). Los hashes de las respuestas no están en git, así que la integración Git de Cloudflare compilaría el Worker sin cripticos.
@@ -222,12 +226,14 @@ npm run dev:worker    # http://localhost:8787
 | `auth/unauthorized-domain` | Dominio no autorizado | Paso 4.3 |
 | Error de índice al crear partida | Índices construyéndose | Esperar al paso 2 |
 | `No hay cripticos cargados todavía` | No se importaron | Paso 3 |
+| `No hay cripticos disponibles` al iniciar | `worker\generated\cryptic-secrets.json` vacío al desplegar | Paso 3 (`--secrets-only` basta) → `npm run deploy` |
 | `missing_cryptic` al responder | Worker desplegado antes de importar | Paso 3 → `npm run deploy` |
 | Siempre «No es correcto» | Clave HMAC distinta entre import y Worker | Usar la misma clave, reimportar y redesplegar |
 | `invalid_token` | `FIREBASE_PROJECT_ID` incorrecto | Revisar `wrangler.jsonc` y redesplegar |
 | `--env-file` no reconocido | Node anterior a 20.6 | Actualizar Node (paso 0) |
 | `'winget' no se reconoce…` | Falta el Instalador de aplicación | Paso 0, opción A u opción B |
 | `la ejecución de scripts está deshabilitada` | Política de ejecución de PowerShell | `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` |
+| `Unknown command: "install-scripts"` en CI | Ese comando es solo para tu PC (npm ≥ 11.16) | No editar `ci.yml`; `allowScripts` ya está en `package.json` |
 | `'node' / 'git' no se reconoce` tras instalar | PowerShell abierto antes de instalar | Cerrar y abrir PowerShell |
 
 ## Límites del plan gratuito

@@ -1,5 +1,5 @@
 // Vista de juego: flujo libre (navegación por lista) o por rondas (criptico compartido + votación).
-import { useMemo, useState } from 'react';
+import { useMemo, useState, memo } from 'react';
 import type { LiveState } from '../../../shared/engine';
 import { nextPendingFree } from './playUtils';
 import type { GameActions } from '../../hooks/useGameChannel';
@@ -121,10 +121,10 @@ function RoundsFlow({ state, uid, actions }: { state: LiveState; uid: string; ac
   );
 }
 
-export function PlayView({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
+export const PlayView = memo(function PlayView({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
   return state.config.flow === 'rounds' ? (
     <RoundsFlow state={state} uid={uid} actions={actions} />
   ) : (
     <FreeFlow state={state} uid={uid} actions={actions} />
   );
-}
+});

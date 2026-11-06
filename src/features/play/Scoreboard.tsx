@@ -1,9 +1,10 @@
 // Marcador en vivo. Ordenado con la misma función que usa el servidor.
+import { memo } from 'react';
 import { rankParticipants, type RankMetric } from '../../../shared/scoring';
 import type { Participant } from '../../../shared/types';
 import { cx } from '../../lib/utils';
 
-export function Scoreboard({
+export const Scoreboard = memo(function Scoreboard({
   participants,
   meId,
   total,
@@ -45,4 +46,4 @@ export function Scoreboard({
       ))}
     </ol>
   );
-}
+});

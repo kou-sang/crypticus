@@ -1,18 +1,19 @@
 // Estructura de la app autenticada: barra superior (desktop) y barra inferior (móvil).
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { NavLink, Outlet, Link } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
 import { cx } from '../lib/utils';
 import { Avatar, PageLoader } from './ui';
 import { Logo } from './Logo';
+import { prefetchAppRoutes, prefetchPath } from '../routes';
 
+// Historial vive en el perfil (botón de avatar); el navbar no repite accesos.
 const NAV_ITEMS = [
-  { to: '/inicio', label: 'Inicio', glyph: '◧', mobile: true },
-  { to: '/competencias', label: 'Competir', glyph: '▦', mobile: true },
-  { to: '/historial', label: 'Historial', glyph: '☰', mobile: false },
-  { to: '/amigos', label: 'Amigos', glyph: '◎', mobile: true },
-  { to: '/chat', label: 'Chat', glyph: '❝', mobile: true },
-  { to: '/rankings', label: 'Ranking', glyph: '▲', mobile: true },
+  { to: '/inicio', label: 'Inicio', glyph: '◧' },
+  { to: '/competencias', label: 'Competir', glyph: '▦' },
+  { to: '/amigos', label: 'Amigos', glyph: '◎' },
+  { to: '/chat', label: 'Chat', glyph: '❝' },
+  { to: '/rankings', label: 'Ranking', glyph: '▲' },
 ];
 
 function GearIcon() {
@@ -27,6 +28,8 @@ function GearIcon() {
 
 export function AppShell() {
   const { profile } = useAuth();
+  useEffect(() => prefetchAppRoutes(), []);
+  const prefetch = (to: string) => () => prefetchPath(to);
 
   return (
     <div className="min-h-dvh pb-20 md:pb-0">
@@ -40,6 +43,8 @@ export function AppShell() {
               <NavLink
                 key={item.to}
                 to={item.to}
+                onPointerEnter={prefetch(item.to)}
+                onFocus={prefetch(item.to)}
                 className={({ isActive }) =>
                   cx('px-3 py-1.5 text-sm font-medium transition-colors', isActive ? 'bg-ink text-paper' : 'hover:bg-paper-2')
                 }
@@ -86,7 +91,7 @@ export function AppShell() {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
-        {NAV_ITEMS.filter((item) => item.mobile).map((item) => (
+        {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

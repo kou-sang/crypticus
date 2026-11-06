@@ -1,4 +1,5 @@
 // Sala de competencia: lobby (Firestore) -> juego en vivo (WebSocket al Durable Object) -> resultados (Firestore).
+import { useMemo } from 'react';
 import { useParams } from 'react-router';
 import { collection, doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -6,8 +7,8 @@ import { useSession } from '../../hooks/useAuth';
 import { useLiveDoc, useLiveQuery } from '../../hooks/useFirestore';
 import { useFriends } from '../../hooks/useFriends';
 import { useGameChannel } from '../../hooks/useGameChannel';
-import { useNow } from '../../hooks/useNow';
-import { formatClock, cx } from '../../lib/utils';
+import { useReached } from '../../hooks/useNow';
+import { cx } from '../../lib/utils';
 import { gameDeadline, rankMetric } from '../../../shared/engine';
 import type { Competition, Participant } from '../../../shared/types';
 import { Badge, EmptyState, PageHeader, PageLoader } from '../../components/ui';
@@ -21,6 +22,7 @@ import { LobbyView } from './LobbyView';
 import { PlayView } from './PlayView';
 import { ResultsView } from './ResultsView';
 import { Scoreboard } from './Scoreboard';
+import { GameClock, StartCountdown } from './GameClock';
 
 export default function CompetitionRoom() {
   const { competitionId = '' } = useParams();
@@ -37,25 +39,30 @@ export default function CompetitionRoom() {
     [competitionId, isLive],
   );
   const game = useGameChannel(competitionId, isLive);
-  const now = useNow(250, isLive) + game.clockOffsetMs;
+  const offset = game.clockOffsetMs;
+
+  const live = isLive ? game.state : null;
+  const startedAt = live?.startedAt ?? comp?.startedAt ?? null;
+  const deadline = live ? gameDeadline(live) : (comp?.endsAt ?? null);
+  // Sin intervalos: solo se re-renderiza al empezar y al vencer el plazo (los relojes se pintan aparte).
+  const started = useReached(isLive ? startedAt : null, offset);
+  const expired = useReached(live ? deadline : null, offset);
+  const participants = useMemo(
+    () => (live ? Object.values(live.participants) : lobbyParticipants.data),
+    [live, lobbyParticipants.data],
+  );
+  const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId }), [competitionId]);
 
   if (competition.loading) return <PageLoader />;
   if (!comp) return <EmptyState title="Esta competencia no existe o fue cancelada" />;
 
-  const live = isLive ? game.state : null;
-  const participants = live ? Object.values(live.participants) : lobbyParticipants.data;
   const isParticipant = comp.participantIds.includes(profile.uid);
   const canJoin = comp.visibility !== 'friends' || comp.hostId === profile.uid || friendIds.includes(comp.hostId);
-  const startedAt = live?.startedAt ?? comp.startedAt;
-  const countdown = isLive && startedAt !== null && now < startedAt;
-  const deadline = live ? gameDeadline(live) : (comp.endsAt ?? 0);
-  const remaining = deadline - now;
-  const ended = live !== null && (live.status === 'finished' || remaining <= 0);
+  const countdown = isLive && startedAt !== null && !started;
+  const ended = live !== null && (live.status === 'finished' || expired);
   const total = live
-    ? live.config.flow === 'rounds'
-      ? live.config.mode === 'count'
-        ? live.config.targetCount
-        : live.crypticIds.length
+    ? live.config.flow === 'rounds' && live.config.mode === 'count'
+      ? live.config.targetCount
       : live.crypticIds.length
     : comp.crypticIds.length;
 
@@ -73,15 +80,13 @@ export default function CompetitionRoom() {
                 title={game.connection === 'open' ? 'Conectado' : 'Reconectando'}
                 className={cx('size-2 rounded-full', game.connection === 'open' ? 'bg-ok' : 'animate-pulse bg-accent')}
               />
-              <div className={cx('font-mono text-4xl font-semibold tabular-nums', remaining < 30_000 && 'text-accent')}>
-                {formatClock(remaining)}
-              </div>
+              {deadline !== null && <GameClock deadline={deadline} offsetMs={offset} />}
             </div>
           )
         }
       />
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-6">
           {comp.status !== 'finished' && <DeviceNotice participants={participants} />}
           {comp.status === 'lobby' && (
@@ -89,12 +94,7 @@ export default function CompetitionRoom() {
           )}
 
           {countdown && startedAt !== null && (
-            <div className="flex min-h-[40dvh] flex-col items-center justify-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted">Comienza en</p>
-              <p key={Math.ceil((startedAt - now) / 1000)} className="font-display text-9xl fade-in">
-                {Math.ceil((startedAt - now) / 1000)}
-              </p>
-            </div>
+            <StartCountdown startedAt={startedAt} offsetMs={offset} />
           )}
 
           {isLive && !countdown && (
@@ -110,7 +110,7 @@ export default function CompetitionRoom() {
                 <PlayView state={live} uid={profile.uid} actions={game.actions} />
                 <RivalToasts state={live} uid={profile.uid} />
                 {live.round?.closesAt != null && !live.round.solvedBy.includes(profile.uid) && (
-                  <FaintOverlay closesAt={live.round.closesAt} totalMs={live.config.rivalCountdownSec * 1000} now={now} />
+                  <FaintOverlay closesAt={live.round.closesAt} totalMs={live.config.rivalCountdownSec * 1000} offsetMs={offset} />
                 )}
               </>
             )
@@ -137,7 +137,7 @@ export default function CompetitionRoom() {
           {isParticipant && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Chat de sala</h3>
-              <ChatPanel target={{ kind: 'competition', competitionId }} compact />
+              <ChatPanel target={chatTarget} compact />
             </section>
           )}
         </aside>
