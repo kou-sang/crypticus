@@ -1,139 +1,213 @@
-# Despliegue de Crypticus — Variante A (Vercel) y Variante B (Cloudflare)
+# Crypticus — Instructivo de deploy (Firebase + Cloudflare)
 
-Ambas variantes pueden usar **el mismo proyecto de Firebase**: comparten usuarios, amigos, chat y rankings, y también la cuota diaria de Firestore. Las competencias no son intercambiables: una sala creada en A se juega en A.
+Guía para **Windows + PowerShell**, con los datos del proyecto Firebase `crypticus-eh`. Los pasos 0 y 1 se hacen una sola vez.
 
-Requisitos: Node 22+, git, una cuenta de Google (Firebase), una de Vercel (A) y una de Cloudflare (B).
+> **Cambio respecto a la guía anterior:** la variante A (Vercel) se descartó. Este instructivo cubre solo la variante B (Cloudflare Workers + Durable Objects).
 
----
+**Estado de tu proyecto:**
 
-## 0. Firebase (una sola vez, común a A y B)
+| Paso | Estado |
+| --- | --- |
+| Proyecto Firebase `crypticus-eh` | ✅ |
+| Auth: correo/contraseña y Google | ✅ |
+| Firestore en modo producción (*West1*) | ✅ |
+| App web registrada | ✅ |
+| Clave de servicio en base64 | ⚠️ Regenerar `encoded.txt` (paso 1.3) |
 
-1. **Crear proyecto**: <https://console.firebase.google.com> → *Agregar proyecto* (Analytics opcional).
-2. **Auth**: *Compilación → Authentication → Comenzar* → habilita **Correo/contraseña** y **Google**.
-3. **Firestore**: *Compilación → Firestore Database → Crear base de datos* → **modo producción** → ubicación cercana a tus jugadores. **No se puede cambiar después.** Anota la región; la usarás en A.
-4. **App web**: *Configuración del proyecto → General → Tus apps → `</>`* → registra la app → copia `apiKey`, `authDomain`, `projectId`, `appId`.
-5. **Cuenta de servicio**: *Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada* → descarga el JSON. Conviértelo a una línea en base64:
-   ```bash
-   base64 -w0 clave.json        # Linux
-   base64 -i clave.json         # macOS
-   ```
-   Guarda el JSON fuera del repo y **nunca** lo subas.
-6. **Clona el repo** (si no lo tienes):
-   ```bash
-   git clone https://github.com/kou-sang/crypticus.git && cd crypticus
-   ```
-7. **Reglas e índices** (desde cualquiera de las dos ramas, son idénticas):
-   ```bash
-   npx firebase-tools login
-   npx firebase-tools deploy --only firestore:rules,firestore:indexes --project <TU_PROJECT_ID>
-   ```
-   Los índices tardan unos minutos en construirse (*Firestore → Índices*).
-8. **Lista de cripticos**: crea `data/cryptics.json` con el formato de `data/cryptics.example.json`. El archivo está en `.gitignore`.
+> **Sobre la región de Firestore:** en esta arquitectura la región no afecta la velocidad del juego. Las respuestas se validan en el Durable Object, cerca de los jugadores, y Firestore solo interviene al crear, iniciar y terminar la partida.
 
 ---
 
-## A. Deploy con Vercel (rama `feat/initial-platform`)
+## 0. Requisitos (una vez)
 
-1. **Rama y dependencias**
-   ```bash
-   git checkout feat/initial-platform && npm install
-   ```
-2. **Variables locales**: crea `.env.local`:
-   ```bash
-   VITE_FIREBASE_API_KEY=...
-   VITE_FIREBASE_AUTH_DOMAIN=<id>.firebaseapp.com
-   VITE_FIREBASE_PROJECT_ID=<id>
-   VITE_FIREBASE_APP_ID=...
-   FIREBASE_SERVICE_ACCOUNT=<base64 del paso 0.5>
-   ```
-3. **Importar cripticos** (públicos en `cryptics`, respuestas y pistas en `crypticSecrets`):
-   ```bash
-   npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.json --dry-run
-   npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.json
-   ```
-4. **Región de las funciones** (clave para la latencia): en `vercel.json` agrega `"regions"` con la región de Vercel más cercana a tu Firestore y haz commit:
+```powershell
+winget install OpenJS.NodeJS.LTS
+winget install Git.Git
+node -v    # debe ser 20.6 o superior (22 recomendado)
+```
 
-   | Firestore | Vercel |
-   | --- | --- |
-   | `southamerica-east1` | `gru1` |
-   | `nam5` / `us-east1` / `us-east4` | `iad1` |
-   | `us-central1` | `cle1` |
-   | `eur3` / `europe-west1` | `cdg1` o `fra1` |
-
-   ```json
-   "regions": ["gru1"],
-   ```
-5. **Crear el proyecto en Vercel**: <https://vercel.com/new> → *Import* `kou-sang/crypticus`. Vite y `vercel.json` se detectan solos.
-   - En **Environment Variables** agrega las 5 variables del paso 2.
-   - Pulsa **Deploy**. El primer deploy usa `main`, que aún no tiene la app y puede fallar; es normal.
-6. **Rama de producción**: *Settings → Environments → Production → Branch Tracking* → `feat/initial-platform` → *Deployments → Redeploy*. Alternativa: haz merge del PR #1 a `main`.
-7. **Dominio autorizado**: Firebase → *Authentication → Configuración → Dominios autorizados* → agrega `<proyecto>.vercel.app`.
-8. **Probar**: abre la URL, crea cuenta y una sala, iníciala y responde un criptico.
+Cierra y vuelve a abrir PowerShell después de instalar.
 
 ---
 
-## B. Deploy con Cloudflare (rama `feat/cloudflare-durable-objects`)
+## 1. Preparar el repositorio
 
-1. **Rama y dependencias**
-   ```bash
-   git checkout feat/cloudflare-durable-objects && npm install
-   ```
-2. **Id del proyecto**: en `wrangler.jsonc` reemplaza `REPLACE_WITH_FIREBASE_PROJECT_ID` por tu `projectId`.
-3. **Clave HMAC** (guárdala en un gestor de contraseñas; si la pierdes, debes reimportar):
-   ```bash
-   openssl rand -hex 32
-   ```
-4. **Variables locales**: crea `.env.local` con las 4 `VITE_*`, `FIREBASE_SERVICE_ACCOUNT` y `ANSWER_HMAC_KEY=<clave del paso 3>`.
-5. **Importar cripticos** (públicos en Firestore; hashes y pistas en `worker/generated/cryptic-secrets.json`, fuera de git):
-   ```bash
-   npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.json --dry-run
-   npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.json
-   ```
-6. **Login en Cloudflare**
-   ```bash
-   npx wrangler login
-   ```
-7. **Desplegar** (build de Vite + Worker + Durable Object):
-   ```bash
-   npm run deploy
-   ```
-   Al terminar muestra la URL `https://crypticus.<tu-subdominio>.workers.dev`.
-8. **Secrets del Worker** (pega el base64 y la clave HMAC cuando los pida):
-   ```bash
-   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT
-   npx wrangler secret put ANSWER_HMAC_KEY
-   ```
-9. **Dominio autorizado**: Firebase → *Authentication → Configuración → Dominios autorizados* → agrega `crypticus.<tu-subdominio>.workers.dev`.
-10. **Probar** y ver logs en vivo:
-    ```bash
-    npx wrangler tail
-    ```
+### 1.1 Clonar
 
-> **Importante (B):** despliega siempre desde tu máquina con `npm run deploy`. Los hashes viajan dentro del bundle y no están en git, así que la integración Git de Cloudflare compilaría sin cripticos. **Cada vez que importes cripticos nuevos, vuelve a ejecutar `npm run deploy`.**
+Clona el repo **en una carpeta distinta** de donde tienes `clave.json`. Ejemplo:
 
-### Desarrollo local de B
+```powershell
+cd D:\EH\EH\Personal
+git clone https://github.com/kou-sang/crypticus.git crypticus-app
+cd crypticus-app
+git checkout feat/cloudflare-durable-objects   # o main, después de hacer merge del PR #2
+npm install
+```
 
-```bash
-printf 'FIREBASE_SERVICE_ACCOUNT=<base64>\nANSWER_HMAC_KEY=<clave>\n' > .dev.vars
-npm run dev:worker     # http://localhost:8787
+> `clave.json` y `encoded.txt` están en `.gitignore` como protección extra, pero lo más seguro es mantenerlos **fuera** de la carpeta del repo. Nunca los compartas ni los subas.
+
+### 1.2 Lista de cripticos
+
+Copia el archivo `cryptics.seed.json` que te envié a la carpeta `data\` del repo:
+
+```powershell
+Copy-Item "$HOME\Downloads\cryptics.seed.json" .\data\
+```
+
+Son 30 cripticos originales (10 fáciles, 11 medios, 9 difíciles). Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
+
+### 1.3 Regenerar la clave en base64 (importante)
+
+En Windows PowerShell, `>` guarda el archivo en UTF-16 y el base64 queda corrupto. Regenéralo en ASCII y sin salto de línea:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("D:\EH\EH\Personal\crypticus\clave.json")) |
+  Set-Content -NoNewline -Encoding ascii "D:\EH\EH\Personal\crypticus\encoded.txt"
+```
+
+### 1.4 Generar la clave HMAC de respuestas
+
+```powershell
+$bytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$hmac = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+$hmac   # 64 caracteres hexadecimales: guárdala en tu gestor de contraseñas
+```
+
+Si pierdes esta clave, tendrás que reimportar los cripticos y volver a desplegar.
+
+### 1.5 Crear `.env.local`
+
+Desde la raíz del repo, en la **misma** ventana de PowerShell (usa `$hmac` del paso anterior):
+
+```powershell
+$sa = Get-Content -Raw "D:\EH\EH\Personal\crypticus\encoded.txt"
+@"
+VITE_FIREBASE_API_KEY=AIzaSyAuB1hI2x8qoslgeBdHumRo7yGURmDt5ns
+VITE_FIREBASE_AUTH_DOMAIN=crypticus-eh.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=crypticus-eh
+VITE_FIREBASE_APP_ID=1:354553835552:web:394079a752c87901074c45
+FIREBASE_SERVICE_ACCOUNT=$sa
+ANSWER_HMAC_KEY=$hmac
+"@ | Set-Content -Encoding ascii .env.local
+```
+
+> Las variables `VITE_*` son la configuración web pública de Firebase: van al navegador y no son secretas. `FIREBASE_SERVICE_ACCOUNT` y `ANSWER_HMAC_KEY` **sí** son secretas: nunca llevan prefijo `VITE_` y no se envían al navegador.
+
+`wrangler.jsonc` ya tiene `FIREBASE_PROJECT_ID = crypticus-eh`.
+
+---
+
+## 2. Firestore: reglas e índices
+
+```powershell
+npx firebase-tools login
+npx firebase-tools deploy --only firestore:rules,firestore:indexes --project crypticus-eh
+```
+
+Espera a que todos los índices estén **Habilitados** en *Firebase → Firestore → Índices* (unos minutos). Sin el índice `cryptics (tier, rand)` no se pueden crear partidas.
+
+---
+
+## 3. Importar los cripticos
+
+```powershell
+npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json --dry-run
+npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json
+```
+
+Esto hace dos cosas:
+
+- Publica en Firestore los datos visibles: enunciado, enumeración y dificultad.
+- Genera `worker\generated\cryptic-secrets.json` con los hashes HMAC de las respuestas y las pistas. Ese archivo viaja dentro del Worker y nunca llega al navegador.
+
+---
+
+## 4. Desplegar en Cloudflare
+
+### 4.1 Iniciar sesión y desplegar
+
+```powershell
+npx wrangler login
+npm run deploy
+```
+
+Al terminar verás la URL: `https://crypticus.<tu-subdominio>.workers.dev`.
+
+### 4.2 Secrets del Worker
+
+Se pasan por tubería para evitar errores al pegar textos largos:
+
+```powershell
+Get-Content -Raw "D:\EH\EH\Personal\crypticus\encoded.txt" | npx wrangler secret put FIREBASE_SERVICE_ACCOUNT
+$hmac | npx wrangler secret put ANSWER_HMAC_KEY
+```
+
+Si cerraste la ventana y perdiste `$hmac`, vuelve a asignarla con el valor guardado: `$hmac = "<tu clave>"`.
+
+### 4.3 Autorizar el dominio en Firebase
+
+*Firebase → Authentication → Configuración → Dominios autorizados → Agregar dominio* → `crypticus.<tu-subdominio>.workers.dev`
+
+---
+
+## 5. Prueba rápida
+
+1. Abre la URL, crea una cuenta y elige tu `@usuario`.
+2. *Competir → Crear* → preset **Rápida** → *Crear sala* → *Iniciar*. Puedes jugar solo para probar.
+3. Responde, por ejemplo, «Capital italiana con amor alterado (4)». Deberías ver la animación, oír el sonido y sumar puntos.
+4. Prueba con dos navegadores (o PC + móvil):
+   - **Duelo:** rondas, votación de dificultad, cuenta atrás con efecto desmayo y aviso de partida mixta móvil/PC.
+   - **Jefe:** golpes, curación al fallar y figura animada.
+5. Al terminar, revisa *Historial*, tu *Perfil* (gráfico de rating) y *Ranking*.
+
+Logs en vivo del Worker:
+
+```powershell
+npx wrangler tail
 ```
 
 ---
 
-## Cómo comparar A vs B
+## 6. Actualizar en el futuro
 
-1. Abre cada URL con DevTools → **Network**.
-2. **A**: filtra `answer` y mira el *Timing* de `POST /api/competitions/answer`.
-3. **B**: filtra `WS` → abre `/ws` → pestaña **Messages**. La diferencia entre el `answer` enviado y el `reply` recibido es la latencia de validación.
-4. Mide unas 20 respuestas por variante, desde la misma red, y compara mediana y p95. Haz la primera respuesta de A tras unos minutos de inactividad para ver el arranque en frío.
+| Cambio | Qué ejecutar |
+| --- | --- |
+| Código nuevo | `git pull` → `npm install` → `npm run deploy` |
+| Cripticos nuevos | Importar (paso 3) → `npm run deploy` |
+| Reglas o índices | Paso 2 |
+
+> **Despliega siempre desde tu PC** (`npm run deploy`). Los hashes de las respuestas no están en git, así que la integración Git de Cloudflare compilaría el Worker sin cripticos.
+
+---
+
+## 7. Desarrollo local (opcional)
+
+```powershell
+@"
+FIREBASE_SERVICE_ACCOUNT=$sa
+ANSWER_HMAC_KEY=$hmac
+"@ | Set-Content -Encoding ascii .dev.vars
+npm run dev:worker    # http://localhost:8787
+```
+
+---
 
 ## Problemas frecuentes
 
 | Síntoma | Causa | Solución |
 | --- | --- | --- |
-| `auth/unauthorized-domain` | Dominio no autorizado | Paso 0 → dominios autorizados |
-| Error de índice en consola | Índices aún construyéndose | Esperar o revisar *Firestore → Índices* |
-| A: `500` en `/api/*` | `FIREBASE_SERVICE_ACCOUNT` mal pegado | Reexportar en base64 sin saltos de línea |
-| B: `missing_cryptic` | Worker desplegado sin secretos | Importar y luego `npm run deploy` |
-| B: siempre "No es correcto" | `ANSWER_HMAC_KEY` distinta entre import y Worker | Usar la misma clave y reimportar + redeploy |
-| B: `invalid_token` | `FIREBASE_PROJECT_ID` incorrecto en `wrangler.jsonc` | Corregir y redeploy |
+| `FIREBASE_SERVICE_ACCOUNT no es JSON válido` | base64 en UTF-16 o con salto de línea | Regenerar con el paso 1.3 |
+| `auth/unauthorized-domain` | Dominio no autorizado | Paso 4.3 |
+| Error de índice al crear partida | Índices construyéndose | Esperar al paso 2 |
+| `No hay cripticos cargados todavía` | No se importaron | Paso 3 |
+| `missing_cryptic` al responder | Worker desplegado antes de importar | Paso 3 → `npm run deploy` |
+| Siempre «No es correcto» | Clave HMAC distinta entre import y Worker | Usar la misma clave, reimportar y redesplegar |
+| `invalid_token` | `FIREBASE_PROJECT_ID` incorrecto | Revisar `wrangler.jsonc` y redesplegar |
+| `--env-file` no reconocido | Node anterior a 20.6 | Actualizar Node (paso 0) |
+
+## Límites del plan gratuito
+
+- **Workers Free:** 100 000 peticiones al día a `/api/*`. Los archivos estáticos (la web) son gratis e ilimitados.
+- **Firestore Spark:** 50 000 lecturas y 20 000 escrituras al día. El juego en vivo no consume cuota de Firestore; sí la consumen el lobby, el chat, los perfiles, el ranking y el cierre de cada partida (resultados + historial: unas `1 + 2 × jugadores` escrituras).
+- **Durable Objects (plan Free):** tiene cuotas propias. Revisa el panel de Cloudflare si el volumen crece.

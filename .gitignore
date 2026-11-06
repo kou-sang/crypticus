@@ -13,3 +13,6 @@ data/*.json
 worker/generated/
 .wrangler
 .dev.vars
+clave.json
+encoded.txt
+*.base64
