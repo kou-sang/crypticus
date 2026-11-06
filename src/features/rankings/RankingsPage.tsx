@@ -1,64 +1,92 @@
-// Rankings: top global (consulta puntual, no en vivo, para ahorrar lecturas) y entre amigos.
+// Ranking: una tabla por modo (Race, Royale, Duel), global o entre amigos. Consultas puntuales con caché.
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../../hooks/useAuth';
 import { useFriends } from '../../hooks/useFriends';
 import { useUsers } from '../../hooks/useUsers';
 import { cx, errorMessage } from '../../lib/utils';
-import { getGlobalPosition, getTopPlayers } from '../../lib/repo';
-import { RankingTable } from '../../components/RankingTable';
-import { ErrorBanner, PageHeader, Spinner } from '../../components/ui';
-import type { UserProfile } from '../../../shared/types';
+import { getModePosition, getTopByMode } from '../../lib/repo';
+import { loadJson, saveJson } from '../../lib/storage';
+import { RankingTable, statsOf } from '../../components/RankingTable';
+import { EmptyState, ErrorBanner, PageHeader, Spinner } from '../../components/ui';
+import { GAME_LABELS } from '../../../shared/scoring';
+import { RANKED_MODES, type RankedMode, type UserProfile } from '../../../shared/types';
+
+const VIEW_KEY = 'crypticus.rankingView.v1';
 
 export default function RankingsPage() {
   const { profile } = useSession();
-  const [tab, setTab] = useState<'global' | 'friends'>('global');
+  const [view, setView] = useState(() => loadJson(VIEW_KEY, { mode: 'race' as RankedMode, scope: 'global' as 'global' | 'friends' }));
   const [top, setTop] = useState<UserProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [position, setPosition] = useState<number | null>(null);
   const { friendIds } = useFriends(profile.uid);
   const friendProfiles = useUsers(friendIds);
+  const myStats = statsOf(profile, view.mode);
+  useEffect(() => saveJson(VIEW_KEY, view), [view]);
 
   useEffect(() => {
     let cancelled = false;
-    getTopPlayers()
+    setTop(null);
+    setError(null);
+    getTopByMode(view.mode)
       .then((rows) => !cancelled && setTop(rows))
       .catch((err: unknown) => !cancelled && setError(errorMessage(err)));
-    getGlobalPosition(profile.rating)
-      .then((value) => !cancelled && setPosition(value))
-      .catch((err: unknown) => console.error('[ranking] posición', err));
+    if (myStats.played > 0) {
+      getModePosition(view.mode, myStats.rating)
+        .then((value) => !cancelled && setPosition(value))
+        .catch((err: unknown) => console.error('[ranking] posición', err));
+    } else setPosition(null);
     return () => {
       cancelled = true;
     };
-  }, [profile.rating]);
+  }, [view.mode, myStats.rating, myStats.played]);
 
   const friendsRows = useMemo(
-    () => [profile, ...friendProfiles.values()].sort((a, b) => b.rating - a.rating),
-    [profile, friendProfiles],
+    () =>
+      [profile, ...friendProfiles.values()]
+        .filter((user) => statsOf(user, view.mode).played > 0 || user.uid === profile.uid)
+        .sort((a, b) => statsOf(b, view.mode).rating - statsOf(a, view.mode).rating),
+    [profile, friendProfiles, view.mode],
   );
+  const rows = view.scope === 'global' ? top : friendsRows;
 
   return (
     <>
       <PageHeader kicker="Ranking" title="Tabla de posiciones" />
-      <div className="mb-6 flex gap-1">
-        {(['global', 'friends'] as const).map((value) => (
+      <div role="tablist" className="mb-3 grid grid-cols-3 border border-ink">
+        {RANKED_MODES.map((mode) => (
           <button
-            key={value}
-            onClick={() => setTab(value)}
-            className={cx('px-4 py-2 text-sm font-semibold', tab === value ? 'bg-ink text-paper' : 'hover:bg-paper-2')}
+            key={mode}
+            role="tab"
+            aria-selected={view.mode === mode}
+            onClick={() => setView((v) => ({ ...v, mode }))}
+            className={cx('py-2 font-display text-lg uppercase', view.mode === mode ? 'bg-ink text-paper' : 'hover:bg-paper-2')}
           >
-            {value === 'global' ? 'Global' : 'Amigos'}
+            {GAME_LABELS[mode].title}
           </button>
         ))}
       </div>
-      <p className="mb-6 border-l-4 border-accent pl-3 text-sm">
-        Tu posición global: <strong className="font-mono">{position ? `#${position}` : '…'}</strong> · rating{' '}
-        <strong className="font-mono">{profile.rating}</strong>
-      </p>
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        {(['global', 'friends'] as const).map((scope) => (
+          <button
+            key={scope}
+            onClick={() => setView((v) => ({ ...v, scope }))}
+            className={cx('px-3 py-1.5 text-sm font-semibold', view.scope === scope ? 'bg-paper-2 ring-1 ring-ink' : 'text-muted hover:text-ink')}
+          >
+            {scope === 'global' ? 'Global' : 'Amigos'}
+          </button>
+        ))}
+        <p className="ml-auto text-sm">
+          Tú: <strong className="font-mono">{myStats.played > 0 ? `#${position ?? '…'} · ${myStats.rating}` : 'sin partidas'}</strong>
+        </p>
+      </div>
       <ErrorBanner error={error} />
-      {tab === 'global' ? (
-        top === null ? <Spinner /> : <RankingTable rows={top} meId={profile.uid} />
+      {rows === null ? (
+        <Spinner />
+      ) : rows.length === 0 ? (
+        <EmptyState title={`Nadie jugó ${GAME_LABELS[view.mode].title} todavía`}>Las partidas de 2 o más jugadores suman al ranking.</EmptyState>
       ) : (
-        <RankingTable rows={friendsRows} meId={profile.uid} />
+        <RankingTable rows={rows} meId={profile.uid} mode={view.mode} />
       )}
     </>
   );

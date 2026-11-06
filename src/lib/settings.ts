@@ -4,20 +4,39 @@ import { useSyncExternalStore } from 'react';
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type MotionPreference = 'system' | 'full' | 'reduced';
 
+/** Grupos de sonidos que se pueden activar por separado en Ajustes. */
+export type SoundGroup = 'answers' | 'rivals' | 'lowTime' | 'countdown' | 'results';
+export const SOUND_GROUPS: Record<SoundGroup, { title: string; description: string }> = {
+  answers: { title: 'Aciertos y errores', description: 'Al responder.' },
+  rivals: { title: 'Rivales', description: 'Cuando un rival acierta o te golpea.' },
+  lowTime: { title: 'Poco tiempo', description: 'Alarma cuando tu reloj se agota (Royale).' },
+  countdown: { title: 'Cuenta atrás', description: 'Inicio de partida y siguiente criptico.' },
+  results: { title: 'Resultado final', description: 'Victoria o derrota.' },
+};
+
 export interface Settings {
   sound: boolean;
   volume: number; // 0..1
+  sounds: Record<SoundGroup, boolean>;
   motion: MotionPreference;
   theme: ThemePreference;
 }
 
 const STORAGE_KEY = 'crypticus.settings.v1';
-const DEFAULTS: Settings = { sound: true, volume: 0.6, motion: 'system', theme: 'system' };
+const DEFAULTS: Settings = {
+  sound: true,
+  volume: 0.6,
+  sounds: { answers: true, rivals: true, lowTime: true, countdown: true, results: true },
+  motion: 'system',
+  theme: 'system',
+};
 
 function read(): Settings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) } : DEFAULTS;
+    if (!raw) return DEFAULTS;
+    const parsed = JSON.parse(raw) as Partial<Settings>;
+    return { ...DEFAULTS, ...parsed, sounds: { ...DEFAULTS.sounds, ...(parsed.sounds ?? {}) } };
   } catch {
     return DEFAULTS;
   }

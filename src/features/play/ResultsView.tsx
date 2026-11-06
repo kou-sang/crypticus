@@ -28,6 +28,8 @@ const REASONS: Record<string, string> = {
   bossDefeated: 'El jefe cayó.',
   bossSurvived: 'El jefe resistió.',
   voted: 'Terminada por votación.',
+  lastStanding: 'Último en pie.',
+  knockout: 'Nocaut: un jugador se quedó sin vida.',
 };
 
 type FinishedCompetition = Competition & {

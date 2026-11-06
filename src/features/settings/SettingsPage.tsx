@@ -4,7 +4,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
 import { updateDisplayName } from '../../lib/repo';
-import { updateSettings, useSettings, type MotionPreference, type ThemePreference } from '../../lib/settings';
+import { updateSettings, useSettings, type MotionPreference, type ThemePreference, SOUND_GROUPS, type SoundGroup } from '../../lib/settings';
 import { playCue } from '../../lib/sound';
 import { cx, errorMessage } from '../../lib/utils';
 import { Button, ErrorBanner, Input, PageHeader } from '../../components/ui';
@@ -120,6 +120,19 @@ export default function SettingsPage() {
               Probar
             </Button>
           </Row>
+          {settings.sound &&
+            (Object.keys(SOUND_GROUPS) as SoundGroup[]).map((group) => (
+              <Row key={group} title={SOUND_GROUPS[group].title} description={SOUND_GROUPS[group].description}>
+                <Segmented
+                  value={settings.sounds[group] ? 'on' : 'off'}
+                  options={[
+                    ['on', 'Sí'],
+                    ['off', 'No'],
+                  ]}
+                  onChange={(v) => updateSettings({ sounds: { ...settings.sounds, [group]: v === 'on' } })}
+                />
+              </Row>
+            ))}
         </section>
 
         <section>

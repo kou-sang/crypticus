@@ -11,6 +11,26 @@ export type CompetitionMode =
   | 'count' // Carrera: termina cuando alguien llega a `targetCount` cripticos.
   | 'boss'; // Cooperativo: todos contra un jefe con barra de vida.
 
+/** Modo de juego elegido en la UI. Define (vía `buildConfig`) las reglas del motor. */
+export type GameMode =
+  | 'race' // Carrera: gana quien llega antes a la meta.
+  | 'royale' // Hasta 8, reloj por jugador estilo ajedrez; gana el último en pie.
+  | 'duel' // 1 contra 1 con vida: acertar primero daña al rival.
+  | 'boss'; // Cooperativo contra un jefe (próximamente).
+export const GAME_MODES: readonly GameMode[] = ['race', 'royale', 'duel', 'boss'];
+
+export type DuelDamage = 'difficulty' | 'speed';
+
+export interface DuelConfig {
+  hp: number; // Vida inicial de cada jugador.
+  damage: DuelDamage; // El daño depende de la dificultad o de la velocidad.
+}
+
+export interface RoyaleConfig {
+  baseSec: number; // Tiempo inicial del reloj de cada jugador.
+  incrementSec: number; // Segundos que suma cada acierto.
+}
+
 /** Cómo se puntúa cada criptico resuelto (modos competitivos). */
 export type ScoringRule = 'standard' | 'fewestHints' | 'speed';
 
@@ -48,6 +68,11 @@ export interface CompetitionConfig {
   wrongPenalty: number; // Puntos restados por respuesta incorrecta.
   tierMix: TierMix; // Solo 'free': proporción/orden de dificultades.
   hideScoreboard: boolean; // Puntajes ocultos hasta el final.
+  // ---- v0.6: modos de juego (opcionales para compatibilidad con partidas anteriores) ----
+  game?: GameMode;
+  intervalSec?: number; // 'rounds': pausa entre cripticos (se revela la solución anterior).
+  duel?: DuelConfig;
+  royale?: RoyaleConfig;
 }
 
 /** Datos públicos de un criptico (colección `cryptics`). */
@@ -98,6 +123,7 @@ export interface Competition extends CompetitionConfig {
   endsAt: number | null;
   finishedAt: number | null;
   winnerId: string | null;
+  invitedIds?: string[]; // Desafío: amigos invitados (ven la sala en Amigos).
 }
 
 export interface Participant {
@@ -113,7 +139,23 @@ export interface Participant {
   lastAttemptAt: number | null;
   joinedAt: number;
   device?: DeviceKind;
+  // ---- ROYALE ----
+  bankMs?: number; // Tiempo total del reloj (base + incrementos ganados). Restante = bankMs - (ahora - inicio).
+  eliminatedAt?: number | null;
+  cursor?: number; // Posición en la lista de cripticos (avance secuencial).
 }
+
+/** Estadísticas por modo (escritas por el servidor). */
+export interface ModeStats {
+  rating: number;
+  played: number;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export type RankedMode = Exclude<GameMode, 'boss'>;
+export const RANKED_MODES: readonly RankedMode[] = ['race', 'royale', 'duel'];
 
 export interface UserProfile {
   uid: string;
@@ -121,6 +163,7 @@ export interface UserProfile {
   handle: string;
   rating: number;
   stats: { played: number; wins: number; solved: number; hintsUsed: number };
+  modeStats?: Partial<Record<RankedMode, ModeStats>>;
   createdAt: number;
 }
 
@@ -133,6 +176,7 @@ export interface HistoryEntry {
   competitionId: string;
   title: string;
   mode: CompetitionMode;
+  game?: GameMode;
   flow: GameFlow;
   finishedAt: number;
   rank: number;
@@ -141,6 +185,7 @@ export interface HistoryEntry {
   solved: number;
   hintsUsed: number;
   won: boolean;
+  outcome?: 'win' | 'loss' | 'draw';
   endReason: string | null;
   ratingDelta: number;
   ratingAfter: number;

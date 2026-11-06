@@ -17,6 +17,7 @@ export interface SelectionInput {
   flow: GameFlow;
   tierMix: TierMix;
   count: number; // 'free': total; 'rounds': por dificultad.
+  tierCounts?: Record<Difficulty, number>; // 'free': cantidades exactas por dificultad (Royale), en orden progresivo.
   random?: () => number;
 }
 
@@ -62,10 +63,13 @@ export function selectCryptics(input: SelectionInput): Selection {
     return { crypticIds: DIFFICULTIES.flatMap((tier) => pool[tier]), pool };
   }
 
-  // 'free': reparto según tierMix; si una dificultad no alcanza, se completa con las demás.
+  // 'free': reparto según tierMix (o cantidades exactas); si una dificultad no alcanza, se completa con las demás.
   const shares = TIER_SHARES[input.tierMix];
   const chosen: ByTier = { easy: [], medium: [], hard: [] };
-  for (const tier of DIFFICULTIES) chosen[tier] = ordered[tier].slice(0, Math.round(input.count * shares[tier]));
+  for (const tier of DIFFICULTIES) {
+    const wanted = input.tierCounts ? input.tierCounts[tier] : Math.round(input.count * shares[tier]);
+    chosen[tier] = ordered[tier].slice(0, wanted);
+  }
   let deficit = input.count - DIFFICULTIES.reduce((sum, tier) => sum + chosen[tier].length, 0);
   for (const tier of DIFFICULTIES) {
     if (deficit <= 0) break;

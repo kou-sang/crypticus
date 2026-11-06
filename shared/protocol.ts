@@ -11,6 +11,7 @@ export type ClientMessage =
   | { type: 'extraTime'; reqId: string }
   | { type: 'skip'; reqId: string }
   | { type: 'endVote'; reqId: string }
+  | { type: 'pass'; reqId: string } // Royale: pasar al siguiente criptico
   | { type: 'ping'; sentAt?: number } // Eco en pong: el cliente mide RTT y desfase de reloj.
   | { type: 'probeAck'; id: number }; // Respuesta a `probe`: el servidor mide el RTT de este jugador.
 

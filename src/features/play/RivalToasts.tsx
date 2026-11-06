@@ -19,7 +19,12 @@ function toToast(event: GameEvent, state: LiveState): Toast | null {
   const id = `${event.at}-${event.kind}-${event.uid ?? ''}`;
   const hidden = state.config.hideScoreboard;
   switch (event.kind) {
+    case 'damage':
+      return { id, title: `${name} acertó primero`, detail: `Te quitó ${event.points} de vida`, tone: 'rival' };
+    case 'eliminated':
+      return { id, title: `${name} se quedó sin tiempo`, detail: 'Eliminado', tone: 'warn' };
     case 'solve': {
+      if (state.config.royale) return { id, title: `${name} acertó`, detail: `+${event.seconds ?? 0}s a su reloj`, tone: 'rival' };
       const tier = event.tier ? DIFFICULTY_LABELS[event.tier].toLowerCase() : '';
       const detail = state.boss ? `Golpeó al jefe (−${event.points})` : hidden ? `Resolvió uno ${tier}` : `Uno ${tier} · +${event.points}`;
       return { id, title: `${name} acertó`, detail, tone: 'rival' };
@@ -51,7 +56,8 @@ export const RivalToasts = memo(function RivalToasts({ state, uid }: { state: Li
     seen.current = Math.max(...state.events.map((e) => e.at));
     const next = fresh.map((e) => toToast(e, state)).filter((t): t is Toast => t !== null);
     if (next.length === 0) return;
-    playCue(next.some((t) => t.tone === 'heal') ? 'heal' : 'rival');
+    const kinds = new Set(fresh.map((e) => e.kind));
+    playCue(kinds.has('damage') ? 'hit' : kinds.has('eliminated') ? 'eliminated' : next.some((t) => t.tone === 'heal') ? 'heal' : 'rival');
     setToasts((prev) => [...prev, ...next].slice(-4));
     const ids = next.map((t) => t.id);
     // Sin cleanup por render: el estado cambia seguido y cancelaría el cierre del toast.

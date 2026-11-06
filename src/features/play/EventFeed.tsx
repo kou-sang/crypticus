@@ -8,8 +8,13 @@ function describe(event: GameEvent, state: LiveState): string | null {
   const tier = event.tier ? DIFFICULTY_LABELS[event.tier].toLowerCase() : '';
   switch (event.kind) {
     case 'solve':
+      if (state.config.royale) return `${name} acertó (+${event.seconds ?? 0}s)`;
       if (state.config.hideScoreboard) return `${name} resolvió uno ${tier}`;
       return state.boss ? `${name} golpeó al jefe (−${event.points})` : `${name} resolvió uno ${tier} (+${event.points})`;
+    case 'damage':
+      return `${name} quitó ${event.points} de vida`;
+    case 'eliminated':
+      return `${name} quedó eliminado`;
     case 'round':
       return `Nueva ronda: ${tier}`;
     case 'skip':

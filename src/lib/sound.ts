@@ -1,7 +1,20 @@
 // Efectos de sonido sintetizados con Web Audio (sin archivos: carga cero y sin licencias).
-import { getSettings } from './settings';
+import { getSettings, type SoundGroup } from './settings';
 
-type Cue = 'success' | 'wrong' | 'rival' | 'hit' | 'heal' | 'tick' | 'victory' | 'defeat';
+type Cue = 'success' | 'wrong' | 'rival' | 'hit' | 'heal' | 'tick' | 'victory' | 'defeat' | 'lowTime' | 'eliminated';
+
+const CUE_GROUP: Record<Cue, SoundGroup> = {
+  success: 'answers',
+  wrong: 'answers',
+  rival: 'rivals',
+  hit: 'rivals',
+  heal: 'rivals',
+  tick: 'countdown',
+  victory: 'results',
+  defeat: 'results',
+  lowTime: 'lowTime',
+  eliminated: 'rivals',
+};
 
 let context: AudioContext | null = null;
 
@@ -80,6 +93,12 @@ const CUES: Record<Cue, Note[]> = {
     { freq: 587, start: 0.12, duration: 0.3, type: 'sine', gain: 0.3 },
   ],
   tick: [{ freq: 1500, start: 0, duration: 0.04, type: 'square', gain: 0.12 }],
+  // Doble pitido agudo: urgencia sin tapar el resto.
+  lowTime: [
+    { freq: 1760, start: 0, duration: 0.07, type: 'square', gain: 0.18 },
+    { freq: 1760, start: 0.12, duration: 0.07, type: 'square', gain: 0.18 },
+  ],
+  eliminated: [{ freq: 330, start: 0, duration: 0.4, type: 'sawtooth', gain: 0.3, slideTo: 110 }],
   victory: [
     { freq: 523.25, start: 0, duration: 0.2, type: 'triangle' },
     { freq: 659.25, start: 0.15, duration: 0.2, type: 'triangle' },
@@ -94,5 +113,6 @@ const CUES: Record<Cue, Note[]> = {
 };
 
 export function playCue(cue: Cue): void {
+  if (!getSettings().sounds[CUE_GROUP[cue]]) return;
   play(CUES[cue]);
 }

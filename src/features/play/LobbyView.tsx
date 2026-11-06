@@ -58,7 +58,7 @@ export function LobbyView({
         {describeModifiers(competition).map((tag) => (
           <Badge key={tag}>{tag}</Badge>
         ))}
-        <Badge>{competition.maxHintsPerClue} pistas c/u</Badge>
+        {!competition.game && <Badge>{competition.maxHintsPerClue} pistas c/u</Badge>}
       </div>
 
       <section>

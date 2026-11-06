@@ -5,6 +5,7 @@ import { FirestoreRest } from './firestore';
 import type { Env } from './env';
 import type { Competition, CompetitionConfig, Difficulty, Participant } from '../shared/types';
 import { mergeLastSeen, selectCryptics } from '../shared/selection';
+import { ROYALE_TIER_COUNTS } from '../shared/gameModes';
 import { catalogByTier } from './secrets';
 import { validateConfig } from '../shared/scoring';
 
@@ -58,6 +59,8 @@ async function selectUnseen(
     flow: competition.flow,
     tierMix: competition.tierMix,
     count,
+    // Royale: 10 fáciles, 10 medios y después solo difíciles.
+    ...(competition.game === 'royale' ? { tierCounts: ROYALE_TIER_COUNTS } : {}),
   });
   if (selection.crypticIds.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
   return selection;
@@ -96,6 +99,12 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
     wrongPenalty: competition.wrongPenalty,
     tierMix: competition.tierMix,
     hideScoreboard: competition.hideScoreboard === true,
+    ...(competition.game ? { game: competition.game } : {}),
+    ...(typeof competition.intervalSec === 'number' ? { intervalSec: competition.intervalSec } : {}),
+    ...(competition.duel ? { duel: { hp: Number(competition.duel.hp), damage: competition.duel.damage } } : {}),
+    ...(competition.royale
+      ? { royale: { baseSec: Number(competition.royale.baseSec), incrementSec: Number(competition.royale.incrementSec) } }
+      : {}),
   };
   const configErrors = validateConfig(config, competition.maxPlayers);
   if (configErrors.length > 0) throw new AppError(400, 'bad_config', configErrors.join(' '));

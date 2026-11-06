@@ -31,6 +31,7 @@ import {
   type Difficulty,
   type GameFlow,
   type HistoryEntry,
+  type RankedMode,
   type Participant,
   type TierMix,
   type UserProfile,
@@ -97,6 +98,26 @@ export function getTopPlayers(max = TOP_LIMIT): Promise<UserProfile[]> {
     topCache = { at: Date.now(), promise };
   }
   return topCache.promise.then((rows) => rows.slice(0, max));
+}
+
+const modeTopCache = new Map<RankedMode, { at: number; promise: Promise<UserProfile[]> }>();
+
+/** Top 50 de un modo por Elo (solo aparecen quienes jugaron ese modo). Caché de 60 s por modo. */
+export function getTopByMode(mode: RankedMode): Promise<UserProfile[]> {
+  const cached = modeTopCache.get(mode);
+  if (cached && Date.now() - cached.at <= TOP_TTL_MS) return cached.promise;
+  const promise = getDocs(
+    query(collection(db, 'users'), orderBy(`modeStats.${mode}.rating`, 'desc'), limit(TOP_LIMIT)),
+  ).then((snap) => snap.docs.map((d) => d.data() as UserProfile));
+  promise.catch(() => modeTopCache.delete(mode));
+  modeTopCache.set(mode, { at: Date.now(), promise });
+  return promise;
+}
+
+/** Posición en el ranking de un modo (1 lectura de agregación). */
+export async function getModePosition(mode: RankedMode, rating: number): Promise<number> {
+  const snap = await getCountFromServer(query(collection(db, 'users'), where(`modeStats.${mode}.rating`, '>', rating)));
+  return snap.data().count + 1;
 }
 
 /** Posición global: 1 lectura de agregación (cuenta cuántos tienen más rating). */
@@ -197,6 +218,7 @@ export interface CreateCompetitionInput extends CompetitionConfig {
   visibility: CompetitionVisibility;
   maxPlayers: number;
   clueCount: number;
+  invitedIds?: string[]; // Desafío directo a amigos.
 }
 
 export async function createCompetition(host: UserProfile, input: CreateCompetitionInput): Promise<string> {
@@ -222,6 +244,11 @@ export async function createCompetition(host: UserProfile, input: CreateCompetit
     wrongPenalty: input.wrongPenalty,
     tierMix: input.tierMix,
     hideScoreboard: input.hideScoreboard,
+    // Firestore no acepta `undefined`: los campos de modo solo se escriben si existen.
+    ...(input.game ? { game: input.game } : {}),
+    ...(input.intervalSec !== undefined ? { intervalSec: input.intervalSec } : {}),
+    ...(input.duel ? { duel: input.duel } : {}),
+    ...(input.royale ? { royale: input.royale } : {}),
   };
   const competitionRef = doc(collection(db, 'competitions'));
   const batch = writeBatch(db);
@@ -241,6 +268,7 @@ export async function createCompetition(host: UserProfile, input: CreateCompetit
     endsAt: null,
     finishedAt: null,
     winnerId: null,
+    ...(input.invitedIds?.length ? { invitedIds: input.invitedIds.slice(0, 7) } : {}),
   } satisfies Omit<Competition, 'id'>);
   batch.set(doc(competitionRef, 'participants', host.uid), newParticipant(host));
   await batch.commit();

@@ -10,6 +10,7 @@ import { ErrorBanner, Spinner } from '../../components/ui';
 import { CluePanel, ClueText } from './CluePanel';
 import { DifficultyVote, SharedRequests } from './GameControls';
 import { useCryptics } from './useCryptics';
+import { DuelBars, NextCountdown, RoyaleFlow } from './ModeViews';
 
 /** Coste visible de una pista según la regla de puntaje. */
 const hintCostOf = (state: LiveState) => (state.config.scoring === 'fewestHints' && state.boss === null ? HINT_PENALTY : 0);
@@ -108,11 +109,25 @@ function PreviousRound({ solution, state, uid }: { solution: Solution; state: Li
   );
 }
 
-function RoundsFlow({ state, uid, actions, solutions }: { state: LiveState; uid: string; actions: GameActions; solutions: Solution[] }) {
+function RoundsFlow({
+  state,
+  uid,
+  actions,
+  solutions,
+  offsetMs,
+}: {
+  state: LiveState;
+  uid: string;
+  actions: GameActions;
+  solutions: Solution[];
+  offsetMs: number;
+}) {
   const me = state.participants[uid]!;
   const round = state.round;
   const previous = solutions[solutions.length - 1];
-  const { cryptics, error } = useCryptics(round ? [round.crypticId] : []);
+  // Durante la pausa el servidor oculta el id del siguiente criptico ('').
+  const waiting = round !== null && round.crypticId === '';
+  const { cryptics, error } = useCryptics(round && !waiting ? [round.crypticId] : []);
 
   if (error) return <ErrorBanner error={error} />;
   if (!round) {
@@ -126,8 +141,14 @@ function RoundsFlow({ state, uid, actions, solutions }: { state: LiveState; uid:
 
   return (
     <div className="grid gap-8 md:grid-cols-[1fr_220px]">
-      <section className="min-w-0">
-        {current ? (
+      <section className="min-w-0 space-y-6">
+        {state.config.duel && <DuelBars state={state} uid={uid} />}
+        {waiting ? (
+          <div className="space-y-4">
+            {round.opensAt != null && <NextCountdown opensAt={round.opensAt} offsetMs={offsetMs} />}
+            {previous && <PreviousRound key={previous.crypticId} solution={previous} state={state} uid={uid} />}
+          </div>
+        ) : current ? (
           <CluePanel
             key={current.id}
             cryptic={current}
@@ -144,7 +165,7 @@ function RoundsFlow({ state, uid, actions, solutions }: { state: LiveState; uid:
         )}
       </section>
       <aside className="space-y-6">
-        {previous && <PreviousRound key={previous.crypticId} solution={previous} state={state} uid={uid} />}
+        {previous && !waiting && <PreviousRound key={previous.crypticId} solution={previous} state={state} uid={uid} />}
         {state.config.difficultyVote && <DifficultyVote state={state} uid={uid} actions={actions} />}
         <SharedRequests state={state} uid={uid} actions={actions} />
       </aside>
@@ -157,14 +178,17 @@ export const PlayView = memo(function PlayView({
   uid,
   actions,
   solutions,
+  offsetMs,
 }: {
   state: LiveState;
   uid: string;
   actions: GameActions;
   solutions: Solution[];
+  offsetMs: number;
 }) {
+  if (state.config.royale) return <RoyaleFlow state={state} uid={uid} actions={actions} offsetMs={offsetMs} />;
   return state.config.flow === 'rounds' ? (
-    <RoundsFlow state={state} uid={uid} actions={actions} solutions={solutions} />
+    <RoundsFlow state={state} uid={uid} actions={actions} solutions={solutions} offsetMs={offsetMs} />
   ) : (
     <FreeFlow state={state} uid={uid} actions={actions} />
   );

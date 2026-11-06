@@ -11,6 +11,7 @@ export const Scoreboard = memo(function Scoreboard({
   metric = 'score',
   hideScores = false,
   isBoss = false,
+  unit,
 }: {
   participants: Participant[];
   meId: string;
@@ -18,6 +19,7 @@ export const Scoreboard = memo(function Scoreboard({
   metric?: RankMetric;
   hideScores?: boolean;
   isBoss?: boolean;
+  unit?: string; // Etiqueta bajo el puntaje (p. ej. "vida" en Duel).
 }) {
   const ranked = hideScores
     ? [...participants].sort((a, b) => a.joinedAt - b.joinedAt).map((p) => ({ ...p, rank: 0 }))
@@ -38,7 +40,8 @@ export const Scoreboard = memo(function Scoreboard({
             </div>
           </div>
           <span className="text-right font-mono text-sm font-semibold tabular-nums">
-            {hideScores ? `${p.solvedIds.length}✓` : metric === 'solved' ? `${p.solvedIds.length}✓` : p.score}
+            {hideScores || metric === 'solved' || metric === 'survival' ? `${p.solvedIds.length}✓` : p.score}
+            {unit && !hideScores && <span className="block text-[10px] font-normal text-muted">{unit}</span>}
             {isBoss && !hideScores && <span className="block text-[10px] font-normal text-muted">daño</span>}
             {metric === 'solved' && !hideScores && <span className="block text-[10px] font-normal text-muted">{p.score} pts</span>}
           </span>

@@ -1,9 +1,6 @@
-// Perfil de un jugador: estadísticas, rating e historial. Para el propio usuario reemplaza a la antigua página Historial.
+// Perfil al estilo Lichess: ratings por modo a un lado; estadísticas, historial y evolución en el centro.
 import { useEffect, useState } from 'react';
-
-const OWN_HISTORY = 50;
-const OTHER_HISTORY = 10;
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
@@ -15,6 +12,11 @@ import { Avatar, Button, EmptyState, ErrorBanner, PageLoader, Spinner } from '..
 import type { HistoryEntry, UserProfile } from '../../../shared/types';
 import { RatingChart } from '../../components/RatingChart';
 import { HistoryTable } from '../../components/HistoryTable';
+import { ModeRatings } from '../../components/ModeRatings';
+
+const OWN_HISTORY = 50;
+const OTHER_HISTORY = 20;
+const MEMBER_SINCE = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' });
 
 export default function ProfilePage() {
   const { uid = '' } = useParams();
@@ -60,54 +62,74 @@ export default function ProfilePage() {
     }
   };
 
+  const challengeLink = `/jugar/nueva?rival=${encodeURIComponent(profile.uid)}&name=${encodeURIComponent(profile.displayName)}`;
+
   return (
     <>
-      <header className="mb-10 flex flex-wrap items-center gap-6 border-b-2 border-ink pb-6">
+      <header className="mb-8 flex flex-wrap items-center gap-5 border-b-2 border-ink pb-6">
         <Avatar name={profile.displayName} size="lg" />
-        <div className="flex-1">
-          <h1 className="font-display text-4xl font-semibold">{profile.displayName}</h1>
-          <p className="font-mono text-sm text-muted">@{profile.handle}</p>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-display text-4xl font-semibold">{profile.displayName}</h1>
+          <p className="font-mono text-sm text-muted">
+            @{profile.handle}
+            {profile.createdAt ? ` · desde ${MEMBER_SINCE.format(new Date(profile.createdAt))}` : ''}
+          </p>
         </div>
-        {!isMe &&
-          (relation ? (
-            <span className="text-sm text-muted">{relation.status === 'accepted' ? '✓ Amigos' : 'Solicitud pendiente'}</span>
-          ) : (
-            <Button onClick={handleAdd} loading={busy}>
-              Agregar amigo
-            </Button>
-          ))}
+        {!isMe && (
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to={challengeLink}
+              className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent"
+            >
+              Desafiar
+            </Link>
+            {relation ? (
+              <span className="inline-flex h-10 items-center text-sm text-muted">
+                {relation.status === 'accepted' ? '✓ Amigos' : 'Solicitud pendiente'}
+              </span>
+            ) : (
+              <Button variant="secondary" onClick={handleAdd} loading={busy}>
+                Agregar amigo
+              </Button>
+            )}
+          </div>
+        )}
       </header>
       <ErrorBanner error={error} />
 
-      <dl className="mb-10 grid grid-cols-2 gap-6 md:grid-cols-5">
-        {[
-          ['Rating', profile.rating],
-          ['Partidas', profile.stats.played],
-          ['Victorias', profile.stats.wins],
-          ['Resueltos', profile.stats.solved],
-          ['Pistas', profile.stats.hintsUsed],
-        ].map(([label, value]) => (
-          <div key={label} className="border-l-2 border-ink pl-3">
-            <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted">{label}</dt>
-            <dd className="font-mono text-2xl font-semibold">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="space-y-6">
+          <ModeRatings user={profile} />
+          <dl className="grid grid-cols-2 gap-4">
+            {[
+              ['Partidas', profile.stats.played],
+              ['Victorias', profile.stats.wins],
+              ['Resueltos', profile.stats.solved],
+              ['Pistas', profile.stats.hintsUsed],
+            ].map(([label, value]) => (
+              <div key={label} className="border-l-2 border-ink pl-3">
+                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted">{label}</dt>
+                <dd className="font-mono text-xl font-semibold">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </aside>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="min-w-0">
-          <h2 className="mb-4 font-display text-2xl">Historial</h2>
-          {history === null ? (
-            <Spinner />
-          ) : history.length === 0 ? (
-            <EmptyState title="Sin partidas todavía" />
-          ) : (
-            <HistoryTable entries={history} />
-          )}
-        </section>
-        <section>
-          <h2 className="mb-4 font-display text-2xl">Rating</h2>
-          <RatingChart history={history ?? []} />
+        <section className="min-w-0 space-y-8">
+          <div>
+            <h2 className="mb-4 font-display text-2xl">Partidas</h2>
+            {history === null ? (
+              <Spinner />
+            ) : history.length === 0 ? (
+              <EmptyState title="Sin partidas todavía" />
+            ) : (
+              <HistoryTable entries={history} />
+            )}
+          </div>
+          <div>
+            <h2 className="mb-4 font-display text-2xl">Evolución</h2>
+            <RatingChart history={history ?? []} />
+          </div>
         </section>
       </div>
     </>

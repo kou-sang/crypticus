@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Logo } from '../../components/Logo';
 import { useAuth } from '../../hooks/useAuth';
-import { MODE_LABELS } from '../../../shared/scoring';
-import type { CompetitionMode } from '../../../shared/types';
+import { GAME_LABELS } from '../../../shared/scoring';
+import { GAME_MODES } from '../../../shared/types';
 
 const RULES = [
   { title: 'Clásico', text: 'Fácil, medio o difícil: más dificultad, más puntos.' },
@@ -106,12 +106,12 @@ export function LandingPage() {
       </section>
 
       <section id="modos" className="border-y-2 border-ink bg-paper-2/50">
-        <div className="mx-auto grid max-w-6xl gap-px bg-line md:grid-cols-3">
-          {(Object.keys(MODE_LABELS) as CompetitionMode[]).map((mode) => (
+        <div className="mx-auto grid max-w-6xl gap-px bg-line sm:grid-cols-2 md:grid-cols-4">
+          {GAME_MODES.map((mode) => (
             <div key={mode} className="bg-paper p-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Modo</p>
-              <h2 className="mt-1 font-display text-3xl">{MODE_LABELS[mode].title}</h2>
-              <p className="mt-2 text-muted">{MODE_LABELS[mode].description}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">{GAME_LABELS[mode].tagline}</p>
+              <h2 className="mt-1 font-display text-3xl">{GAME_LABELS[mode].title}</h2>
+              <p className="mt-2 text-muted">{GAME_LABELS[mode].description}</p>
             </div>
           ))}
         </div>

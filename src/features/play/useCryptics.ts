@@ -6,7 +6,8 @@ import type { CrypticPublic } from '../../../shared/types';
 
 const cache = new Map<string, CrypticPublic>();
 
-export function useCryptics(ids: string[]): { cryptics: Map<string, CrypticPublic>; error: string | null } {
+export function useCryptics(rawIds: string[]): { cryptics: Map<string, CrypticPublic>; error: string | null } {
+  const ids = rawIds.filter(Boolean); // Ids vacíos (criptico oculto durante la pausa) no se consultan.
   const key = ids.join(',');
   const [, forceRender] = useState(0);
   const [error, setError] = useState<string | null>(null);
