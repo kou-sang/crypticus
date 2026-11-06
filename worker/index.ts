@@ -89,6 +89,24 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, data: times });
 }
 
+const SOLUTION_ERRORS: Record<string, [number, string]> = {
+  not_found: [404, 'La partida no existe.'],
+  not_participant: [403, 'Solo los participantes ven las soluciones.'],
+  not_finished: [409, 'La partida no terminó.'],
+};
+
+/** GET /api/competitions/:id/solutions — respuestas y explicaciones al terminar. */
+async function handleSolutions(request: Request, env: Env, competitionId: string): Promise<Response> {
+  const user = await verifyFirebaseToken(bearerToken(request), env.FIREBASE_PROJECT_ID);
+  try {
+    return json({ ok: true, data: await roomStub(env, competitionId).solutions(user.uid) });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : '';
+    const [status, message] = SOLUTION_ERRORS[code] ?? [500, 'No se pudieron cargar las soluciones.'];
+    throw new AppError(status, code || 'internal', message);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -96,6 +114,14 @@ export default {
       if (url.pathname === '/api/competitions/start') {
         if (request.method !== 'POST') throw new AppError(405, 'method_not_allowed', 'Solo POST.');
         return await handleStart(request, env);
+      }
+
+      const solutionsMatch = url.pathname.match(/^\/api\/competitions\/([^/]+)\/solutions$/);
+      if (solutionsMatch) {
+        const competitionId = decodeURIComponent(solutionsMatch[1] ?? '');
+        if (!COMPETITION_ID.test(competitionId)) throw new AppError(400, 'bad_id', 'Id inválido.');
+        if (request.method !== 'GET') throw new AppError(405, 'method_not_allowed', 'Solo GET.');
+        return await handleSolutions(request, env, competitionId);
       }
 
       const wsMatch = url.pathname.match(/^\/api\/competitions\/([^/]+)\/ws$/);

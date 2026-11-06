@@ -42,3 +42,15 @@ export function answerLengthFromEnumeration(enumeration: string): number {
   const numbers = enumeration.match(/\d+/g) ?? [];
   return numbers.reduce((sum, value) => sum + Number(value), 0);
 }
+
+const TRAILING_ENUMERATION = /\s*\((\d+(?:\s*[,-]\s*\d+)*)\)\s*$/;
+
+/**
+ * Separa la enumeración final de un enunciado: "Hueso del brazo (5)" -> { text: "Hueso del brazo", enumeration: "(5)" }.
+ * Evita mostrarla dos veces cuando el enunciado ya la trae escrita.
+ */
+export function splitClue(clue: string): { text: string; enumeration: string | null } {
+  const match = clue.match(TRAILING_ENUMERATION);
+  if (!match) return { text: clue.trim(), enumeration: null };
+  return { text: clue.slice(0, match.index).trim(), enumeration: `(${(match[1] ?? '').replace(/\s+/g, '')})` };
+}

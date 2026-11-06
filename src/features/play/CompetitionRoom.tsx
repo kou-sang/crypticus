@@ -68,23 +68,24 @@ export default function CompetitionRoom() {
 
   return (
     <>
-      <PageHeader
-        kicker={`Anfitrión: ${comp.hostName}`}
-        title={comp.title}
-        action={
-          isLive &&
-          !countdown && (
-            <div className="flex items-center gap-3">
-              {live?.overtimeEndsAt !== null && live?.overtimeEndsAt !== undefined && <Badge tone="accent">Prórroga</Badge>}
-              <span
-                title={game.connection === 'open' ? 'Conectado' : 'Reconectando'}
-                className={cx('size-2 rounded-full', game.connection === 'open' ? 'bg-ok' : 'animate-pulse bg-accent')}
-              />
-              {deadline !== null && <GameClock deadline={deadline} offsetMs={offset} />}
-            </div>
-          )
-        }
-      />
+      <PageHeader kicker={`Anfitrión: ${comp.hostName}`} title={comp.title} />
+
+      {/* Barra fija: el tiempo sigue a la vista al hacer scroll o con el teclado del móvil abierto. */}
+      {isLive && !countdown && (
+        <div className="sticky top-14 z-10 -mx-4 -mt-4 mb-6 flex items-center justify-end gap-3 border-b border-line bg-paper/95 px-4 py-2 backdrop-blur">
+          {live?.participants[profile.uid] && !live.boss && !live.config.hideScoreboard && (
+            <span className="mr-auto font-mono text-sm">
+              Tú: <strong>{live.participants[profile.uid]!.score}</strong> pts
+            </span>
+          )}
+          {live?.overtimeEndsAt != null && <Badge tone="accent">Prórroga</Badge>}
+          <span
+            title={game.connection === 'open' ? 'Conectado' : 'Reconectando'}
+            className={cx('size-2 rounded-full', game.connection === 'open' ? 'bg-ok' : 'animate-pulse bg-accent')}
+          />
+          {deadline !== null && <GameClock deadline={deadline} offsetMs={offset} />}
+        </div>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-6">
@@ -107,7 +108,7 @@ export default function CompetitionRoom() {
             ) : (
               <>
                 {live.boss && <BossBar hp={live.boss.hp} maxHp={live.boss.maxHp} level={live.config.bossLevel} />}
-                <PlayView state={live} uid={profile.uid} actions={game.actions} />
+                <PlayView state={live} uid={profile.uid} actions={game.actions} solutions={game.solutions} />
                 <RivalToasts state={live} uid={profile.uid} />
                 {live.round?.closesAt != null && !live.round.solvedBy.includes(profile.uid) && (
                   <FaintOverlay closesAt={live.round.closesAt} totalMs={live.config.rivalCountdownSec * 1000} offsetMs={offset} />

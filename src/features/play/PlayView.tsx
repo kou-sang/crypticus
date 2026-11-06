@@ -1,13 +1,18 @@
 // Vista de juego: flujo libre (navegación por lista) o por rondas (criptico compartido + votación).
 import { useMemo, useState, memo } from 'react';
 import type { LiveState } from '../../../shared/engine';
+import type { Solution } from '../../../shared/protocol';
+import { DIFFICULTY_LABELS, HINT_PENALTY } from '../../../shared/scoring';
 import { nextPendingFree } from './playUtils';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { cx } from '../../lib/utils';
 import { ErrorBanner, Spinner } from '../../components/ui';
-import { CluePanel } from './CluePanel';
+import { CluePanel, ClueText } from './CluePanel';
 import { DifficultyVote, SharedRequests } from './GameControls';
 import { useCryptics } from './useCryptics';
+
+/** Coste visible de una pista según la regla de puntaje. */
+const hintCostOf = (state: LiveState) => (state.config.scoring === 'fewestHints' && state.boss === null ? HINT_PENALTY : 0);
 
 function FreeFlow({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
   const me = state.participants[uid]!;
@@ -29,7 +34,7 @@ function FreeFlow({ state, uid, actions }: { state: LiveState; uid: string; acti
               key={id}
               onClick={() => setSelectedId(id)}
               aria-current={id === selectedId}
-              title={tier}
+              title={tier ? DIFFICULTY_LABELS[tier] : undefined}
               className={cx(
                 'relative size-9 border font-mono text-xs font-semibold transition-colors',
                 solved.has(id) ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink',
@@ -60,20 +65,25 @@ function FreeFlow({ state, uid, actions }: { state: LiveState; uid: string; acti
         ) : (
           <>
             <CluePanel
+              key={current.id}
               cryptic={current}
               me={me}
               heading={`Criptico ${index + 1} de ${state.crypticIds.length}`}
               maxHintsPerClue={state.config.maxHintsPerClue}
+              hintCost={hintCostOf(state)}
+              wrongPenalty={state.config.wrongPenalty}
               isBoss={state.boss !== null}
               actions={actions}
-              onSolved={(id) => setSelectedId(nextPendingFree(state.crypticIds, [...me.solvedIds, id], id))}
+              onNext={() => setSelectedId(nextPendingFree(state.crypticIds, [...me.solvedIds, current.id], current.id))}
             />
-            <button
-              className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
-              onClick={() => setSelectedId(nextPendingFree(state.crypticIds, me.solvedIds, selectedId))}
-            >
-              Saltar →
-            </button>
+            {!solved.has(current.id) && (
+              <button
+                className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+                onClick={() => setSelectedId(nextPendingFree(state.crypticIds, me.solvedIds, selectedId))}
+              >
+                Dejar para después →
+              </button>
+            )}
           </>
         )}
         <SharedRequests state={state} uid={uid} actions={actions} />
@@ -82,9 +92,26 @@ function FreeFlow({ state, uid, actions }: { state: LiveState; uid: string; acti
   );
 }
 
-function RoundsFlow({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
+/** Solución de la última ronda cerrada: en rondas el criptico cambia al instante y no daría tiempo a leerla. */
+function PreviousRound({ solution, state, uid }: { solution: Solution; state: LiveState; uid: string }) {
+  const { cryptics } = useCryptics([solution.crypticId]);
+  const cryptic = cryptics.get(solution.crypticId);
+  const names = solution.solvedBy.map((id) => (id === uid ? 'tú' : (state.participants[id]?.displayName ?? '?')));
+  return (
+    <section className="border-l-4 border-ink bg-paper-2/60 px-4 py-3 text-sm fade-in" aria-label="Ronda anterior">
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Ronda anterior</p>
+      {cryptic && <ClueText cryptic={cryptic} className="mt-1 block font-display text-lg" />}
+      {solution.answer && <p className="mt-1 font-mono text-base font-semibold uppercase tracking-widest">{solution.answer}</p>}
+      {solution.explanation && <p className="mt-1">{solution.explanation}</p>}
+      <p className="mt-1 text-xs text-muted">{names.length > 0 ? `Resuelto por ${names.join(', ')}` : 'Nadie lo resolvió'}</p>
+    </section>
+  );
+}
+
+function RoundsFlow({ state, uid, actions, solutions }: { state: LiveState; uid: string; actions: GameActions; solutions: Solution[] }) {
   const me = state.participants[uid]!;
   const round = state.round;
+  const previous = solutions[solutions.length - 1];
   const { cryptics, error } = useCryptics(round ? [round.crypticId] : []);
 
   if (error) return <ErrorBanner error={error} />;
@@ -102,10 +129,13 @@ function RoundsFlow({ state, uid, actions }: { state: LiveState; uid: string; ac
       <section className="min-w-0">
         {current ? (
           <CluePanel
+            key={current.id}
             cryptic={current}
             me={me}
             heading={`Ronda ${round.index}`}
             maxHintsPerClue={state.config.maxHintsPerClue}
+            hintCost={hintCostOf(state)}
+            wrongPenalty={state.config.wrongPenalty}
             isBoss={state.boss !== null}
             actions={actions}
           />
@@ -114,6 +144,7 @@ function RoundsFlow({ state, uid, actions }: { state: LiveState; uid: string; ac
         )}
       </section>
       <aside className="space-y-6">
+        {previous && <PreviousRound key={previous.crypticId} solution={previous} state={state} uid={uid} />}
         {state.config.difficultyVote && <DifficultyVote state={state} uid={uid} actions={actions} />}
         <SharedRequests state={state} uid={uid} actions={actions} />
       </aside>
@@ -121,9 +152,19 @@ function RoundsFlow({ state, uid, actions }: { state: LiveState; uid: string; ac
   );
 }
 
-export const PlayView = memo(function PlayView({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
+export const PlayView = memo(function PlayView({
+  state,
+  uid,
+  actions,
+  solutions,
+}: {
+  state: LiveState;
+  uid: string;
+  actions: GameActions;
+  solutions: Solution[];
+}) {
   return state.config.flow === 'rounds' ? (
-    <RoundsFlow state={state} uid={uid} actions={actions} />
+    <RoundsFlow state={state} uid={uid} actions={actions} solutions={solutions} />
   ) : (
     <FreeFlow state={state} uid={uid} actions={actions} />
   );

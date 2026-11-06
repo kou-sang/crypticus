@@ -1,50 +1,35 @@
-// Panel de un criptico: enunciado, celdas, respuesta, pistas y feedback. Común a flujo libre y rondas.
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+// Panel de un criptico: enunciado, celdas editables, pistas, feedback y explicación al acertar.
+import { useEffect, useState } from 'react';
 import type { CrypticPublic, Participant } from '../../../shared/types';
-import { answerLengthFromEnumeration, normalizeAnswer } from '../../../shared/answer';
+import { answerLengthFromEnumeration, splitClue } from '../../../shared/answer';
 import { DIFFICULTY_LABELS } from '../../../shared/scoring';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { ApiError } from '../../lib/api';
-import { cx, errorMessage } from '../../lib/utils';
+import { errorMessage } from '../../lib/utils';
 import { playCue } from '../../lib/sound';
 import { Badge, Button, ErrorBanner } from '../../components/ui';
+import { AnswerGrid } from './AnswerGrid';
 
-type Feedback = { kind: 'correct'; points: number } | { kind: 'wrong' } | { kind: 'stale' } | null;
+type Feedback =
+  | { kind: 'correct'; points: number; explanation: string | null }
+  | { kind: 'wrong' }
+  | { kind: 'incomplete' }
+  | { kind: 'stale' }
+  | null;
 
 const TIER_TONE = { easy: 'ok', medium: 'neutral', hard: 'accent' } as const;
 
-/** Celdas que reflejan lo tecleado, agrupadas según la enumeración "(4,3-2)". */
-function AnswerCells({ enumeration, value, solved, celebrate }: { enumeration: string; value: string; solved: boolean; celebrate: boolean }) {
-  const groups = (enumeration.match(/\d+/g) ?? []).map(Number);
-  const letters = normalizeAnswer(value).split('');
-  let cursor = 0;
+/** Enunciado sin la enumeración repetida: si el texto ya la trae, se muestra una sola vez. */
+export function ClueText({ cryptic, className }: { cryptic: Pick<CrypticPublic, 'clue' | 'enumeration'>; className?: string }) {
+  const { text, enumeration } = splitClue(cryptic.clue);
   return (
-    <div className="flex flex-wrap gap-3" aria-hidden>
-      {groups.map((size, groupIndex) => (
-        <div key={groupIndex} className="flex gap-px bg-ink p-px">
-          {Array.from({ length: size }, (_, i) => {
-            const position = cursor++;
-            return (
-              <span
-                key={i}
-                style={celebrate ? { animationDelay: `${position * 45}ms` } : undefined}
-                className={cx(
-                  'inline-flex size-9 items-center justify-center font-mono text-base font-semibold uppercase transition-colors duration-300 sm:size-10',
-                  solved ? 'bg-ink text-paper' : 'bg-paper',
-                  celebrate && 'cell-pop',
-                )}
-              >
-                {letters[position] ?? ''}
-              </span>
-            );
-          })}
-        </div>
-      ))}
-    </div>
+    <span className={className}>
+      {text} <span className="whitespace-nowrap text-muted">{cryptic.enumeration || enumeration}</span>
+    </span>
   );
 }
 
-/** Explosión de puntos de color al acertar (puramente decorativa). */
+/** Explosión de puntos de color al acertar (decorativa). */
 function Burst() {
   const dots = Array.from({ length: 14 }, (_, i) => {
     const angle = (i / 14) * Math.PI * 2;
@@ -69,41 +54,34 @@ export function CluePanel({
   me,
   heading,
   maxHintsPerClue,
+  hintCost,
+  wrongPenalty,
   isBoss,
   actions,
-  onSolved,
+  onNext,
 }: {
   cryptic: CrypticPublic;
   me: Participant;
   heading: string;
   maxHintsPerClue: number;
+  hintCost: number; // Puntos que resta cada pista (0 si la regla no penaliza).
+  wrongPenalty: number;
   isBoss: boolean;
   actions: GameActions;
-  onSolved?: (crypticId: string) => void;
+  onNext?: () => void; // Flujo libre: pasar al siguiente tras leer la explicación.
 }) {
-  const [guess, setGuess] = useState('');
-  const [solvedText, setSolvedText] = useState<string | null>(null);
+  const length = answerLengthFromEnumeration(cryptic.enumeration);
+  const [letters, setLetters] = useState<string[]>(() => Array.from({ length }, () => ''));
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'answer' | 'hint' | null>(null);
   const [hints, setHints] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const solved = me.solvedIds.includes(cryptic.id);
+  const solvedNow = feedback?.kind === 'correct';
+  const solved = solvedNow || me.solvedIds.includes(cryptic.id);
   const hintsUsed = me.hintsByClue[cryptic.id] ?? 0;
   const hintsAvailable = Math.max(0, Math.min(maxHintsPerClue, cryptic.hintCount) - hintsUsed);
-  const expectedLength = answerLengthFromEnumeration(cryptic.enumeration);
-  const typedLength = normalizeAnswer(guess).length;
-
-  // Reinicio al cambiar de criptico.
-  useEffect(() => {
-    setGuess('');
-    setSolvedText(null);
-    setFeedback(null);
-    setError(null);
-    setHints([]);
-    inputRef.current?.focus();
-  }, [cryptic.id]);
+  const complete = letters.every(Boolean);
 
   // Recupera pistas ya reveladas (p. ej. tras recargar).
   useEffect(() => {
@@ -114,25 +92,30 @@ export function CluePanel({
       .catch((err: unknown) => console.error('[hint] recuperar', err));
   }, [cryptic.id, hintsUsed, hints.length, actions]);
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!normalizeAnswer(guess) || busy) return;
+  const handleLetters = (next: string[]) => {
+    setLetters(next);
+    if (feedback?.kind === 'wrong' || feedback?.kind === 'incomplete') setFeedback(null);
+  };
+
+  const handleSubmit = async () => {
+    if (solved) return onNext?.(); // Enter tras acertar = siguiente.
+    if (busy) return;
+    if (!complete) {
+      setFeedback({ kind: 'incomplete' });
+      return;
+    }
     setBusy('answer');
     setError(null);
-    const attempt = guess;
     try {
-      const result = await actions.answer(cryptic.id, attempt);
+      const result = await actions.answer(cryptic.id, letters.join(''));
       if (result.correct) {
         playCue('success');
-        setFeedback({ kind: 'correct', points: result.points });
-        setSolvedText(attempt); // Correcta => lo tecleado es la respuesta.
-        window.setTimeout(() => onSolved?.(cryptic.id), 650);
+        setFeedback({ kind: 'correct', points: result.points, explanation: result.explanation ?? null });
       } else if (result.stale) {
         setFeedback({ kind: 'stale' });
       } else {
         playCue('wrong');
         setFeedback({ kind: 'wrong' });
-        inputRef.current?.select();
       }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'not_playable') setFeedback({ kind: 'stale' });
@@ -152,72 +135,52 @@ export function CluePanel({
       setError(errorMessage(err));
     } finally {
       setBusy(null);
-      inputRef.current?.focus();
     }
   };
 
   return (
-    <div key={cryptic.id} className="fade-in">
+    <div className="fade-in">
       <div className="flex flex-wrap items-center gap-2">
         <p className="font-mono text-xs uppercase tracking-widest text-muted">{heading}</p>
         <Badge tone={TIER_TONE[cryptic.tier]}>{DIFFICULTY_LABELS[cryptic.tier]}</Badge>
       </div>
       <h2 className="mt-3 font-display text-3xl leading-snug md:text-4xl">
-        {cryptic.clue} <span className="whitespace-nowrap text-muted">{cryptic.enumeration}</span>
+        <ClueText cryptic={cryptic} />
       </h2>
 
-      <div className={cx('relative mt-6', feedback?.kind === 'wrong' && 'animate-[shake_0.3s]')}>
-        <AnswerCells
+      <div className="relative mt-6">
+        <AnswerGrid
           enumeration={cryptic.enumeration}
-          value={solvedText ?? guess}
-          solved={solved || solvedText !== null}
-          celebrate={feedback?.kind === 'correct'}
+          letters={letters}
+          onLetters={handleLetters}
+          onSubmit={handleSubmit}
+          locked={solved}
+          celebrate={solvedNow}
+          wrong={feedback?.kind === 'wrong'}
         />
-        {feedback?.kind === 'correct' && <Burst />}
+        {solvedNow && <Burst />}
       </div>
 
-      {solved || solvedText !== null ? (
-        <p className="mt-6 text-sm font-semibold text-ok">✓ Resuelto</p>
-      ) : (
-        <form onSubmit={handleSubmit} className="mt-6 flex gap-2">
-          <input
-            ref={inputRef}
-            value={guess}
-            onChange={(e) => {
-              setGuess(e.target.value);
-              if (feedback?.kind === 'wrong') setFeedback(null);
-            }}
-            autoFocus
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
-            aria-label="Tu respuesta"
-            placeholder="Respuesta"
-            className={cx(
-              'h-12 min-w-0 flex-1 border-2 bg-paper px-3 font-mono text-lg uppercase tracking-widest outline-none',
-              feedback?.kind === 'wrong' ? 'border-accent' : 'border-ink',
-            )}
-          />
-          <Button type="submit" loading={busy === 'answer'} className="h-12 px-6">
-            Enviar
-          </Button>
-        </form>
-      )}
-
-      <div className="mt-2 flex h-5 items-center gap-3 text-xs">
-        {!solved && solvedText === null && (
-          <span className={cx('font-mono', typedLength === expectedLength ? 'text-ok' : 'text-muted')}>
-            {typedLength}/{expectedLength}
-          </span>
-        )}
+      <div className="mt-3 min-h-5 text-sm" aria-live="polite">
         {feedback?.kind === 'correct' && (
           <span className="font-semibold text-ok">
-            {isBoss ? `−${feedback.points} de vida al jefe` : `+${feedback.points} puntos`}
+            ✓ {isBoss ? `−${feedback.points} de vida al jefe` : `+${feedback.points} puntos`}
           </span>
         )}
-        {feedback?.kind === 'wrong' && <span className="font-semibold text-accent">No es correcto.</span>}
+        {solved && !solvedNow && <span className="font-semibold text-ok">✓ Resuelto</span>}
+        {feedback?.kind === 'wrong' && (
+          <span className="font-semibold text-accent">No es correcto{wrongPenalty > 0 ? ` (−${wrongPenalty})` : ''}.</span>
+        )}
+        {feedback?.kind === 'incomplete' && <span className="text-muted">Completa todas las casillas.</span>}
         {feedback?.kind === 'stale' && <span className="font-semibold text-muted">Otro jugador se adelantó.</span>}
       </div>
+
+      {feedback?.kind === 'correct' && feedback.explanation && (
+        <p className="mt-4 border-l-4 border-ok bg-ok/10 px-4 py-3 text-sm">
+          <span className="mr-1 font-semibold">Explicación:</span>
+          {feedback.explanation}
+        </p>
+      )}
 
       <ErrorBanner error={error} />
 
@@ -231,13 +194,24 @@ export function CluePanel({
         </ol>
       )}
 
-      {!solved && solvedText === null && (
-        <div className="mt-6">
-          <Button variant="secondary" onClick={handleHint} loading={busy === 'hint'} disabled={hintsAvailable <= 0}>
-            Pista ({hintsAvailable})
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        {!solved && (
+          <>
+            <Button onClick={handleSubmit} loading={busy === 'answer'} disabled={!complete} className="h-11 px-6">
+              Enviar
+            </Button>
+            <Button variant="secondary" onClick={handleHint} loading={busy === 'hint'} disabled={hintsAvailable <= 0}>
+              {hintsAvailable > 0 ? `Pista${hintCost > 0 ? ` (−${hintCost})` : ''}` : 'Sin pistas'}
+              {hintsAvailable > 0 && <span className="font-mono text-xs opacity-70">· {hintsAvailable}</span>}
+            </Button>
+          </>
+        )}
+        {solved && onNext && (
+          <Button autoFocus onClick={onNext} className="h-11 px-6">
+            Siguiente →
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

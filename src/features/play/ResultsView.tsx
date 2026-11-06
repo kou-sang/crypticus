@@ -1,9 +1,14 @@
 // Resultados finales (standings congelados por el servidor al cerrar).
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { playCue } from '../../lib/sound';
+import { api } from '../../lib/api';
 import type { Competition } from '../../../shared/types';
-import { cx } from '../../lib/utils';
+import type { Solution } from '../../../shared/protocol';
+import { cx, errorMessage } from '../../lib/utils';
+import { ErrorBanner, Spinner } from '../../components/ui';
+import { ClueText } from './CluePanel';
+import { useCryptics } from './useCryptics';
 
 interface Standing {
   uid: string;
@@ -30,6 +35,55 @@ type FinishedCompetition = Competition & {
   bossDefeated?: boolean | null;
   boss?: { hp: number; maxHp: number } | null;
 };
+
+/** Repaso: cada criptico con su respuesta y su explicación. Es lo que permite comprobar que la pista es justa. */
+function SolutionsList({ competitionId, meId, names }: { competitionId: string; meId: string; names: Map<string, string> }) {
+  const [solutions, setSolutions] = useState<Solution[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .solutions(competitionId)
+      .then((list) => !cancelled && setSolutions(list))
+      .catch((err: unknown) => !cancelled && setError(errorMessage(err)));
+    return () => {
+      cancelled = true;
+    };
+  }, [competitionId]);
+  const ids = useMemo(() => solutions?.map((s) => s.crypticId) ?? [], [solutions]);
+  const { cryptics } = useCryptics(ids);
+
+  if (error) return <ErrorBanner error={error} />;
+  if (!solutions) return <Spinner />;
+  if (solutions.length === 0) return <p className="text-sm text-muted">No se jugó ningún criptico.</p>;
+  return (
+    <ol className="divide-y divide-line border-y border-line">
+      {solutions.map((solution, index) => {
+        const cryptic = cryptics.get(solution.crypticId);
+        const mine = solution.solvedBy.includes(meId);
+        const others = solution.solvedBy.filter((id) => id !== meId).map((id) => names.get(id) ?? '?');
+        return (
+          <li key={solution.crypticId} className="grid gap-1 py-4 sm:grid-cols-[2rem_1fr]">
+            <span className="font-mono text-sm text-muted">{index + 1}.</span>
+            <div className="min-w-0">
+              {cryptic && <ClueText cryptic={cryptic} className="font-display text-lg" />}
+              <p className="mt-1 flex flex-wrap items-baseline gap-x-3">
+                <span className={cx('font-mono font-semibold uppercase tracking-widest', mine ? 'text-ok' : 'text-ink')}>
+                  {solution.answer ?? '—'}
+                </span>
+                <span className="text-xs text-muted">
+                  {mine ? '✓ Lo resolviste' : 'No lo resolviste'}
+                  {others.length > 0 && ` · también ${others.join(', ')}`}
+                </span>
+              </p>
+              {solution.explanation && <p className="mt-1 text-sm">{solution.explanation}</p>}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 export function ResultsView({ competition, meId }: { competition: FinishedCompetition; meId: string }) {
   const standings = competition.finalStandings ?? [];
@@ -95,6 +149,17 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
           ))}
         </tbody>
       </table>
+
+      {competition.participantIds.includes(meId) && (
+        <section>
+          <h2 className="mb-3 font-display text-2xl">Soluciones</h2>
+          <SolutionsList
+            competitionId={competition.id}
+            meId={meId}
+            names={new Map(standings.map((s) => [s.uid, s.displayName]))}
+          />
+        </section>
+      )}
 
       <Link to="/competencias/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
         Revancha

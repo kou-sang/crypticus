@@ -1,5 +1,6 @@
-// Cliente HTTP del Worker (solo `start`; respuestas y pistas van por WebSocket, ver gameChannel.ts).
+// Cliente HTTP del Worker (`start` y `solutions`; respuestas y pistas van por WebSocket, ver gameChannel.ts).
 import { auth } from './firebase';
+import type { Solution } from '../../shared/protocol';
 
 export class ApiError extends Error {
   constructor(
@@ -13,17 +14,15 @@ export class ApiError extends Error {
 
 type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } };
 
-async function post<T>(path: string, body: Record<string, unknown>): Promise<T> {
+async function request<T>(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<T> {
   const user = auth.currentUser;
   if (!user) throw new ApiError('unauthenticated', 'Inicia sesión primero.', 401);
 
   let response: Response;
   try {
-    response = await fetch(`/api/${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}` },
-      body: JSON.stringify(body),
-    });
+    const headers: Record<string, string> = { Authorization: `Bearer ${await user.getIdToken()}` };
+    if (body) headers['Content-Type'] = 'application/json';
+    response = await fetch(`/api/${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
   } catch {
     throw new ApiError('network', 'Sin conexión con el servidor.', 0);
   }
@@ -39,5 +38,8 @@ async function post<T>(path: string, body: Record<string, unknown>): Promise<T> 
 }
 
 export const api = {
-  start: (competitionId: string) => post<{ startedAt: number; endsAt: number }>('competitions/start', { competitionId }),
+  start: (competitionId: string) =>
+    request<{ startedAt: number; endsAt: number }>('POST', 'competitions/start', { competitionId }),
+  solutions: (competitionId: string) =>
+    request<Solution[]>('GET', `competitions/${encodeURIComponent(competitionId)}/solutions`),
 };

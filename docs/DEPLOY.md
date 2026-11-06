@@ -195,6 +195,22 @@ npx wrangler tail
 
 ## 6. Actualizar en el futuro
 
+Cada mejora llega como un PR. Después de hacer **merge** en GitHub:
+
+```powershell
+cd D:\EH\EH\Personal\crypticus-app
+git switch main
+git pull
+git log -1 --oneline          # debe mostrar el merge del último PR
+npm ci
+npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json --replace   # solo si el PR lo pide
+npm run deploy
+```
+
+Ejecuta los comandos **de a uno** (no en una sola línea). `npm run deploy` termina mostrando `Uploaded crypticus` y un `Current Version ID`. Si dice `No updated asset files`, no había cambios que subir: revisa que `git pull` haya traído el commit.
+
+**Comprobar la versión desplegada:** abre *Ajustes* (engranaje). Al pie aparece `Crypticus vX.Y.Z`, que debe coincidir con `version` en `package.json`. Si ves una versión anterior, recarga con `Ctrl + Shift + R`.
+
 | Cambio | Qué ejecutar |
 | --- | --- |
 | Código nuevo | `git pull` → `npm ci` → `npm run deploy` |

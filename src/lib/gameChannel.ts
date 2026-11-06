@@ -1,15 +1,15 @@
 // Canal WebSocket con el Durable Object de una competencia: auth, request/response y reconexión.
 import { auth } from './firebase';
 import { ApiError } from './api';
-import type { AckReply, ActionMessage, AnswerReply, ClientMessage, HintReply, ServerMessage } from '../../shared/protocol';
+import type { AckReply, ActionMessage, AnswerReply, ClientMessage, HintReply, ServerMessage, Solution } from '../../shared/protocol';
 import type { LiveState } from '../../shared/engine';
 import type { Difficulty } from '../../shared/types';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
 
 export interface GameChannelHandlers {
-  onReady: (state: LiveState | null, serverTime: number) => void;
-  onState: (state: LiveState) => void;
+  onReady: (state: LiveState | null, solutions: Solution[], serverTime: number) => void;
+  onState: (state: LiveState, solutions: Solution[]) => void;
   onConnection: (state: ConnectionState) => void;
 }
 
@@ -147,11 +147,11 @@ export class GameChannel {
         this.authenticated = true;
         this.attempts = 0;
         this.handlers.onConnection('open');
-        this.handlers.onReady(message.state, message.serverTime);
+        this.handlers.onReady(message.state, message.solutions ?? [], message.serverTime);
         this.startPing();
         break;
       case 'state':
-        this.handlers.onState(message.state);
+        this.handlers.onState(message.state, message.solutions ?? []);
         break;
       case 'reply': {
         const pending = this.pending.get(message.reqId);

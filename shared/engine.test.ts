@@ -6,6 +6,7 @@ import {
   createLiveState,
   reserveAttempt,
   resolveVote,
+  revealableIds,
   tick,
   toggleExtraTime,
   toggleSkip,
@@ -230,5 +231,23 @@ describe('jefe: fallar lo cura', () => {
     const afterHit = state.boss!.hp;
     answer(state, 'a', 'm1', false, 3000);
     expect(state.boss?.hp).toBe(afterHit + 15);
+  });
+});
+
+describe('revealableIds', () => {
+  it('flujo libre: nada en vivo, todo al terminar', () => {
+    const state = setup();
+    expect(revealableIds(state)).toEqual([]);
+    tick(state, 200_000);
+    expect(state.status).toBe('finished');
+    expect(revealableIds(state)).toEqual(['e1', 'm1', 'h1']);
+  });
+
+  it('rondas: solo las cerradas, nunca la actual', () => {
+    const state = setup({ flow: 'rounds' });
+    expect(revealableIds(state)).toEqual([]);
+    answer(state, 'a', 'm1', true, 1000);
+    expect(revealableIds(state)).toEqual(['m1']);
+    expect(revealableIds(state)).not.toContain(state.round?.crypticId);
   });
 });

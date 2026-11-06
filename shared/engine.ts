@@ -509,3 +509,19 @@ function isExhausted(state: LiveState, players: Participant[]): boolean {
   if (state.config.flow === 'rounds') return state.round === null;
   return players.length > 0 && players.every((p) => state.crypticIds.every((id) => p.solvedIds.includes(id)));
 }
+
+// ---------- Revelado de soluciones ----------
+
+/**
+ * Cripticos cuya solución ya se puede mostrar a todos:
+ * - partida terminada: todos los jugados;
+ * - 'rounds' en vivo: las rondas ya cerradas (nadie puede seguir respondiéndolas);
+ * - 'free' en vivo: ninguno (los rivales podrían seguir con el mismo criptico).
+ */
+export function revealableIds(state: LiveState): string[] {
+  if (state.config.flow === 'rounds') {
+    const current = state.status === 'live' ? state.round?.crypticId : undefined;
+    return state.usedIds.filter((id) => id !== current);
+  }
+  return state.status === 'finished' ? [...state.crypticIds] : [];
+}
