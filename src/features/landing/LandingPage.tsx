@@ -6,13 +6,21 @@ import { useAuth } from '../../hooks/useAuth';
 import { GAME_LABELS } from '../../../shared/scoring';
 import { GAME_MODES } from '../../../shared/types';
 
-// Ejemplo público (también está en data/cryptics.example.json).
-const DEMO = { clue: 'Reptil cambiante:', wordplay: 'lecho con felino', enumeration: '(8)', answer: 'CAMALEÓN', split: 4 };
+// Criptico de portada: definición críptica que se resuelve a sí misma.
+const DEMO = { clue: '¡Estás resolviendo uno en latín!', enumeration: '(9)', answer: 'CRYPTICUS' };
 
 const ANATOMY = [
-  { label: 'Definición', text: 'Siempre al principio o al final. Es la respuesta dicha de forma directa.', sample: 'Reptil cambiante' },
-  { label: 'Juego de palabras', text: 'El resto de la pista lleva a la misma respuesta por otro camino.', sample: 'lecho (CAMA) + felino (LEÓN)' },
-  { label: 'Enumeración', text: 'Cuántas letras tiene, y en cuántas palabras.', sample: '(8)' },
+  {
+    label: 'Definición',
+    text: 'Siempre al principio o al final. Es la respuesta dicha de forma directa.',
+    sample: 'Reptil cambiante: lecho con felino',
+  },
+  {
+    label: 'Juego de palabras',
+    text: 'El resto de la pista lleva a la misma respuesta por otro camino.',
+    sample: 'lecho (CAMA) + felino (LEÓN)',
+  },
+  { label: 'Enumeración', text: 'Cuántas letras tiene, y en cuántas palabras.', sample: '(8) → CAMALEÓN' },
 ];
 
 const REASONS = [
@@ -41,7 +49,7 @@ function DemoGrid() {
         <span
           key={index}
           className={`grid size-9 place-items-center font-mono text-lg font-semibold transition-colors duration-150 sm:size-10 ${
-            index < revealed ? (index < DEMO.split ? 'bg-ink text-paper' : 'bg-accent text-paper') : 'bg-paper text-transparent'
+            index < revealed ? 'bg-ink text-paper' : 'bg-paper text-transparent'
           }`}
         >
           {letter}
@@ -90,13 +98,12 @@ export function LandingPage() {
           <figure className="border-2 border-ink p-6">
             <p className="font-mono text-[11px] uppercase tracking-widest text-muted">Ejemplo</p>
             <blockquote className="mt-2 font-display text-2xl leading-snug">
-              <span className="underline decoration-ink decoration-2 underline-offset-4">{DEMO.clue}</span> {DEMO.wordplay}{' '}
-              <span className="text-muted">{DEMO.enumeration}</span>
+              {DEMO.clue} <span className="text-muted">{DEMO.enumeration}</span>
             </blockquote>
             <div className="mt-5">
               <DemoGrid />
             </div>
-            <figcaption className="mt-4 text-sm text-muted">CAMA (lecho) + LEÓN (felino) = CAMALEÓN, el reptil que cambia de color.</figcaption>
+            <figcaption className="mt-4 text-sm text-muted">Lo que estás resolviendo es un criptico. En latín: CRYPTICUS.</figcaption>
           </figure>
         </div>
       </section>
