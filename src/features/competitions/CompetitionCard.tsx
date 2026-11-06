@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import type { Competition } from '../../../shared/types';
-import { BOSS_LABELS, COMEBACK_LABELS, DUEL_DAMAGE_LABELS, FLOW_LABELS, GAME_LABELS, SCORING_LABELS } from '../../../shared/scoring';
+import { BOSS_LABELS, COMEBACK_LABELS, DUEL_DAMAGE_LABELS, FLOW_LABELS, SCORING_LABELS } from '../../../shared/scoring';
 import { formatTimeControl } from '../../../shared/gameModes';
 import { Badge } from '../../components/ui';
 import { formatRelative } from '../../lib/utils';
