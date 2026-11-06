@@ -1,9 +1,10 @@
 // Configuración de la partida antes de empezar: modo, flujo, puntaje y modificadores.
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 import { useSession } from '../../hooks/useAuth';
 import { createCompetition, type CreateCompetitionInput } from '../../lib/repo';
 import { cx, errorMessage } from '../../lib/utils';
+import { loadJson, saveJson } from '../../lib/storage';
 import {
   BOSS_LABELS,
   COMEBACK_LABELS,
@@ -26,45 +27,24 @@ import type {
 } from '../../../shared/types';
 import { Button, ErrorBanner, Input, PageHeader, Select } from '../../components/ui';
 
-const PRESETS: Record<string, Partial<CreateCompetitionInput>> = {
-  quick: { title: 'Partida rápida', mode: 'timed', flow: 'free', durationSec: 600, clueCount: 10 },
-  duel: {
-    title: 'Duelo',
-    mode: 'count',
-    flow: 'rounds',
-    targetCount: 5,
-    winByTwo: true,
-    difficultyVote: true,
-    rivalCountdownSec: 15,
-    comeback: 'high',
-    maxPlayers: 2,
-    durationSec: 1200,
-    clueCount: 15,
-    extraTime: { enabled: true, seconds: 60, maxUses: 2 },
-    visibility: 'friends',
-  },
-  boss: {
-    title: 'Cacería del jefe',
-    mode: 'boss',
-    flow: 'free',
-    bossLevel: 'normal',
-    durationSec: 900,
-    clueCount: 15,
-    maxPlayers: 4,
-    extraTime: { enabled: true, seconds: 45, maxUses: 2 },
-  },
-};
+// La última configuración usada se recuerda entre visitas.
+const FORM_KEY = 'crypticus.createForm.v1';
 
-function initialForm(preset: string | null): CreateCompetitionInput {
+function defaultForm(): CreateCompetitionInput {
   return {
     ...DEFAULT_CONFIG,
     title: 'Mi competencia',
     visibility: 'public',
     maxPlayers: 8,
     clueCount: 10,
-    ...(preset ? PRESETS[preset] : {}),
   };
 }
+
+const VISIBILITY_OPTIONS: Array<{ value: CompetitionVisibility; title: string; description: string }> = [
+  { value: 'public', title: 'Pública', description: 'Aparece en Jugar para todos.' },
+  { value: 'friends', title: 'Amigos', description: 'Solo la ven tus amigos.' },
+  { value: 'private', title: 'Privada', description: 'Solo con el enlace.' },
+];
 
 function Choice<T extends string>({
   value,
@@ -148,8 +128,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export default function CreateCompetitionPage() {
   const { profile } = useSession();
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const [form, setForm] = useState<CreateCompetitionInput>(() => initialForm(params.get('preset')));
+  const [form, setForm] = useState<CreateCompetitionInput>(() => loadJson(FORM_KEY, defaultForm()));
+  useEffect(() => saveJson(FORM_KEY, form), [form]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -187,21 +167,12 @@ export default function CreateCompetitionPage() {
     <>
       <PageHeader kicker="Nueva" title="Configura la partida" />
 
-      <div className="mb-8 flex flex-wrap gap-2">
-        {Object.entries({ quick: 'Rápida', duel: 'Duelo', boss: 'Jefe' }).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setForm(initialForm(key))}
-            className="border border-line px-3 py-1.5 text-sm font-semibold hover:border-ink"
-          >
-            Preset: {label}
-          </button>
-        ))}
-      </div>
-
       <form onSubmit={handleSubmit} className="grid max-w-3xl gap-10">
         <Input label="Título" value={form.title} onChange={(e) => set('title', e.target.value)} minLength={3} maxLength={60} required />
+
+        <Section title="Sala">
+          <Choice<CompetitionVisibility> value={form.visibility} onChange={(v) => set('visibility', v)} columns={3} options={VISIBILITY_OPTIONS} />
+        </Section>
 
         <Section title="Modo de juego">
           <Choice<CompetitionMode>
@@ -376,11 +347,6 @@ export default function CreateCompetitionPage() {
                 ))}
               </Select>
             )}
-            <Select label="Visibilidad" value={form.visibility} onChange={(e) => set('visibility', e.target.value as CompetitionVisibility)}>
-              <option value="public">Pública</option>
-              <option value="friends">Solo amigos</option>
-              <option value="private">Privada (enlace)</option>
-            </Select>
           </div>
         </Section>
 

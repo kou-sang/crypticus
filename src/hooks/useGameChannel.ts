@@ -13,12 +13,14 @@ export interface GameActions {
   vote: (tier: Difficulty) => Promise<AckReply>;
   extraTime: () => Promise<AckReply>;
   skip: () => Promise<AckReply>;
+  endVote: () => Promise<AckReply>;
 }
 
 export interface GameChannelState {
   state: LiveState | null;
   connection: ConnectionState;
-  clockOffsetMs: number; // serverTime - Date.now() al conectar
+  clockOffsetMs: number; // Hora del servidor - Date.now(), estimada con la muestra de menor RTT
+  rttMs: number | null; // Latencia ida y vuelta más reciente (se muestra en la barra de juego)
   solutions: Solution[]; // Rondas cerradas (y todo, al terminar)
   actions: GameActions;
 }
@@ -30,10 +32,12 @@ export function useGameChannel(competitionId: string, enabled: boolean): GameCha
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [state, setState] = useState<LiveState | null>(null);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
+  const [rttMs, setRttMs] = useState<number | null>(null);
   const [solutions, setSolutions] = useState<Solution[]>([]);
 
   useEffect(() => {
     if (!enabled) return;
+    let bestRtt = Infinity;
     const instance = new GameChannel(competitionId, {
       onReady: (next, revealed, serverTime) => {
         setState(next);
@@ -46,6 +50,14 @@ export function useGameChannel(competitionId: string, enabled: boolean): GameCha
         setSolutions((prev) => (prev.length === revealed.length ? prev : revealed));
       },
       onConnection: setConnection,
+      onLatency: ({ rttMs: rtt, offsetMs }) => {
+        setRttMs(Math.round(rtt));
+        // La muestra con menor RTT tiene la menor incertidumbre de desfase.
+        if (rtt <= bestRtt) {
+          bestRtt = rtt;
+          setClockOffsetMs(offsetMs);
+        }
+      },
     });
     instance.connect();
     setChannel(instance);
@@ -64,10 +76,11 @@ export function useGameChannel(competitionId: string, enabled: boolean): GameCha
             vote: (tier) => channel.vote(tier),
             extraTime: () => channel.extraTime(),
             skip: () => channel.skip(),
+            endVote: () => channel.endVote(),
           }
-        : { answer: offline, hint: offline, vote: offline, extraTime: offline, skip: offline },
+        : { answer: offline, hint: offline, vote: offline, extraTime: offline, skip: offline, endVote: offline },
     [channel],
   );
 
-  return { state, connection, clockOffsetMs, solutions, actions };
+  return { state, connection, clockOffsetMs, rttMs, solutions, actions };
 }

@@ -10,7 +10,9 @@ export type ClientMessage =
   | { type: 'vote'; reqId: string; tier: Difficulty }
   | { type: 'extraTime'; reqId: string }
   | { type: 'skip'; reqId: string }
-  | { type: 'ping' };
+  | { type: 'endVote'; reqId: string }
+  | { type: 'ping'; sentAt?: number } // Eco en pong: el cliente mide RTT y desfase de reloj.
+  | { type: 'probeAck'; id: number }; // Respuesta a `probe`: el servidor mide el RTT de este jugador.
 
 export type ActionMessage = Extract<ClientMessage, { reqId: string }>;
 
@@ -47,6 +49,7 @@ export type ServerMessage =
   | { type: 'reply'; reqId: string; ok: true; data: AnswerReply | HintReply | AckReply }
   | { type: 'reply'; reqId: string; ok: false; error: { code: string; message: string } }
   | { type: 'error'; code: string; message: string }
-  | { type: 'pong'; serverTime: number };
+  | { type: 'pong'; serverTime: number; sentAt?: number }
+  | { type: 'probe'; id: number };
 
 export const MAX_CLIENT_MESSAGE_BYTES = 2048;

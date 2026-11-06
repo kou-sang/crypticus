@@ -3,16 +3,25 @@ import { bearerToken, verifyFirebaseToken } from './auth';
 import { AppError, errorResponse, json } from './errors';
 import { FirestoreRest } from './firestore';
 import type { Env } from './env';
-import type { Competition, CompetitionConfig, Participant } from '../shared/types';
+import type { Competition, CompetitionConfig, Difficulty, Participant } from '../shared/types';
+import { mergeLastSeen, selectCryptics } from '../shared/selection';
+import { catalogByTier } from './secrets';
 import { validateConfig } from '../shared/scoring';
 
 export { CompetitionRoom } from './competitionRoom';
 
 const COMPETITION_ID = /^[A-Za-z0-9_-]{1,64}$/;
-const COUNTDOWN_MS = 3_000;
+// 3 s visibles (3-2-1) + margen para que todos los clientes reciban el estado antes del primer número.
+const COUNTDOWN_MS = 4_500;
 
+/**
+ * Cada sala vive en un Durable Object. La pista de región lo crea cerca de los jugadores
+ * (solo influye la primera vez; después el objeto no se mueve).
+ */
 function roomStub(env: Env, competitionId: string) {
-  return env.COMPETITION_ROOM.get(env.COMPETITION_ROOM.idFromName(competitionId));
+  const id = env.COMPETITION_ROOM.idFromName(competitionId);
+  const hint = env.DO_LOCATION_HINT as DurableObjectLocationHint | undefined;
+  return hint ? env.COMPETITION_ROOM.get(id, { locationHint: hint }) : env.COMPETITION_ROOM.get(id);
 }
 
 async function readCompetitionId(request: Request): Promise<string> {
@@ -25,6 +34,33 @@ async function readCompetitionId(request: Request): Promise<string> {
   const id = (body as { competitionId?: unknown } | null)?.competitionId;
   if (typeof id !== 'string' || !COMPETITION_ID.test(id)) throw new AppError(400, 'bad_body', 'competitionId inválido.');
   return id;
+}
+
+/**
+ * Elige los cripticos de la partida con el catálogo empaquetado y el historial `userSeen/{uid}` de cada jugador.
+ * Conserva el tamaño que pidió el anfitrión (total en 'free', por dificultad en 'rounds').
+ */
+async function selectUnseen(
+  firestore: FirestoreRest,
+  competition: Competition,
+  uids: string[],
+): Promise<{ crypticIds: string[]; pool: Record<Difficulty, string[]> }> {
+  const seenDocs = await firestore.batchGet<{ seen?: Record<string, number> }>(uids.map((uid) => `userSeen/${uid}`));
+  const lastSeen = mergeLastSeen([...seenDocs.values()].map((d) => d.seen));
+  const pool = competition.pool ?? { easy: [], medium: [], hard: [] };
+  const count =
+    competition.flow === 'rounds'
+      ? Math.max(pool.easy.length, pool.medium.length, pool.hard.length, 1)
+      : Math.max(competition.crypticIds.length, 1);
+  const selection = selectCryptics({
+    byTier: catalogByTier(),
+    lastSeen,
+    flow: competition.flow,
+    tierMix: competition.tierMix,
+    count,
+  });
+  if (selection.crypticIds.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
+  return selection;
 }
 
 /** POST /api/competitions/start — el anfitrión inicia; el DO toma el control de la partida. */
@@ -44,7 +80,6 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
     throw new AppError(409, 'not_enough_players', `Se necesitan al menos ${minPlayers} jugadores.`);
   }
 
-  const startedAt = Date.now() + COUNTDOWN_MS;
   const config: CompetitionConfig = {
     mode: competition.mode,
     scoring: competition.scoring,
@@ -65,6 +100,9 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   const configErrors = validateConfig(config, competition.maxPlayers);
   if (configErrors.length > 0) throw new AppError(400, 'bad_config', configErrors.join(' '));
 
+  // Selección sin repetir: se descartan (o se dejan para el final) los cripticos que ya vio algún jugador.
+  const { crypticIds, pool } = await selectUnseen(firestore, competition, participants.map((p) => p.id));
+
   // El DO es idempotente: si ya inició (reintento), devuelve los tiempos originales.
   let times: { startedAt: number; endsAt: number };
   try {
@@ -73,9 +111,9 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
       title: competition.title ?? '',
       config,
       participants: participants.map((p) => ({ ...p, uid: p.id })),
-      crypticIds: competition.crypticIds,
-      pool: competition.pool ?? { easy: [], medium: [], hard: [] },
-      startedAt,
+      crypticIds,
+      pool,
+      startedAt: Date.now() + COUNTDOWN_MS, // Tras la selección: el margen no se consume en lecturas.
     });
   } catch (error) {
     // Los errores del motor llegan del DO como Error genérico con el mensaje original.
@@ -84,7 +122,7 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
 
   // Los clientes escuchan este cambio en Firestore y abren el WebSocket.
   await firestore.commit([
-    { kind: 'update', path: `competitions/${competitionId}`, data: { status: 'live', ...times } },
+    { kind: 'update', path: `competitions/${competitionId}`, data: { status: 'live', crypticIds, pool, ...times } },
   ]);
   return json({ ok: true, data: times });
 }
@@ -107,10 +145,24 @@ async function handleSolutions(request: Request, env: Env, competitionId: string
   }
 }
 
+/**
+ * Proxy del handler de Firebase Auth en el mismo dominio (`/__/auth/*`).
+ * Con `VITE_AUTH_SAME_ORIGIN=true` el login de Google no depende de cookies de terceros,
+ * que Safari, Brave y el Chrome móvil bloquean y que rompen el popup/redirect.
+ */
+async function proxyFirebaseAuth(request: Request, url: URL, env: Env): Promise<Response> {
+  const target = new URL(`${url.pathname}${url.search}`, `https://${env.FIREBASE_PROJECT_ID}.firebaseapp.com`);
+  return fetch(new Request(target, request));
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     try {
+      if (url.pathname.startsWith('/__/auth/') || url.pathname.startsWith('/__/firebase/')) {
+        return await proxyFirebaseAuth(request, url, env);
+      }
+
       if (url.pathname === '/api/competitions/start') {
         if (request.method !== 'POST') throw new AppError(405, 'method_not_allowed', 'Solo POST.');
         return await handleStart(request, env);

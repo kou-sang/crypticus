@@ -9,6 +9,7 @@ export type ConnectionState = 'connecting' | 'open' | 'closed';
 
 export interface GameChannelHandlers {
   onReady: (state: LiveState | null, solutions: Solution[], serverTime: number) => void;
+  onLatency?: (sample: { rttMs: number; offsetMs: number }) => void;
   onState: (state: LiveState, solutions: Solution[]) => void;
   onConnection: (state: ConnectionState) => void;
 }
@@ -20,7 +21,8 @@ interface PendingRequest {
 }
 
 const REQUEST_TIMEOUT_MS = 8_000;
-const PING_INTERVAL_MS = 30_000;
+const PING_INTERVAL_MS = 10_000;
+const INITIAL_PINGS = 3; // Ráfaga inicial: el RTT mínimo da el desfase de reloj más preciso.
 const MAX_BACKOFF_MS = 8_000;
 
 export class GameChannel {
@@ -90,6 +92,10 @@ export class GameChannel {
 
   skip(): Promise<AckReply> {
     return this.request<AckReply>({ type: 'skip', reqId: this.nextId() });
+  }
+
+  endVote(): Promise<AckReply> {
+    return this.request<AckReply>({ type: 'endVote', reqId: this.nextId() });
   }
 
   dispose(): void {
@@ -166,6 +172,19 @@ export class GameChannel {
         console.warn('[ws] error del servidor', message.code, message.message);
         break;
       case 'pong':
+        if (typeof message.sentAt === 'number') {
+          // NTP simplificado: el servidor marcó la hora a mitad del viaje.
+          const now = Date.now();
+          const rttMs = now - message.sentAt;
+          this.handlers.onLatency?.({ rttMs, offsetMs: message.serverTime - (message.sentAt + rttMs / 2) });
+        }
+        break;
+      case 'probe':
+        try {
+          this.rawSend({ type: 'probeAck', id: message.id });
+        } catch {
+          // Desconectado: se medirá en la próxima.
+        }
         break;
     }
   }
@@ -186,15 +205,18 @@ export class GameChannel {
     this.reconnectTimer = window.setTimeout(() => this.connect(), delay);
   }
 
+  private ping(): void {
+    try {
+      this.rawSend({ type: 'ping', sentAt: Date.now() });
+    } catch {
+      // Si no está abierto, onclose reconectará.
+    }
+  }
+
   private startPing(): void {
     if (this.pingTimer !== null) window.clearInterval(this.pingTimer);
-    this.pingTimer = window.setInterval(() => {
-      try {
-        this.rawSend({ type: 'ping' });
-      } catch {
-        // Si no está abierto, onclose reconectará.
-      }
-    }, PING_INTERVAL_MS);
+    for (let i = 0; i < INITIAL_PINGS; i++) window.setTimeout(() => this.ping(), i * 250);
+    this.pingTimer = window.setInterval(() => this.ping(), PING_INTERVAL_MS);
   }
 
   private clearTimers(): void {

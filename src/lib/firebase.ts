@@ -5,7 +5,11 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  // Mismo dominio que la app (el Worker hace proxy de /__/auth) => sin cookies de terceros.
+  authDomain:
+    import.meta.env.VITE_AUTH_SAME_ORIGIN === 'true' && typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      ? window.location.host
+      : import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };

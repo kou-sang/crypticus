@@ -54,7 +54,7 @@ export interface GameEvent {
   seconds?: number;
 }
 
-export type EndReason = 'time' | 'target' | 'winByTwo' | 'exhausted' | 'bossDefeated' | 'bossSurvived' | null;
+export type EndReason = 'time' | 'target' | 'winByTwo' | 'exhausted' | 'bossDefeated' | 'bossSurvived' | 'voted' | null;
 
 export interface LiveState {
   competitionId: string;
@@ -73,6 +73,7 @@ export interface LiveState {
   boss: { maxHp: number; hp: number } | null;
   extraTime: { usesLeft: number; votes: string[] };
   skipVotes: string[];
+  endVotes?: string[]; // Opcional: estados guardados antes de v0.5 no lo tienen.
   events: GameEvent[];
   winnerId: string | null;
   endReason: EndReason;
@@ -131,6 +132,7 @@ export function createLiveState(input: CreateInput): LiveState {
     boss: input.config.mode === 'boss' ? { maxHp: 0, hp: 0 } : null,
     extraTime: { usesLeft: input.config.extraTime.enabled ? input.config.extraTime.maxUses : 0, votes: [] },
     skipVotes: [],
+    endVotes: [],
     events: [],
     winnerId: null,
     endReason: null,
@@ -350,6 +352,29 @@ export function toggleSkip(state: LiveState, input: { uid: string; now: number; 
   advanceRound(state, input.now, input.random ?? Math.random);
   evaluate(state, input.now);
   return { skipped: true };
+}
+
+/** Votos necesarios para terminar la sala: mayoría estricta. */
+export function endVotesNeeded(state: LiveState): number {
+  return Math.floor(Object.keys(state.participants).length / 2) + 1;
+}
+
+/**
+ * Alterna el voto para terminar la partida. Con mayoría estricta termina:
+ * gana quien va primero (sin ganador si hay empate en la cima o es modo jefe).
+ */
+export function toggleEndVote(state: LiveState, input: { uid: string; now: number }): { ended: boolean } {
+  requireLive(state, input.now);
+  requireParticipant(state, input.uid);
+  state.endVotes = toggle(state.endVotes ?? [], input.uid);
+  if (state.endVotes.length < endVotesNeeded(state)) return { ended: false };
+
+  const ranked = rankState(state);
+  const leader = ranked[0];
+  const tiedAtTop = ranked.filter((p) => p.rank === 1).length > 1;
+  const winnerId = state.boss || !leader || tiedAtTop ? null : leader.uid;
+  finish(state, 'voted', winnerId, input.now);
+  return { ended: true };
 }
 
 // ---------- Rondas ----------

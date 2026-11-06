@@ -9,7 +9,9 @@ import {
   revealableIds,
   tick,
   toggleExtraTime,
+  toggleEndVote,
   toggleSkip,
+  endVotesNeeded,
   type LiveState,
 } from './engine';
 import { DEFAULT_CONFIG, rankParticipants } from './scoring';
@@ -249,5 +251,32 @@ describe('revealableIds', () => {
     answer(state, 'a', 'm1', true, 1000);
     expect(revealableIds(state)).toEqual(['m1']);
     expect(revealableIds(state)).not.toContain(state.round?.crypticId);
+  });
+});
+
+describe('votar terminar', () => {
+  it('requiere mayoría estricta y el voto se puede retirar', () => {
+    const state = setup({}, ['a', 'b', 'c']);
+    expect(endVotesNeeded(state)).toBe(2);
+    expect(toggleEndVote(state, { uid: 'a', now: 1000 }).ended).toBe(false);
+    expect(toggleEndVote(state, { uid: 'a', now: 1100 }).ended).toBe(false); // retira
+    expect(state.endVotes).toEqual([]);
+    toggleEndVote(state, { uid: 'a', now: 1200 });
+    expect(toggleEndVote(state, { uid: 'b', now: 1300 }).ended).toBe(true);
+    expect(state.status).toBe('finished');
+    expect(state.endReason).toBe('voted');
+  });
+
+  it('gana el que va primero; empate en la cima = sin ganador', () => {
+    const state = setup();
+    answer(state, 'a', 'e1', true, 1000);
+    toggleEndVote(state, { uid: 'a', now: 2000 });
+    toggleEndVote(state, { uid: 'b', now: 2000 });
+    expect(state.winnerId).toBe('a');
+
+    const tied = setup();
+    toggleEndVote(tied, { uid: 'a', now: 2000 });
+    toggleEndVote(tied, { uid: 'b', now: 2000 });
+    expect(tied.winnerId).toBeNull();
   });
 });

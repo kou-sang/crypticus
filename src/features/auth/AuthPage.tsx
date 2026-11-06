@@ -1,11 +1,13 @@
 // Inicio de sesión / registro con email o Google.
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  getRedirectResult,
   signInWithPopup,
+  signInWithRedirect,
   updateProfile,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
@@ -20,10 +22,19 @@ const AUTH_ERRORS: Record<string, string> = {
   'auth/invalid-email': 'Email inválido.',
   'auth/popup-closed-by-user': 'Se cerró la ventana de Google.',
   'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos.',
+  'auth/unauthorized-domain': 'Este dominio no está autorizado en Firebase (Authentication → Configuración → Dominios autorizados).',
+  'auth/operation-not-allowed': 'El acceso con Google no está habilitado en Firebase.',
+  'auth/network-request-failed': 'Error de red con Google. Revisa la conexión o los bloqueadores.',
+  'auth/internal-error': 'Google no respondió. Prueba de nuevo.',
 };
 
+// Si el navegador bloquea el popup, se usa redirección completa.
+const POPUP_FALLBACK = new Set(['auth/popup-blocked', 'auth/operation-not-supported-in-environment', 'auth/cancelled-popup-request']);
+
+/** Mensaje legible + código entre paréntesis (sirve para diagnosticar). */
 function describeAuthError(error: unknown): string {
-  if (error instanceof FirebaseError) return AUTH_ERRORS[error.code] ?? error.message;
+  if (error instanceof FirebaseError) return `${AUTH_ERRORS[error.code] ?? error.message} (${error.code})`;
+  console.error('[auth]', error);
   return 'No se pudo iniciar sesión.';
 }
 
@@ -57,13 +68,24 @@ export default function AuthPage() {
     }
   };
 
+  // Vuelta de un login por redirección: muestra el error si lo hubo (el éxito lo maneja GuestOnly).
+  useEffect(() => {
+    getRedirectResult(auth).catch((err: unknown) => setError(describeAuthError(err)));
+  }, []);
+
   const handleGoogle = async () => {
     setError(null);
     setBusy(true);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      await signInWithPopup(auth, provider);
       navigate(from, { replace: true });
     } catch (err) {
+      if (err instanceof FirebaseError && POPUP_FALLBACK.has(err.code)) {
+        await signInWithRedirect(auth, provider).catch((redirectError: unknown) => setError(describeAuthError(redirectError)));
+        return;
+      }
       setError(describeAuthError(err));
     } finally {
       setBusy(false);
