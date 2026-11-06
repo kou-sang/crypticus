@@ -225,7 +225,15 @@ export const DuelAlerts = memo(function DuelAlerts({ state, uid }: { state: Live
 // ---------- Pausa entre cripticos ----------
 
 /** Cuenta los segundos hasta que abre el siguiente criptico (con tic por segundo). */
-export const NextCountdown = memo(function NextCountdown({ opensAt, offsetMs }: { opensAt: number; offsetMs: number }) {
+export const NextCountdown = memo(function NextCountdown({
+  opensAt,
+  offsetMs,
+  label = 'Siguiente criptico en',
+}: {
+  opensAt: number;
+  offsetMs: number;
+  label?: string;
+}) {
   const now = useNow(100) + offsetMs;
   const seconds = Math.max(0, Math.ceil((opensAt - now) / 1000));
   const last = useRef<number | null>(null);
@@ -237,7 +245,7 @@ export const NextCountdown = memo(function NextCountdown({ opensAt, offsetMs }: 
   }, [seconds]);
   return (
     <div className="flex items-baseline gap-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted">Siguiente criptico en</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted">{label}</p>
       <p key={seconds} className="font-display text-5xl fade-in">
         {seconds}
       </p>

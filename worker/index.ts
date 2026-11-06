@@ -4,9 +4,9 @@ import { AppError, errorResponse, json } from './errors';
 import { FirestoreRest } from './firestore';
 import type { Env } from './env';
 import type { Competition, CompetitionConfig, Difficulty, Participant } from '../shared/types';
-import { mergeLastSeen, selectCryptics } from '../shared/selection';
+import { mergeLastSeen, selectCryptics, selectTiebreakers } from '../shared/selection';
 import { ROYALE_TIER_COUNTS } from '../shared/gameModes';
-import { catalogByTier } from './secrets';
+import { catalogByTier, catalogTiebreak } from './secrets';
 import { validateConfig } from '../shared/scoring';
 
 export { CompetitionRoom } from './competitionRoom';
@@ -45,7 +45,7 @@ async function selectUnseen(
   firestore: FirestoreRest,
   competition: Competition,
   uids: string[],
-): Promise<{ crypticIds: string[]; pool: Record<Difficulty, string[]> }> {
+): Promise<{ crypticIds: string[]; pool: Record<Difficulty, string[]>; tiebreakIds: string[] }> {
   const seenDocs = await firestore.batchGet<{ seen?: Record<string, number> }>(uids.map((uid) => `userSeen/${uid}`));
   const lastSeen = mergeLastSeen([...seenDocs.values()].map((d) => d.seen));
   const pool = competition.pool ?? { easy: [], medium: [], hard: [] };
@@ -66,7 +66,10 @@ async function selectUnseen(
     ...(competition.game === 'royale' ? { tierCounts: ROYALE_TIER_COUNTS } : {}),
   });
   if (selection.crypticIds.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
-  return selection;
+  // Muerte súbita: solo Race, Royale y Duel con rivales (el jefe es cooperativo).
+  const competitive = competition.mode !== 'boss' && uids.length >= 2;
+  const tiebreakIds = competitive ? selectTiebreakers(catalogTiebreak(), lastSeen) : [];
+  return { ...selection, tiebreakIds };
 }
 
 /** POST /api/competitions/start — el anfitrión inicia; el DO toma el control de la partida. */
@@ -117,7 +120,7 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   if (configErrors.length > 0) throw new AppError(400, 'bad_config', configErrors.join(' '));
 
   // Selección sin repetir: se descartan (o se dejan para el final) los cripticos que ya vio algún jugador.
-  const { crypticIds, pool } = await selectUnseen(firestore, competition, participants.map((p) => p.id));
+  const { crypticIds, pool, tiebreakIds } = await selectUnseen(firestore, competition, participants.map((p) => p.id));
 
   // El DO es idempotente: si ya inició (reintento), devuelve los tiempos originales.
   let times: { startedAt: number; endsAt: number };
@@ -129,6 +132,7 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
       participants: participants.map((p) => ({ ...p, uid: p.id })),
       crypticIds,
       pool,
+      tiebreakIds,
       startedAt: Date.now() + COUNTDOWN_MS, // Tras la selección: el margen no se consume en lecturas.
     });
   } catch (error) {

@@ -47,6 +47,7 @@ export interface StartInput {
   participants: Participant[];
   crypticIds: string[];
   pool: Record<Difficulty, string[]>;
+  tiebreakIds?: string[];
   startedAt: number;
 }
 
@@ -75,7 +76,10 @@ interface RaceEntry {
  */
 function publicState(state: LiveState, now: number, uid: string | null): LiveState {
   // Partida terminada: ya no hay nada que ocultar del juego en sí (las soluciones van aparte).
-  if (state.status === 'finished') return { ...state, pool: { easy: [], medium: [], hard: [] } };
+  // De los cripticos de desempate solo se muestran los que llegaron a jugarse.
+  if (state.status === 'finished') {
+    return { ...state, pool: { easy: [], medium: [], hard: [] }, tiebreakIds: state.tiebreak?.played ?? [] };
+  }
 
   const round = state.round;
   const pendingRound = round && round.opensAt != null && now < round.opensAt ? round.crypticId : null;
@@ -91,9 +95,15 @@ function publicState(state: LiveState, now: number, uid: string | null): LiveSta
   } else {
     visible = state.crypticIds; // Flujo libre clásico: la lista completa es parte del juego.
   }
-  const allowed = new Set(visible);
+  // Muerte súbita: el criptico actual se envía al abrir; los siguientes siguen siendo secretos.
+  const tb = state.tiebreak;
+  const tbOpen = tb != null && now >= tb.opensAt;
+  const tbVisible = tb ? tb.played.slice(0, tbOpen ? tb.index + 1 : tb.index) : [];
+  const allowed = new Set([...visible, ...tbVisible]);
   return {
     ...state,
+    tiebreakIds: [],
+    tiebreak: tb && !tbOpen ? { ...tb, crypticId: '', played: tb.played.slice(0, tb.index) } : tb,
     crypticIds: visible,
     usedIds: state.usedIds.filter((id) => allowed.has(id)),
     pool: { easy: [], medium: [], hard: [] },
@@ -133,7 +143,8 @@ export class CompetitionRoom extends DurableObject<Env> {
       if (this.state.competitionId !== input.competitionId) throw new Error('Sala inconsistente.');
       return { startedAt: this.state.startedAt, endsAt: this.state.endsAt };
     }
-    const allIds = [...new Set([...input.crypticIds, ...input.pool.easy, ...input.pool.medium, ...input.pool.hard])];
+    const tiebreakIds = input.tiebreakIds ?? [];
+    const allIds = [...new Set([...input.crypticIds, ...input.pool.easy, ...input.pool.medium, ...input.pool.hard, ...tiebreakIds])];
     this.state = createLiveState({
       competitionId: input.competitionId,
       title: input.title,
@@ -142,6 +153,7 @@ export class CompetitionRoom extends DurableObject<Env> {
       crypticIds: input.crypticIds,
       pool: input.pool,
       catalog: buildCatalog(allIds),
+      tiebreakIds,
       startedAt: input.startedAt,
     });
     await this.commit();
@@ -311,7 +323,10 @@ export class CompetitionRoom extends DurableObject<Env> {
 
     const correct = await verifyAnswer(this.env.ANSWER_HMAC_KEY, crypticId, guess, secret.hash);
     // En rondas, varios aciertos casi simultáneos se arbitran con compensación de latencia.
-    const contested = correct && state.config.flow === 'rounds' && state.status === 'live' && state.round?.crypticId === crypticId;
+    const contested =
+      correct &&
+      state.status === 'live' &&
+      (state.tiebreak ? state.tiebreak.crypticId === crypticId : state.config.flow === 'rounds' && state.round?.crypticId === crypticId);
     // applyAnswer revalida: durante el await pudo cerrarse la ronda. Se usa la hora de llegada, no la de fin de verificación.
     const outcome = contested
       ? await this.joinRace(uid, crypticId, receivedAt)

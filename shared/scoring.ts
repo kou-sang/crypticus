@@ -280,16 +280,21 @@ export type RankMetric = 'score' | 'solved' | 'survival';
  * > resolvió antes > se unió antes. Empates exactos comparten posición.
  * Supervivencia: los que siguen en pie primero; entre eliminados, quien cayó más tarde.
  */
+/** Valor principal del ranking según la métrica del modo (mayor es mejor). */
+export function rankPrimary(p: Participant, metric: RankMetric): number {
+  if (metric === 'solved') return p.solvedIds.length;
+  if (metric === 'survival') return (p.eliminatedAt == null ? 1e15 : p.eliminatedAt * 100) + Math.min(99, p.solvedIds.length);
+  return p.score;
+}
+
 export function rankParticipants(participants: Participant[], metric: RankMetric = 'score'): RankedParticipant[] {
-  const primary = (p: Participant) =>
-    metric === 'solved'
-      ? p.solvedIds.length
-      : metric === 'survival'
-        ? (p.eliminatedAt == null ? 1e15 : p.eliminatedAt * 100) + Math.min(99, p.solvedIds.length)
-        : p.score;
+  const primary = (p: Participant) => rankPrimary(p, metric);
+  const won = (p: Participant) => (p.tiebreakWon === true ? 1 : 0);
   const sorted = [...participants].sort((a, b) => {
     if (primary(b) !== primary(a)) return primary(b) - primary(a);
     if (b.score !== a.score) return b.score - a.score;
+    // Quien ganó la muerte súbita queda por delante de los empatados.
+    if (won(b) !== won(a)) return won(b) - won(a);
     if (a.hintsUsed !== b.hintsUsed) return a.hintsUsed - b.hintsUsed;
     const aTime = a.lastSolvedAt ?? Number.POSITIVE_INFINITY;
     const bTime = b.lastSolvedAt ?? Number.POSITIVE_INFINITY;
@@ -304,6 +309,7 @@ export function rankParticipants(participants: Participant[], metric: RankMetric
       previous !== undefined &&
       primary(previous) === primary(participant) &&
       previous.score === participant.score &&
+      won(previous) === won(participant) &&
       previous.hintsUsed === participant.hintsUsed &&
       previous.lastSolvedAt === participant.lastSolvedAt;
     ranked.push({ ...participant, rank: tied ? previous.rank : index + 1 });

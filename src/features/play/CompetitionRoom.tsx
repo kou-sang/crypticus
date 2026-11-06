@@ -69,7 +69,8 @@ export default function CompetitionRoom() {
   const isParticipant = comp.participantIds.includes(profile.uid);
   const canJoin = comp.visibility !== 'friends' || comp.hostId === profile.uid || friendIds.includes(comp.hostId);
   const countdown = isLive && startedAt !== null && !started;
-  const ended = live !== null && (live.status === 'finished' || expired);
+  // Con muerte súbita en curso el reloj de la partida ya venció, pero el juego sigue.
+  const ended = live !== null && (live.status === 'finished' || (expired && !live.tiebreak));
   // Durante la partida no se ofrece «Volver»: evita salir por accidente con un toque.
   const playing = isLive && !ended && isParticipant;
   const total = live

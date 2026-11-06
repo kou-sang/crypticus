@@ -30,6 +30,7 @@ const REASONS: Record<string, string> = {
   voted: 'Terminada por votación.',
   lastStanding: 'Último en pie.',
   knockout: 'Nocaut: un jugador se quedó sin vida.',
+  tiebreak: 'Definido en la muerte súbita de desempate.',
 };
 
 type FinishedCompetition = Competition & {

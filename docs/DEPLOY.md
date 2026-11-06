@@ -76,7 +76,7 @@ Copia el archivo `cryptics.seed.json` que te envié a la carpeta `data\` del rep
 Copy-Item "$HOME\Downloads\cryptics.seed.json" .\data\
 ```
 
-Son 1030 cripticos originales (422 fáciles, 392 medios, 216 difíciles), verificados por script. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición o combinación). La dificultad sigue el estándar del proyecto: una sola operación con una palabra común es fácil; varias operaciones o una palabra poco común es medio; si además hace falta conocimiento externo, es difícil. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
+Son 1130 cripticos originales, verificados por script: 1030 para las partidas (422 fáciles, 392 medios, 216 difíciles) y 100 de desempate, con respuestas de 2 o 3 palabras (`"tiebreak": true`). Los de desempate solo aparecen en la muerte súbita, cuando Race, Royale o Duel terminan empatados en la cima; su dificultad suma un nivel por cada palabra extra. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición o combinación). La dificultad sigue el estándar del proyecto: una sola operación con una palabra común es fácil; varias operaciones o una palabra poco común es medio; si además hace falta conocimiento externo, es difícil. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
 
 Antes de importar, revisa el archivo (no toca Firestore):
 

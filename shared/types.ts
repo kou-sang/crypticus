@@ -107,6 +107,8 @@ export interface CrypticImportItem {
   explanation?: string;
   setter?: string;
   tags?: string[];
+  /** Pool de desempate (respuestas de 2 o 3 palabras): solo se usa en la muerte súbita. */
+  tiebreak?: boolean;
 }
 
 export interface Competition extends CompetitionConfig {
@@ -151,6 +153,7 @@ export interface Participant {
   // ---- Secuencial (Race Pacífico, Royale) ----
   nextOpensAt?: number; // El criptico en `cursor` no se muestra ni se puede responder antes.
   surrenders?: number; // Rendiciones usadas.
+  tiebreakWon?: boolean; // Ganó la muerte súbita de desempate.
 }
 
 /** Estadísticas por modo (escritas por el servidor). */
