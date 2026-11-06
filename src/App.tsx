@@ -3,23 +3,23 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AuthProvider } from './hooks/useAuth';
 import { AppShell } from './components/AppShell';
-import { GuestOnly, RequireAuth } from './components/RequireAuth';
+import { GuestOnly, OwnProfileRedirect, RequireAuth } from './components/RequireAuth';
 import { PageLoader } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LandingPage } from './features/landing/LandingPage';
+import { loaders } from './routes';
 
-const AuthPage = lazy(() => import('./features/auth/AuthPage'));
-const OnboardingPage = lazy(() => import('./features/auth/OnboardingPage'));
-const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'));
-const CompetitionsPage = lazy(() => import('./features/competitions/CompetitionsPage'));
-const CreateCompetitionPage = lazy(() => import('./features/competitions/CreateCompetitionPage'));
-const CompetitionRoom = lazy(() => import('./features/play/CompetitionRoom'));
-const FriendsPage = lazy(() => import('./features/friends/FriendsPage'));
-const ChatPage = lazy(() => import('./features/chat/ChatPage'));
-const RankingsPage = lazy(() => import('./features/rankings/RankingsPage'));
-const ProfilePage = lazy(() => import('./features/profile/ProfilePage'));
-const HistoryPage = lazy(() => import('./features/history/HistoryPage'));
-const SettingsPage = lazy(() => import('./features/settings/SettingsPage'));
+const AuthPage = lazy(loaders.auth);
+const OnboardingPage = lazy(loaders.onboarding);
+const DashboardPage = lazy(loaders.dashboard);
+const CompetitionsPage = lazy(loaders.competitions);
+const CreateCompetitionPage = lazy(loaders.createCompetition);
+const CompetitionRoom = lazy(loaders.room);
+const FriendsPage = lazy(loaders.friends);
+const ChatPage = lazy(loaders.chat);
+const RankingsPage = lazy(loaders.rankings);
+const ProfilePage = lazy(loaders.profile);
+const SettingsPage = lazy(loaders.settings);
 
 export function App() {
   return (
@@ -44,7 +44,7 @@ export function App() {
                   <Route path="/chat/:chatId" element={<ChatPage />} />
                   <Route path="/rankings" element={<RankingsPage />} />
                   <Route path="/u/:uid" element={<ProfilePage />} />
-                  <Route path="/historial" element={<HistoryPage />} />
+                  <Route path="/historial" element={<OwnProfileRedirect />} />
                   <Route path="/ajustes" element={<SettingsPage />} />
                 </Route>
               </Route>

@@ -1,6 +1,7 @@
 // Importa cripticos: datos públicos -> Firestore; secretos -> worker/generated/cryptic-secrets.json.
 // Las respuestas se guardan como HMAC-SHA256 (clave ANSWER_HMAC_KEY), nunca en claro.
-// Uso: FIREBASE_SERVICE_ACCOUNT=... ANSWER_HMAC_KEY=... npm run import:cryptics -- data/cryptics.json [--dry-run] [--secrets-only]
+// Uso: FIREBASE_SERVICE_ACCOUNT=... ANSWER_HMAC_KEY=... npm run import:cryptics -- data/cryptics.json [--dry-run] [--secrets-only] [--replace]
+// --replace: el archivo pasa a ser la lista completa (borra de Firestore y de los secretos lo que no esté).
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { cert, initializeApp } from 'firebase-admin/app';
@@ -58,6 +59,7 @@ async function main(): Promise<void> {
   const [filePath = 'data/cryptics.json', ...flags] = process.argv.slice(2);
   const dryRun = flags.includes('--dry-run');
   const secretsOnly = flags.includes('--secrets-only');
+  const replace = flags.includes('--replace');
   const hmacKey = process.env.ANSWER_HMAC_KEY ?? '';
   if (!dryRun && hmacKey.length < 32) throw new Error('ANSWER_HMAC_KEY debe tener al menos 32 caracteres.');
 
@@ -80,10 +82,12 @@ async function main(): Promise<void> {
 
   // 1) Secretos para el Worker (se fusionan con los existentes para permitir importaciones parciales).
   let existing: Record<string, unknown> = {};
-  try {
-    existing = JSON.parse(await readFile(SECRETS_PATH, 'utf8')) as Record<string, unknown>;
-  } catch {
-    existing = {};
+  if (!replace) {
+    try {
+      existing = JSON.parse(await readFile(SECRETS_PATH, 'utf8')) as Record<string, unknown>;
+    } catch {
+      existing = {};
+    }
   }
   for (const item of items) {
     existing[item.id] = {
@@ -111,6 +115,18 @@ async function main(): Promise<void> {
     }
     await batch.commit();
     console.log(`  ✓ Firestore ${Math.min(offset + BATCH_SIZE, items.length)}/${items.length}`);
+  }
+
+  // 3) Reemplazo: borra los documentos públicos que ya no están en el archivo.
+  if (replace) {
+    const keep = new Set(items.map((item) => item.id));
+    const stale = (await db.collection('cryptics').select().get()).docs.filter((d) => !keep.has(d.id));
+    for (let offset = 0; offset < stale.length; offset += BATCH_SIZE) {
+      const batch = db.batch();
+      stale.slice(offset, offset + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    console.log(`  ✓ Firestore: ${stale.length} cripticos obsoletos borrados`);
   }
 }
 

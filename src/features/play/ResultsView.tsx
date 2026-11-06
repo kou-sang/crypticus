@@ -96,14 +96,9 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
         </tbody>
       </table>
 
-      <div className="flex gap-3">
-        <Link to="/competencias/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
-          Revancha
-        </Link>
-        <Link to="/competencias" className="inline-flex h-10 items-center border border-ink px-4 text-sm font-semibold">
-          Más salas
-        </Link>
-      </div>
+      <Link to="/competencias/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
+        Revancha
+      </Link>
     </div>
   );
 }

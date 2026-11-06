@@ -1,22 +1,29 @@
-// Carga perfiles por uid con caché en memoria (evita lecturas repetidas entre pantallas).
-import { useEffect, useState } from 'react';
+// Carga perfiles por uid con caché en memoria (TTL corto: ratings frescos sin lecturas repetidas).
+import { useEffect, useMemo, useState } from 'react';
 import { getUsers } from '../lib/repo';
 import type { UserProfile } from '../../shared/types';
 
-const cache = new Map<string, UserProfile>();
+const TTL_MS = 2 * 60_000;
+const cache = new Map<string, { at: number; profile: UserProfile }>();
+
+const isFresh = (uid: string) => {
+  const entry = cache.get(uid);
+  return entry !== undefined && Date.now() - entry.at < TTL_MS;
+};
 
 export function useUsers(uids: string[]): Map<string, UserProfile> {
   const key = [...uids].sort().join(',');
-  const [, forceRender] = useState(0);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
-    const missing = uids.filter((uid) => !cache.has(uid));
+    const missing = uids.filter((uid) => !isFresh(uid));
     if (missing.length === 0) return;
     let cancelled = false;
     getUsers(missing)
       .then((profiles) => {
-        profiles.forEach((p) => cache.set(p.uid, p));
-        if (!cancelled) forceRender((n) => n + 1);
+        const at = Date.now();
+        profiles.forEach((profile) => cache.set(profile.uid, { at, profile }));
+        if (!cancelled) setVersion((n) => n + 1);
       })
       .catch((error: unknown) => console.error('[users] carga fallida', error));
     return () => {
@@ -25,10 +32,13 @@ export function useUsers(uids: string[]): Map<string, UserProfile> {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  const result = new Map<string, UserProfile>();
-  uids.forEach((uid) => {
-    const profile = cache.get(uid);
-    if (profile) result.set(uid, profile);
-  });
-  return result;
+  // Referencia estable mientras no cambien los uids ni lleguen datos nuevos (permite memoizar consumidores).
+  return useMemo(() => {
+    const result = new Map<string, UserProfile>();
+    key.split(',').forEach((uid) => {
+      const entry = cache.get(uid);
+      if (entry) result.set(uid, entry.profile);
+    });
+    return result;
+  }, [key, version]);
 }

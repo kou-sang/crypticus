@@ -1,5 +1,5 @@
 // Jefe: figura animada, barra de vida y números flotantes de daño/curación.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { BOSS_LABELS } from '../../../shared/scoring';
 import type { BossLevel } from '../../../shared/types';
 import { playCue } from '../../lib/sound';
@@ -11,7 +11,7 @@ interface Floater {
   value: number; // negativo = daño, positivo = curación
 }
 
-export function BossBar({ hp, maxHp, level }: { hp: number; maxHp: number; level: BossLevel }) {
+export const BossBar = memo(function BossBar({ hp, maxHp, level }: { hp: number; maxHp: number; level: BossLevel }) {
   const ratio = maxHp > 0 ? hp / maxHp : 0;
   const previous = useRef(hp);
   const [effect, setEffect] = useState<'hit' | 'heal' | null>(null);
@@ -68,4 +68,4 @@ export function BossBar({ hp, maxHp, level }: { hp: number; maxHp: number; level
       </div>
     </section>
   );
-}
+});

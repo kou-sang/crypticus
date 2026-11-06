@@ -1,4 +1,5 @@
 // Últimos eventos de la partida (resoluciones, rondas, tiempo extra, prórroga).
+import { memo } from 'react';
 import type { GameEvent, LiveState } from '../../../shared/engine';
 import { DIFFICULTY_LABELS } from '../../../shared/scoring';
 
@@ -22,7 +23,7 @@ function describe(event: GameEvent, state: LiveState): string | null {
   }
 }
 
-export function EventFeed({ state }: { state: LiveState }) {
+export const EventFeed = memo(function EventFeed({ state }: { state: LiveState }) {
   const items = state.events
     .slice()
     .reverse()
@@ -39,4 +40,4 @@ export function EventFeed({ state }: { state: LiveState }) {
       ))}
     </ol>
   );
-}
+});

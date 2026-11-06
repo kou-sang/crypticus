@@ -1,7 +1,8 @@
 // Aviso cuando la sala mezcla jugadores en móvil y en PC (teclear en táctil suele ser más lento).
+import { memo } from 'react';
 import type { Participant } from '../../../shared/types';
 
-export function DeviceNotice({ participants }: { participants: Participant[] }) {
+export const DeviceNotice = memo(function DeviceNotice({ participants }: { participants: Participant[] }) {
   const mobile = participants.filter((p) => p.device === 'mobile');
   const desktop = participants.filter((p) => p.device === 'desktop');
   if (mobile.length === 0 || desktop.length === 0) return null;
@@ -16,4 +17,4 @@ export function DeviceNotice({ participants }: { participants: Participant[] }) 
       </span>
     </p>
   );
-}
+});

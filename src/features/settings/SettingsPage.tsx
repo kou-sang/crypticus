@@ -1,6 +1,5 @@
 // Configuración: cuenta, sonido, animaciones y tema.
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
@@ -86,10 +85,7 @@ export default function SettingsPage() {
             </Button>
           </form>
           <p className="mt-2 text-xs text-muted">
-            Usuario <span className="font-mono">@{profile.handle}</span> ·{' '}
-            <Link to={`/u/${profile.uid}`} className="underline underline-offset-4">
-              ver mi perfil
-            </Link>
+            Usuario <span className="font-mono">@{profile.handle}</span>
           </p>
           <div className="mt-3 space-y-2">
             <ErrorBanner error={error} />

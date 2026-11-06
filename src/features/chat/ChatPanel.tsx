@@ -1,5 +1,5 @@
 // Panel de chat reutilizable (global, directo o de competencia). Últimos 50 mensajes en vivo.
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, memo } from 'react';
 import { collection, limit, orderBy, query, type Timestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useLiveQuery } from '../../hooks/useFirestore';
@@ -20,7 +20,7 @@ export type ChatTarget = { kind: 'chat'; chatId: string } | { kind: 'competition
 
 const MESSAGE_LIMIT = 50;
 
-export function ChatPanel({ target, className, compact = false }: { target: ChatTarget; className?: string; compact?: boolean }) {
+export const ChatPanel = memo(function ChatPanel({ target, className, compact = false }: { target: ChatTarget; className?: string; compact?: boolean }) {
   const { profile } = useSession();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -92,4 +92,4 @@ export function ChatPanel({ target, className, compact = false }: { target: Chat
       {error && <ErrorBanner error={error} />}
     </div>
   );
-}
+});

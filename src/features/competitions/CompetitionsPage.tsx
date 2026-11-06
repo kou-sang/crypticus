@@ -81,7 +81,7 @@ export default function CompetitionsPage() {
         <Spinner />
       ) : items.length === 0 ? (
         <EmptyState title={tab === 'public' ? 'No hay salas públicas ahora' : 'Tus amigos no tienen salas abiertas'}>
-          Sé el primero: <Link to="/competencias/nueva" className="underline">crea una competencia</Link>.
+          Sé el primero con «+ Crear».
         </EmptyState>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,8 +1,18 @@
 // Efecto "desmayo": tras el acierto de un rival, la pantalla se oscurece desde los bordes hasta el cierre.
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
+import { useNow } from '../../hooks/useNow';
 import { playCue } from '../../lib/sound';
 
-export function FaintOverlay({ closesAt, totalMs, now }: { closesAt: number; totalMs: number; now: number }) {
+export const FaintOverlay = memo(function FaintOverlay({
+  closesAt,
+  totalMs,
+  offsetMs,
+}: {
+  closesAt: number;
+  totalMs: number;
+  offsetMs: number;
+}) {
+  const now = useNow(100) + offsetMs;
   const remaining = Math.max(0, closesAt - now);
   const progress = totalMs > 0 ? Math.min(1, 1 - remaining / totalMs) : 1;
   const seconds = Math.ceil(remaining / 1000);
@@ -31,4 +41,4 @@ export function FaintOverlay({ closesAt, totalMs, now }: { closesAt: number; tot
       </div>
     </div>
   );
-}
+});
