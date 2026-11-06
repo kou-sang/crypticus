@@ -62,7 +62,7 @@ describe('buildConfig', () => {
 });
 
 describe('Royale', () => {
-  const royale = { game: 'royale' as const, royale: { baseSec: 60, incrementSec: 5 } };
+  const royale = { game: 'royale' as const, royale: { baseSec: 60, incrementSec: 5, cooldownSec: 0 } };
 
   it('acertar suma segundos y avanza; el criptico es secuencial', () => {
     const state = start(royale);
@@ -91,7 +91,7 @@ describe('Royale', () => {
 });
 
 describe('Duel', () => {
-  const duel = { game: 'duel' as const, duel: { hp: 100, damage: 'difficulty' as const, comeback: 'off' as const } };
+  const duel = { game: 'duel' as const, duel: { hp: 100, damage: 'difficulty' as const, comeback: 'off' as const, cooldownSec: 0 } };
 
   it('acertar primero daña al rival, cierra el criptico y abre otro tras 3 s', () => {
     const state = start(duel);
