@@ -502,6 +502,9 @@ export class CompetitionRoom extends DurableObject<Env> {
               endReason: state.endReason,
               ratingDelta: deltas[p.uid] ?? 0,
               ratingAfter: (ratings[p.uid] ?? 1200) + (deltas[p.uid] ?? 0),
+              ...(rankedMode && ranked.length >= 2
+                ? { modeRatingAfter: (modeRatings[p.uid] ?? 1200) + (modeDeltas[p.uid] ?? 0) }
+                : {}),
             },
           })),
         ...ranked

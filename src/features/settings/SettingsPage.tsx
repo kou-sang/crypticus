@@ -8,6 +8,7 @@ import { updateSettings, useSettings, type MotionPreference, type ThemePreferenc
 import { playCue } from '../../lib/sound';
 import { cx, errorMessage } from '../../lib/utils';
 import { Button, ErrorBanner, Input, PageHeader } from '../../components/ui';
+import { BackLink } from '../../components/BackLink';
 
 function Row({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
@@ -72,6 +73,7 @@ export default function SettingsPage() {
 
   return (
     <>
+      <BackLink />
       <PageHeader kicker="Configuración" title="Ajustes" />
       <div className="grid max-w-2xl gap-10">
         <section>

@@ -12,6 +12,7 @@ import { cx } from '../../lib/utils';
 import { gameDeadline, rankMetric } from '../../../shared/engine';
 import type { Competition, Participant } from '../../../shared/types';
 import { Badge, EmptyState, PageHeader, PageLoader } from '../../components/ui';
+import { BackLink } from '../../components/BackLink';
 import { ChatPanel } from '../chat/ChatPanel';
 import { BossBar } from './BossBar';
 import { DeviceNotice } from './DeviceNotice';
@@ -57,12 +58,20 @@ export default function CompetitionRoom() {
   const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId }), [competitionId]);
 
   if (competition.loading) return <PageLoader />;
-  if (!comp) return <EmptyState title="Esta competencia no existe o fue cancelada" />;
+  if (!comp)
+    return (
+      <>
+        <BackLink to="/jugar" />
+        <EmptyState title="Esta competencia no existe o fue cancelada" />
+      </>
+    );
 
   const isParticipant = comp.participantIds.includes(profile.uid);
   const canJoin = comp.visibility !== 'friends' || comp.hostId === profile.uid || friendIds.includes(comp.hostId);
   const countdown = isLive && startedAt !== null && !started;
   const ended = live !== null && (live.status === 'finished' || expired);
+  // Durante la partida no se ofrece «Volver»: evita salir por accidente con un toque.
+  const playing = isLive && !ended && isParticipant;
   const total = live
     ? live.config.mode === 'count'
       ? live.config.targetCount
@@ -73,6 +82,7 @@ export default function CompetitionRoom() {
 
   return (
     <>
+      {!playing && <BackLink to="/jugar" label="Volver a Jugar" />}
       <PageHeader kicker={`Anfitrión: ${comp.hostName}`} title={comp.title} />
 
       {/* Barra fija: el tiempo sigue a la vista al hacer scroll o con el teclado del móvil abierto. */}

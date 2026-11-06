@@ -6,6 +6,7 @@ import { AppShell } from './components/AppShell';
 import { GuestOnly, OwnProfileRedirect, RequireAuth } from './components/RequireAuth';
 import { PageLoader } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { UpdateBanner } from './components/UpdateBanner';
 import { LandingPage } from './features/landing/LandingPage';
 import { loaders } from './routes';
 
@@ -24,6 +25,7 @@ export function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <UpdateBanner />
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
             <Routes>

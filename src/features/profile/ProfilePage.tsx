@@ -13,6 +13,7 @@ import type { HistoryEntry, UserProfile } from '../../../shared/types';
 import { RatingChart } from '../../components/RatingChart';
 import { HistoryTable } from '../../components/HistoryTable';
 import { ModeRatings } from '../../components/ModeRatings';
+import { BackLink } from '../../components/BackLink';
 
 const OWN_HISTORY = 50;
 const OTHER_HISTORY = 20;
@@ -45,7 +46,13 @@ export default function ProfilePage() {
   }, [uid, isMe]);
 
   if (user.loading) return <PageLoader />;
-  if (!user.data) return <EmptyState title="Jugador no encontrado" />;
+  if (!user.data)
+    return (
+      <>
+        <BackLink />
+        <EmptyState title="Jugador no encontrado" />
+      </>
+    );
 
   const profile = user.data;
   const relation = all.find((r) => r.id === pairId(me.uid, profile.uid));
@@ -66,6 +73,7 @@ export default function ProfilePage() {
 
   return (
     <>
+      <BackLink />
       <header className="mb-8 flex flex-wrap items-center gap-5 border-b-2 border-ink pb-6">
         <Avatar name={profile.displayName} size="lg" />
         <div className="min-w-0 flex-1">
