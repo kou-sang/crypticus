@@ -1,0 +1,19 @@
+[
+  {
+    "clue": "Ave que oye al revés (3)",
+    "answer": "oye",
+    "difficulty": "facil",
+    "hints": ["Es un anagrama-reverso", "Lee 'oye' de derecha a izquierda"],
+    "explanation": "Ejemplo de formato: reemplazar por cripticos reales."
+  },
+  {
+    "id": "ejemplo-02",
+    "clue": "Pista de ejemplo con enumeración explícita (4,4)",
+    "answer": "cara dura",
+    "enumeration": "(4,4)",
+    "difficulty": "medio",
+    "hints": ["Primera pista", "Segunda pista", "Tercera pista"],
+    "setter": "kou-sang",
+    "tags": ["ejemplo"]
+  }
+]

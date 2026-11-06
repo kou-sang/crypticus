@@ -1,0 +1,44 @@
+// Protocolo WebSocket entre el cliente y el Durable Object de cada competencia.
+import type { LiveState } from './engine';
+import type { Difficulty } from './types';
+
+/** Mensajes cliente -> servidor. `reqId` correlaciona la respuesta. */
+export type ClientMessage =
+  | { type: 'auth'; token: string }
+  | { type: 'answer'; reqId: string; crypticId: string; guess: string }
+  | { type: 'hint'; reqId: string; crypticId: string; reveal: boolean }
+  | { type: 'vote'; reqId: string; tier: Difficulty }
+  | { type: 'extraTime'; reqId: string }
+  | { type: 'skip'; reqId: string }
+  | { type: 'ping' };
+
+export type ActionMessage = Extract<ClientMessage, { reqId: string }>;
+
+export interface AnswerReply {
+  correct: boolean;
+  points: number; // Puntos o daño al jefe
+  finished: boolean;
+  stale: boolean; // Correcta, pero otro ganó la ronda primero
+  explanation?: string | null;
+}
+
+export interface HintReply {
+  hints: string[];
+  remaining: number;
+}
+
+export interface AckReply {
+  ok: true;
+  applied?: boolean;
+}
+
+/** Mensajes servidor -> cliente. El estado completo se difunde tras cada cambio (es pequeño). */
+export type ServerMessage =
+  | { type: 'ready'; uid: string; state: LiveState | null; serverTime: number }
+  | { type: 'state'; state: LiveState }
+  | { type: 'reply'; reqId: string; ok: true; data: AnswerReply | HintReply | AckReply }
+  | { type: 'reply'; reqId: string; ok: false; error: { code: string; message: string } }
+  | { type: 'error'; code: string; message: string }
+  | { type: 'pong'; serverTime: number };
+
+export const MAX_CLIENT_MESSAGE_BYTES = 2048;
