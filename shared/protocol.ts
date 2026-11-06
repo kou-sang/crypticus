@@ -32,10 +32,18 @@ export interface AckReply {
   applied?: boolean;
 }
 
+/** Solución de un criptico, revelada solo cuando ya no se puede responder (ver `revealableIds`). */
+export interface Solution {
+  crypticId: string;
+  answer: string | null;
+  explanation: string | null;
+  solvedBy: string[];
+}
+
 /** Mensajes servidor -> cliente. El estado completo se difunde tras cada cambio (es pequeño). */
 export type ServerMessage =
-  | { type: 'ready'; uid: string; state: LiveState | null; serverTime: number }
-  | { type: 'state'; state: LiveState }
+  | { type: 'ready'; uid: string; state: LiveState | null; solutions: Solution[]; serverTime: number }
+  | { type: 'state'; state: LiveState; solutions: Solution[] }
   | { type: 'reply'; reqId: string; ok: true; data: AnswerReply | HintReply | AckReply }
   | { type: 'reply'; reqId: string; ok: false; error: { code: string; message: string } }
   | { type: 'error'; code: string; message: string }

@@ -152,6 +152,7 @@ export default function SettingsPage() {
           <Button variant="danger" onClick={handleSignOut}>
             Cerrar sesión
           </Button>
+          <p className="mt-6 font-mono text-xs text-muted">Crypticus v{__APP_VERSION__}</p>
         </section>
       </div>
     </>

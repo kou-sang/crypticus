@@ -6,7 +6,7 @@ import { cx, formatClock } from '../../lib/utils';
 export const GameClock = memo(function GameClock({ deadline, offsetMs }: { deadline: number; offsetMs: number }) {
   const remaining = deadline - (useNow(250) + offsetMs);
   return (
-    <div className={cx('font-mono text-4xl font-semibold tabular-nums', remaining < 30_000 && 'text-accent')}>
+    <div className={cx('font-mono text-3xl font-semibold tabular-nums md:text-4xl', remaining < 30_000 && 'text-accent')}>
       {formatClock(remaining)}
     </div>
   );

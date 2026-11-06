@@ -27,11 +27,12 @@ import {
   type ClientMessage,
   type HintReply,
   type ServerMessage,
+  type Solution,
 } from '../shared/protocol';
 import { verifyFirebaseToken } from './auth';
 import { AppError } from './errors';
 import { FirestoreRest, type Write } from './firestore';
-import { buildCatalog, getCrypticSecret } from './secrets';
+import { buildCatalog, getCrypticSecret, solutionsFor } from './secrets';
 import type { Env } from './env';
 
 export interface StartInput {
@@ -92,6 +93,15 @@ export class CompetitionRoom extends DurableObject<Env> {
     });
     await this.commit();
     return { startedAt: this.state.startedAt, endsAt: this.state.endsAt };
+  }
+
+  /** Soluciones de una partida terminada, solo para sus participantes. */
+  async solutions(uid: string): Promise<Solution[]> {
+    const state = this.state;
+    if (!state) throw new Error('not_found');
+    if (!state.participants[uid]) throw new Error('not_participant');
+    if (state.status !== 'finished') throw new Error('not_finished');
+    return solutionsFor(state);
   }
 
   // ---------- WebSocket ----------
@@ -166,7 +176,8 @@ export class CompetitionRoom extends DurableObject<Env> {
     try {
       const user = await verifyFirebaseToken(typeof token === 'string' ? token : '', this.env.FIREBASE_PROJECT_ID);
       ws.serializeAttachment({ uid: user.uid } satisfies SocketAttachment);
-      this.send(ws, { type: 'ready', uid: user.uid, state: this.state, serverTime: Date.now() });
+      const solutions = this.state ? solutionsFor(this.state) : [];
+      this.send(ws, { type: 'ready', uid: user.uid, state: this.state, solutions, serverTime: Date.now() });
     } catch (error) {
       this.send(ws, { type: 'error', code: 'unauthenticated', message: describeError(error).message });
       ws.close(4401, 'unauthenticated');
@@ -248,7 +259,7 @@ export class CompetitionRoom extends DurableObject<Env> {
     if (!state) return;
     await this.ctx.storage.put(STATE_KEY, state);
     if (state.status === 'live') await this.ctx.storage.setAlarm(nextDeadline(state));
-    this.broadcast({ type: 'state', state });
+    this.broadcast({ type: 'state', state, solutions: solutionsFor(state) });
   }
 
   /** Escribe resultados, rating y estadísticas en Firestore. Reintenta por alarma si falla. */

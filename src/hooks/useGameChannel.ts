@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { GameChannel, type ConnectionState } from '../lib/gameChannel';
 import { ApiError } from '../lib/api';
 import type { LiveState } from '../../shared/engine';
-import type { AckReply, AnswerReply, HintReply } from '../../shared/protocol';
+import type { AckReply, AnswerReply, HintReply, Solution } from '../../shared/protocol';
 import type { Difficulty } from '../../shared/types';
 
 /** Acciones de juego expuestas a la UI. */
@@ -19,6 +19,7 @@ export interface GameChannelState {
   state: LiveState | null;
   connection: ConnectionState;
   clockOffsetMs: number; // serverTime - Date.now() al conectar
+  solutions: Solution[]; // Rondas cerradas (y todo, al terminar)
   actions: GameActions;
 }
 
@@ -29,15 +30,21 @@ export function useGameChannel(competitionId: string, enabled: boolean): GameCha
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [state, setState] = useState<LiveState | null>(null);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
+  const [solutions, setSolutions] = useState<Solution[]>([]);
 
   useEffect(() => {
     if (!enabled) return;
     const instance = new GameChannel(competitionId, {
-      onReady: (next, serverTime) => {
+      onReady: (next, revealed, serverTime) => {
         setState(next);
+        setSolutions(revealed);
         setClockOffsetMs(serverTime - Date.now());
       },
-      onState: setState,
+      onState: (next, revealed) => {
+        setState(next);
+        // Evita re-render si no cambió nada revelado (lo habitual durante una ronda).
+        setSolutions((prev) => (prev.length === revealed.length ? prev : revealed));
+      },
       onConnection: setConnection,
     });
     instance.connect();
@@ -62,5 +69,5 @@ export function useGameChannel(competitionId: string, enabled: boolean): GameCha
     [channel],
   );
 
-  return { state, connection, clockOffsetMs, actions };
+  return { state, connection, clockOffsetMs, solutions, actions };
 }

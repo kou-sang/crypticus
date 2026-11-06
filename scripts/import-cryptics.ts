@@ -6,7 +6,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { deriveEnumeration, normalizeAnswer } from '../shared/answer.js';
+import { answerLengthFromEnumeration, deriveEnumeration, normalizeAnswer, splitClue } from '../shared/answer.js';
 import { hashAnswer } from '../shared/answerHash.js';
 import { parseDifficulty } from '../shared/scoring.js';
 import type { CrypticImportItem, CrypticPublic, CrypticSecret } from '../shared/types.js';
@@ -34,13 +34,19 @@ function validateItem(item: unknown, index: number): ValidItem {
   }
   const tier = parseDifficulty(raw.difficulty);
   if (!tier) throw new Error(`#${index}: "difficulty" debe ser fácil, medio o difícil`);
+  // La enumeración escrita en el enunciado se separa: la UI la muestra aparte.
+  const { text: clue, enumeration: clueEnumeration } = splitClue(raw.clue);
+  const enumeration = raw.enumeration ?? clueEnumeration ?? deriveEnumeration(raw.answer);
+  if (answerLengthFromEnumeration(enumeration) !== normalizeAnswer(raw.answer).length) {
+    throw new Error(`#${index}: la enumeración ${enumeration} no coincide con "${raw.answer}"`);
+  }
   const hints = Array.isArray(raw.hints) ? raw.hints.filter((h) => typeof h === 'string' && h.trim()) : [];
 
   return {
     id: stableId(raw),
     publicData: {
-      clue: raw.clue.trim(),
-      enumeration: raw.enumeration ?? deriveEnumeration(raw.answer),
+      clue,
+      enumeration,
       tier,
       hintCount: hints.length,
       rand: Math.random(), // Para muestreo aleatorio eficiente (where rand >= x).
@@ -94,6 +100,7 @@ async function main(): Promise<void> {
       hash: await hashAnswer(hmacKey, item.id, item.secretData.answer),
       tier: item.publicData.tier,
       hints: item.secretData.hints,
+      answer: item.secretData.answer,
       ...(item.secretData.explanation ? { explanation: item.secretData.explanation } : {}),
     };
   }

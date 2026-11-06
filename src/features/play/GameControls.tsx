@@ -90,7 +90,7 @@ export function SharedRequests({ state, uid, actions }: { state: LiveState; uid:
       )}
       {showSkip && (
         <Button variant={skipAsked ? 'primary' : 'ghost'} loading={busy === 'skip'} onClick={() => run('skip', actions.skip)}>
-          Pasar · {state.skipVotes.length}/{total}
+          {skipAsked ? 'Pediste pasar' : 'Votar pasar'} · {state.skipVotes.length}/{total}
         </Button>
       )}
       <ErrorBanner error={error} />

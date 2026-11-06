@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Versión visible en Ajustes: permite comprobar qué build está desplegado.
+  define: { __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev') },
   server: {
     // En desarrollo, /api (HTTP y WebSocket) va a `wrangler dev`.
     proxy: { '/api': { target: 'http://127.0.0.1:8787', ws: true, changeOrigin: true } },

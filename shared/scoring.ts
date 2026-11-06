@@ -83,7 +83,7 @@ export const BOSS_LABELS: Record<BossLevel, string> = { normal: 'Normal', hard: 
 // ---------- Puntaje ----------
 
 const BASE_POINTS = 100;
-const HINT_PENALTY = 30;
+export const HINT_PENALTY = 30;
 const MIN_POINTS = 10;
 const MAX_SPEED_BONUS = 100;
 const BOSS_BASE_DAMAGE = 100;

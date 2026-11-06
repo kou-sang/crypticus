@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answerLengthFromEnumeration, deriveEnumeration, isCorrectAnswer, normalizeAnswer } from './answer';
+import { answerLengthFromEnumeration, deriveEnumeration, isCorrectAnswer, normalizeAnswer, splitClue } from './answer';
 
 describe('normalizeAnswer', () => {
   it('ignora acentos, mayúsculas, espacios y signos', () => {
@@ -24,5 +24,16 @@ describe('deriveEnumeration', () => {
   });
   it('calcula la longitud total', () => {
     expect(answerLengthFromEnumeration('(4-3-4)')).toBe(11);
+  });
+});
+
+describe('splitClue', () => {
+  it('separa la enumeración final', () => {
+    expect(splitClue('Hueso del brazo que transmite (5)')).toEqual({ text: 'Hueso del brazo que transmite', enumeration: '(5)' });
+    expect(splitClue('Cara dura (4, 4) ')).toEqual({ text: 'Cara dura', enumeration: '(4,4)' });
+    expect(splitClue('Uno-dos (3-3)')).toEqual({ text: 'Uno-dos', enumeration: '(3-3)' });
+  });
+  it('deja intacto un enunciado sin enumeración', () => {
+    expect(splitClue('Sin números (al final)')).toEqual({ text: 'Sin números (al final)', enumeration: null });
   });
 });
