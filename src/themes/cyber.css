@@ -38,7 +38,8 @@
 [data-skin='cyber'] .font-display {
   font-synthesis: none;
   font-weight: 400;
-  letter-spacing: 0.02em;
+  /* El espaciado ya viene ajustado en el archivo (letras que se tocan); sin tracking extra. */
+  letter-spacing: 0;
 }
 
 /* Espacio virtual: neblina de neón y un suelo de rejilla que gira hacia la sección elegida. */
@@ -67,20 +68,32 @@
   right: -60%;
   top: 58%;
   height: 90%;
+  overflow: hidden;
+  transform: perspective(420px) rotateX(64deg);
+  transform-origin: top center;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5) 45%, transparent 85%);
+}
+/*
+ * La rejilla se mueve con transform (composición pura). Antes se animaba background-position,
+ * que repinta toda la superficie en cada cuadro durante la partida.
+ * Desplazamiento lateral por sección: --vr-index (con transición); avance continuo: animación en Y de un tile.
+ */
+.cyber-floor::before {
+  content: '';
+  position: absolute;
+  inset: -64px -512px 0;
   background-image:
     linear-gradient(rgba(0, 225, 255, 0.38) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 225, 255, 0.38) 1px, transparent 1px);
   background-size: 64px 64px;
-  background-position-x: calc(var(--vr-index, 0) * -220px);
-  transform: perspective(420px) rotateX(64deg);
-  transform-origin: top center;
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5) 45%, transparent 85%);
-  transition: background-position-x 750ms cubic-bezier(.2,.7,.2,1);
+  translate: calc(var(--vr-index, 0) * -96px) 0;
+  transition: translate 750ms cubic-bezier(.2,.7,.2,1);
   animation: floor-drift 7s linear infinite;
+  will-change: transform;
 }
 @keyframes floor-drift {
-  from { background-position-y: 0; }
-  to { background-position-y: 64px; }
+  from { transform: translateY(0); }
+  to { transform: translateY(64px); }
 }
 
 /* Lente del visor: viñeta, líneas de barrido y esquinas del HUD. */
@@ -120,12 +133,12 @@
   transform-origin: 50% 40%;
 }
 @keyframes vr-turn {
+  /* Sin filter (blur/brillo) sobre toda la pantalla: solo opacity y transform, que no repintan. */
   from {
     opacity: 0;
-    filter: blur(3px) brightness(1.6);
     transform: translateX(calc(var(--vr-dir, 0) * 14vw)) rotateY(calc(var(--vr-dir, 0) * -20deg)) scale(0.95);
   }
-  to { opacity: 1; filter: none; transform: none; }
+  to { opacity: 1; transform: none; }
 }
 [data-skin='cyber'] .page-enter h1 { animation: glitch-in 520ms steps(1) both; }
 @keyframes glitch-in {
@@ -133,9 +146,14 @@
   20% { clip-path: inset(40% 0 20% 0); transform: translateX(5px); }
   40% { clip-path: inset(10% 0 55% 0); transform: translateX(-3px); }
   60% { clip-path: inset(0 0 0 0); transform: translateX(2px); text-shadow: 1px 0 var(--accent), -1px 0 var(--cyan); }
-  100% { clip-path: none; transform: none; text-shadow: 0 0 18px rgba(0, 225, 255, 0.35); }
+  100% { clip-path: none; transform: none; text-shadow: -2px 2px 0 var(--cyan), 0 0 18px rgba(245, 228, 0, 0.25); }
 }
-[data-skin='cyber'] h1 { text-shadow: 0 0 18px rgba(0, 225, 255, 0.35); letter-spacing: 0.02em; }
+/* Títulos: amarillo neón con un eco cian desplazado, como la rotulación de referencia. */
+[data-skin='cyber'] h1 {
+  color: var(--neon);
+  letter-spacing: 0;
+  text-shadow: -2px 2px 0 var(--cyan), 0 0 18px rgba(245, 228, 0, 0.25);
+}
 
 /* Cristal translúcido para barras, tarjetas y ventanas. */
 [data-skin='cyber'] .app-header,

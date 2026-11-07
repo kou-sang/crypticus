@@ -26,37 +26,48 @@
 /* ---------- Escena ---------- */
 
 /*
- * Más grande que la pantalla para poder desplazarse sin mostrar bordes:
- * cada sección del menú mueve el muro (--vr-index) y el puntero suma un leve paralaje (--px, --py).
+ * Más grande que la pantalla para poder desplazarse sin mostrar bordes.
+ * Rendimiento: todo lo que se mueve es transform u opacity en capas propias (solo composición, sin repintar).
+ * - .crypt-scene: cada sección del menú desplaza el muro (--vr-index, con transición CSS).
+ * - .crypt-parallax: paralaje con el puntero; cryptLight.ts escribe su transform directamente.
  */
 .crypt-scene {
   position: absolute;
   inset: -5vh -12vw;
-  transform: translate3d(calc((1.5 - var(--vr-index, 1)) * 3vw + var(--px, 0px)), var(--py, 0px), 0);
+  transform: translate3d(calc((1.5 - var(--vr-index, 1)) * 3vw), 0, 0);
   transition: transform 900ms cubic-bezier(.2,.7,.2,1);
   will-change: transform;
 }
+.crypt-parallax {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  opacity: 0;
+  transition: opacity 420ms ease-out;
+}
+/* La escena aparece cuando el muro ya está decodificado (SkinBackdrop). */
+.is-ready > .crypt-parallax { opacity: 1; }
 .crypt-wall {
   position: absolute;
   inset: 0;
   background-color: #0b0907;
-  background-image: url('/themes/crypt/wall.webp'), url('/themes/crypt/wall-fallback.svg');
-  background-size: cover, 480px 360px;
-  background-position: center, center;
-  background-repeat: no-repeat, repeat;
+  background-image: url('/themes/crypt/wall.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 @media (orientation: portrait) {
   .crypt-wall {
-    background-image: url('/themes/crypt/wall-mobile.webp'), url('/themes/crypt/wall-fallback.svg');
-    background-size: cover, 360px 270px;
+    background-image: url('/themes/crypt/wall-mobile.webp');
   }
 }
 
-/* Penumbra: más densa cuando el viento apaga las llamas (--ambient la calcula cryptLight.ts). */
+/* Penumbra: más densa cuando el viento apaga las llamas (cryptLight.ts escribe su opacidad). */
 .crypt-shade {
   position: absolute;
   inset: 0;
-  opacity: calc(0.78 + (1 - var(--ambient, 0.85)) * 0.9);
+  opacity: 0.9;
+  will-change: opacity;
   background:
     radial-gradient(ellipse 70% 62% at 50% 44%, transparent 18%, rgba(5, 4, 3, 0.6) 70%, rgba(3, 2, 2, 0.92) 100%),
     linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent 24%, transparent 72%, rgba(0, 0, 0, 0.6));
@@ -89,10 +100,10 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 14px 12px rgba(0, 0, 0, 0.75)) brightness(calc(0.75 + var(--f, 0.85) * 0.3));
+  filter: drop-shadow(0 14px 12px rgba(0, 0, 0, 0.75)); /* Fijo: un filtro que cambia repinta en cada cuadro. */
 }
 
-/* Luz sobre el muro: se inclina con el viento (--shift) y respira con la llama (--f). */
+/* Luz sobre el muro: se inclina con el viento y respira con la llama (opacity y transform desde cryptLight.ts). */
 .torch-light {
   position: absolute;
   left: 50%;
@@ -101,16 +112,16 @@
   height: 760px;
   margin: -380px 0 0 -380px;
   border-radius: 50%;
-  mix-blend-mode: screen;
-  opacity: calc(var(--f, 0.85) * 0.95);
-  transform: translateX(var(--shift, 0px)) scale(calc(0.86 + var(--f, 0.85) * 0.18));
-  background: radial-gradient(circle, rgba(255, 176, 72, 0.36) 0%, rgba(242, 130, 46, 0.15) 26%, rgba(200, 90, 30, 0.05) 46%, transparent 64%);
+  /* Sin mix-blend-mode: obligaba a recomponer el muro detrás en cada cuadro. Un degradado cálido translúcido se ve igual. */
+  opacity: 0.8;
+  will-change: opacity, transform;
+  background: radial-gradient(circle, rgba(255, 170, 70, 0.38) 0%, rgba(242, 130, 46, 0.16) 26%, rgba(200, 90, 30, 0.055) 46%, transparent 64%);
 }
 @media (max-width: 767px) {
   .torch-light { width: 900px; height: 900px; margin: -450px 0 0 -450px; }
 }
 
-/* Llama viva sobre la canasta del sprite: se dobla con el viento (--lean) y cambia de altura con --f. */
+/* Llama viva sobre la canasta del sprite: se dobla con el viento y cambia de altura (transform desde cryptLight.ts). */
 .torch-flame {
   position: absolute;
   left: 50%;
@@ -119,8 +130,7 @@
   height: 84px;
   margin-left: -27px;
   transform-origin: 50% 100%;
-  transform: skewX(var(--lean, 0deg)) scaleY(calc(0.72 + var(--f, 0.85) * 0.4)) scaleX(calc(1.08 - var(--f, 0.85) * 0.12));
-  mix-blend-mode: screen;
+  will-change: transform;
 }
 .torch-flame::before,
 .torch-flame::after {
@@ -128,8 +138,8 @@
   position: absolute;
   inset: 0;
   border-radius: 50% 50% 44% 44% / 64% 64% 36% 36%;
-  background: radial-gradient(ellipse 50% 62% at 50% 80%, #fff4cf 0%, #ffc457 24%, #f2701f 52%, rgba(190, 50, 15, 0) 74%);
-  filter: blur(1.2px);
+  /* Borde suave dentro del degradado (sin filter: blur). */
+  background: radial-gradient(ellipse 50% 62% at 50% 80%, #fff4cf 0%, #ffc457 22%, #f2701f 48%, rgba(220, 80, 20, 0.35) 62%, rgba(190, 50, 15, 0) 76%);
   animation: flame-lick 0.9s ease-in-out infinite alternate;
 }
 .torch-flame::after {
@@ -167,7 +177,7 @@
 @keyframes spark {
   0% { opacity: 0; transform: translate(0, 0); }
   15% { opacity: 1; }
-  100% { opacity: 0; transform: translate(calc(var(--shift, 0px) * 0.6 + 6px), -90px); }
+  100% { opacity: 0; transform: translate(8px, -90px); }
 }
 
 /* ---------- Pergamino: paneles de contenido, ventanas, ajustes y avisos ---------- */
@@ -190,15 +200,16 @@
   color: var(--ink);
   border-color: #6f5432;
   background-color: #c3ab7d;
+  /* Textura en un tile WebP de 4 KB (antes, ruido SVG que el navegador generaba al pintar: lento en celulares). */
   background-image:
-    radial-gradient(ellipse 80% 70% at 50% 40%, rgba(255, 244, 210, 0.38), transparent 75%),
-    repeating-linear-gradient(0deg, rgba(95, 62, 22, 0.05) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(90deg, rgba(95, 62, 22, 0.035) 0 2px, transparent 2px 9px),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.035' numOctaves='4' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 .36 0 0 0 0 .24 0 0 0 0 .1 0 0 0 .55 -.12'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23p)'/%3E%3C/svg%3E");
+    radial-gradient(ellipse 80% 70% at 50% 40%, rgba(255, 244, 210, 0.32), transparent 75%),
+    url('/themes/crypt/parchment.webp');
+  background-size: auto, 256px 256px;
+  /* Bordes quemados con sombras internas cortas: las largas cuestan en cada repintado (el reloj late adentro). */
   box-shadow:
-    inset 0 0 70px rgba(80, 45, 12, 0.55),
-    inset 0 0 14px rgba(50, 25, 6, 0.6),
-    0 22px 60px rgba(0, 0, 0, 0.7);
+    inset 0 0 28px rgba(80, 45, 12, 0.5),
+    inset 0 0 6px rgba(50, 25, 6, 0.6),
+    0 18px 40px rgba(0, 0, 0, 0.65);
 }
 [data-skin='crypt'] .page {
   position: relative;
