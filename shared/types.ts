@@ -25,6 +25,7 @@ export interface DuelConfig {
   hp: number; // Vida inicial de cada jugador.
   damage: DuelDamage; // El daño depende de la dificultad o de la velocidad.
   combo?: boolean; // Aciertos seguidos golpean más fuerte. Ausente (salas previas a v0.9) = activo.
+  teams?: boolean; // 2 vs 2: vida compartida por equipo; cualquiera del equipo puede responder.
 }
 
 export interface RoyaleConfig {
@@ -135,11 +136,13 @@ export interface Competition extends CompetitionConfig {
   rematchOf?: string; // Sala de revancha: partida de origen.
   invitedNames?: Record<string, string>; // Sala de revancha: nombres de los invitados (para mostrar quién falta).
   declinedIds?: string[]; // Sala de revancha: invitados que la rechazaron.
+  teams?: Record<string, 0 | 1>; // Duel 2 vs 2: equipo elegido por cada jugador en la sala.
 }
 
 export interface Participant {
   uid: string;
   displayName: string;
+  team?: 0 | 1; // Duel 2 vs 2.
   score: number; // En 'boss' = daño infligido.
   solvedIds: string[];
   hintsByClue: Record<string, number>;

@@ -5,6 +5,7 @@ import { FirestoreRest } from './firestore';
 import type { Env } from './env';
 import type { Competition, CompetitionConfig, Difficulty, Participant } from '../shared/types';
 import { mergeLastSeen, selectCryptics, selectTiebreakers } from '../shared/selection';
+import { assignTeams, isTeamDuel, startBlocker } from '../shared/teams';
 import { ROYALE_TIER_COUNTS } from '../shared/gameModes';
 import { catalogByTier, catalogTiebreak } from './secrets';
 import { validateConfig } from '../shared/scoring';
@@ -88,6 +89,16 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   if (participants.length < minPlayers) {
     throw new AppError(409, 'not_enough_players', `Se necesitan al menos ${minPlayers} jugadores.`);
   }
+  // Duel: cantidad exacta (1 vs 1 o 2 vs 2). Sin esto se podía jugar solo y el daño era 0.
+  const blocker = startBlocker(competition, participants.map((p) => p.id));
+  if (blocker) throw new AppError(409, 'bad_players', blocker);
+  // 2 vs 2: respeta lo elegido en la sala y completa por orden de llegada.
+  const teams = isTeamDuel(competition)
+    ? assignTeams(
+        [...participants].sort((a, b) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0)).map((p) => p.id),
+        competition.teams ?? {},
+      )
+    : null;
 
   const config: CompetitionConfig = {
     mode: competition.mode,
@@ -109,7 +120,14 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
     ...(competition.game ? { game: competition.game } : {}),
     ...(typeof competition.intervalSec === 'number' ? { intervalSec: competition.intervalSec } : {}),
     ...(competition.duel
-      ? { duel: { hp: Number(competition.duel.hp), damage: competition.duel.damage, combo: competition.duel.combo !== false } }
+      ? {
+          duel: {
+            hp: Number(competition.duel.hp),
+            damage: competition.duel.damage,
+            combo: competition.duel.combo !== false,
+            ...(competition.duel.teams === true ? { teams: true } : {}),
+          },
+        }
       : {}),
     ...(competition.royale
       ? { royale: { baseSec: Number(competition.royale.baseSec), incrementSec: Number(competition.royale.incrementSec) } }
@@ -132,7 +150,7 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
       competitionId,
       title: competition.title ?? '',
       config,
-      participants: participants.map((p) => ({ ...p, uid: p.id })),
+      participants: participants.map((p) => ({ ...p, uid: p.id, ...(teams ? { team: teams[p.id] } : {}) })),
       crypticIds,
       pool,
       tiebreakIds,

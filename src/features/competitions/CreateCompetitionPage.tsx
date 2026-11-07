@@ -19,6 +19,7 @@ import {
   ROYALE_PRESETS,
   SUDDEN_DEATH_OPTIONS,
   SURRENDER_USES_OPTIONS,
+  type DuelFormat,
   type ModeSettings,
 } from '../../../shared/gameModes';
 import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, LIMITS, validateConfig } from '../../../shared/scoring';
@@ -385,8 +386,22 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
   const [custom, setCustom] = useState(!preset);
   return (
     <>
+      <Option
+        title="Formato"
+        info="1 vs 1: cada uno con su vida. 2 vs 2: cada equipo comparte una sola barra de vida y cualquiera de los dos puede responder; el acierto de uno golpea por el equipo."
+      >
+        <Chips<DuelFormat>
+          label="Formato"
+          value={settings.format}
+          options={[
+            ['1v1', '1 vs 1'],
+            ['2v2', '2 vs 2'],
+          ]}
+          onChange={(format) => update({ format })}
+        />
+      </Option>
       <section className="py-2">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Vida</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">{settings.format === '2v2' ? 'Vida por equipo' : 'Vida'}</p>
         <div className="flex flex-wrap items-center gap-2">
           <Chips<number>
             label="Vida"
@@ -449,9 +464,9 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
       <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option
         title="Cómo se juega"
-        info="Solo 2 jugadores, sin pistas. Ambos ven el mismo criptico (dificultad al azar). El primero en acertar lo cierra al instante y se muestran respuesta y explicación durante 3 segundos."
+        info="Sin pistas. Todos ven el mismo criptico (dificultad al azar). El primero en acertar lo cierra al instante y se muestran respuesta y explicación durante 3 segundos. La partida empieza solo con la sala completa: 2 jugadores en 1 vs 1, 4 en 2 vs 2."
       >
-        <span className="text-sm text-muted">1 contra 1</span>
+        <span className="text-sm text-muted">{settings.format === '2v2' ? '2 contra 2' : '1 contra 1'}</span>
       </Option>
     </>
   );

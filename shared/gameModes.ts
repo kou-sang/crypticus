@@ -45,7 +45,10 @@ export interface DuelSettings {
   cooldownSec: number;
   combo: boolean;
   surrender: { enabled: boolean; maxUses: number }; // En vez de saltear: rendirse, como en Race.
+  format: DuelFormat;
 }
+
+export type DuelFormat = '1v1' | '2v2';
 
 export interface ModeSettings {
   game: GameMode;
@@ -81,7 +84,7 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
     cooldownSec: 2,
   },
   royale: { baseSec: 120, incrementSec: 5, cooldownSec: 1 },
-  duel: { hp: 150, damage: 'difficulty', comeback: 'low', cooldownSec: 2, combo: true, surrender: { enabled: true, maxUses: 2 } },
+  duel: { hp: 150, damage: 'difficulty', comeback: 'low', cooldownSec: 2, combo: true, surrender: { enabled: true, maxUses: 2 }, format: '1v1' },
 };
 
 export const MODE_MAX_PLAYERS: Record<GameMode, number> = { race: 8, royale: 8, duel: 2, boss: 4 };
@@ -120,7 +123,8 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
   }
 
   if (settings.game === 'duel') {
-    const { hp, damage, comeback, combo, surrender } = settings.duel;
+    const { hp, damage, comeback, combo, surrender, format } = settings.duel;
+    const teams = format === '2v2';
     return {
       config: {
         ...base,
@@ -131,11 +135,11 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
         intervalSec: ROUND_INTERVAL_SEC,
         difficultyVote: false,
         comeback,
-        duel: { hp, damage, combo },
+        duel: { hp, damage, combo, ...(teams ? { teams: true } : {}) },
         surrender,
         cooldownSec: settings.duel.cooldownSec,
       },
-      maxPlayers: MODE_MAX_PLAYERS.duel,
+      maxPlayers: teams ? 4 : MODE_MAX_PLAYERS.duel,
       clueCount: 30,
       title: `Duel ${hp} HP`,
     };
@@ -203,6 +207,7 @@ export function settingsFromConfig(config: CompetitionConfig): ModeSettings {
           cooldownSec: config.cooldownSec ?? d.duel.cooldownSec,
           combo: config.duel.combo !== false,
           surrender: config.surrender ? { ...config.surrender } : { ...d.duel.surrender, enabled: false },
+          format: config.duel.teams ? '2v2' : '1v1',
         }
       : d.duel,
   };
