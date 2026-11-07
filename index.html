@@ -8,6 +8,15 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
     <title>Crypticus · Competencias de cripticos</title>
+    <script>
+      // Tema antes del primer pintado (evita un destello del tema Normal). La app lo vuelve a aplicar al iniciar.
+      try {
+        var s = JSON.parse(localStorage.getItem('crypticus.settings.v1') || '{}');
+        var r = document.documentElement;
+        if (s.skin === 'medieval' || s.skin === 'cyber') r.setAttribute('data-skin', s.skin);
+        if (s.theme === 'light' || s.theme === 'dark') r.setAttribute('data-theme', s.theme);
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

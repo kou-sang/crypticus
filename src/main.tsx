@@ -6,8 +6,12 @@ import '@fontsource-variable/jetbrains-mono';
 import './index.css';
 import { App } from './App';
 import { applyDocumentSettings } from './lib/settings';
+import { installUiSounds } from './lib/uiSounds';
+import { loadSkinFonts } from './themes/fonts';
 
 applyDocumentSettings();
+installUiSounds();
+loadSkinFonts();
 
 const container = document.getElementById('root');
 if (!container) throw new Error('No se encontró #root');
