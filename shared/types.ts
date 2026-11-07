@@ -25,15 +25,15 @@ export interface DuelConfig {
   hp: number; // Vida inicial de cada jugador.
   damage: DuelDamage; // El daño depende de la dificultad o de la velocidad.
   combo?: boolean; // Aciertos seguidos golpean más fuerte. Ausente (salas previas a v0.9) = activo.
+  teams?: boolean; // 2 vs 2: vida compartida por equipo; cualquiera del equipo puede responder.
 }
 
 export interface RoyaleConfig {
   baseSec: number; // Tiempo inicial del reloj de cada jugador.
   incrementSec: number; // Segundos que suma cada acierto.
+  skips?: number; // Saltos permitidos por jugador (0 = no se saltea). Cada uno resta tiempo del reloj.
 }
 
-/** Cómo se puntúa cada criptico resuelto (modos competitivos). */
-export type ScoringRule = 'standard' | 'fewestHints' | 'speed';
 
 /** Cómo se reparten los cripticos. */
 export type GameFlow =
@@ -47,15 +47,8 @@ export type CompetitionStatus = 'lobby' | 'live' | 'finished';
 export type DeviceKind = 'mobile' | 'desktop';
 export type CompetitionVisibility = 'public' | 'friends' | 'private';
 
-export interface ExtraTimeConfig {
-  enabled: boolean;
-  seconds: number; // Segundos añadidos por uso.
-  maxUses: number;
-}
-
 export interface CompetitionConfig {
   mode: CompetitionMode;
-  scoring: ScoringRule;
   flow: GameFlow;
   durationSec: number; // Reloj de la partida (en 'count' actúa como tope).
   targetCount: number; // Meta en 'count'.
@@ -63,12 +56,10 @@ export interface CompetitionConfig {
   difficultyVote: boolean; // Solo 'rounds': se vota la dificultad del siguiente.
   rivalCountdownSec: number; // Solo 'rounds': tras el primer acierto, segundos para que el resto acierte (0 = cierra al instante).
   comeback: ComebackLevel; // Bonus proporcional para quien va perdiendo.
-  extraTime: ExtraTimeConfig;
   bossLevel: BossLevel;
   maxHintsPerClue: number;
-  wrongPenalty: number; // Puntos restados por respuesta incorrecta.
+  hintsPerGame?: number; // Tope de pistas por jugador en toda la partida (Race). Ausente = sin tope.
   tierMix: TierMix; // Solo 'free': proporción/orden de dificultades.
-  hideScoreboard: boolean; // Puntajes ocultos hasta el final.
   // ---- v0.6: modos de juego (opcionales para compatibilidad con partidas anteriores) ----
   game?: GameMode;
   intervalSec?: number; // 'rounds': pausa entre cripticos (se revela la solución anterior).
@@ -115,6 +106,7 @@ export interface CrypticImportItem {
 export interface Competition extends CompetitionConfig {
   id: string;
   title: string;
+  code?: string; // 4 letras (v1.0+): entrar con /s/CODE o desde Jugar. Salas anteriores no lo tienen.
   hostId: string;
   hostName: string;
   status: CompetitionStatus;
@@ -134,11 +126,13 @@ export interface Competition extends CompetitionConfig {
   rematchOf?: string; // Sala de revancha: partida de origen.
   invitedNames?: Record<string, string>; // Sala de revancha: nombres de los invitados (para mostrar quién falta).
   declinedIds?: string[]; // Sala de revancha: invitados que la rechazaron.
+  teams?: Record<string, 0 | 1>; // Duel 2 vs 2: equipo elegido por cada jugador en la sala.
 }
 
 export interface Participant {
   uid: string;
   displayName: string;
+  team?: 0 | 1; // Duel 2 vs 2.
   score: number; // En 'boss' = daño infligido.
   solvedIds: string[];
   hintsByClue: Record<string, number>;
@@ -158,6 +152,7 @@ export interface Participant {
   // ---- Secuencial (Race Pacífico, Royale) ----
   nextOpensAt?: number; // El criptico en `cursor` no se muestra ni se puede responder antes.
   surrenders?: number; // Rendiciones usadas.
+  skipsUsed?: number; // Royale: saltos usados.
   tiebreakWon?: boolean; // Ganó la muerte súbita de desempate.
 }
 
@@ -177,7 +172,7 @@ export interface UserProfile {
   uid: string;
   displayName: string;
   handle: string;
-  rating: number;
+  rating?: number; // Rating general: obsoleto desde v0.12 (el Elo es por modo). Cuentas antiguas lo conservan.
   stats: { played: number; wins: number; solved: number; hintsUsed: number };
   modeStats?: Partial<Record<RankedMode, ModeStats>>;
   createdAt: number;
@@ -203,8 +198,9 @@ export interface HistoryEntry {
   won: boolean;
   outcome?: 'win' | 'loss' | 'draw';
   endReason: string | null;
-  ratingDelta: number;
-  ratingAfter: number;
+  ratingDelta: number; // Cambio de Elo en esta partida (desde v0.12, del modo; antes, del rating general).
+  ratingAfter?: number; // Rating general tras la partida (solo partidas anteriores a v0.12).
   /** Elo del modo (Race, Royale o Duel) tras la partida. Solo en partidas puntuables de 2 o más. */
   modeRatingAfter?: number;
+  modeRatingDelta?: number; // Cambio del Elo del modo en esta partida.
 }

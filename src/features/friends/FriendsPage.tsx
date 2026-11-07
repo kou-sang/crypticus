@@ -22,7 +22,7 @@ import { ModeRatings } from '../../components/ModeRatings';
 import { describeMode } from '../competitions/CompetitionCard';
 
 const challengeLink = (user: UserProfile) =>
-  `/jugar/nueva?rival=${encodeURIComponent(user.uid)}&name=${encodeURIComponent(user.displayName)}`;
+  `/jugar?crear=1&rival=${encodeURIComponent(user.uid)}&name=${encodeURIComponent(user.displayName)}`;
 
 function PersonRow({ profile, children }: { profile: UserProfile | undefined; children?: ReactNode }) {
   return (

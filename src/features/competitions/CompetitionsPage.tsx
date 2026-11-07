@@ -1,21 +1,80 @@
-// Listado de competencias abiertas: públicas y de amigos.
-import { useState } from 'react';
-import { Link } from 'react-router';
+// Listado de salas abiertas (públicas y de amigos), creación rápida y entrada con código de 4 letras.
+// ?crear=1 abre la creación; con &rival=uid&name=… crea un desafío privado.
+import { useState, type FormEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { collection, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
 import { useLiveQuery } from '../../hooks/useFirestore';
 import { useFriends } from '../../hooks/useFriends';
 import type { Competition } from '../../../shared/types';
-import { EmptyState, ErrorBanner, PageHeader, Spinner } from '../../components/ui';
-import { cx } from '../../lib/utils';
+import { Button, EmptyState, ErrorBanner, PageHeader, Spinner } from '../../components/ui';
+import { cx, errorMessage } from '../../lib/utils';
+import { findOpenRoomByCode } from '../../lib/repo';
+import { normalizeRoomCode, ROOM_CODE_LENGTH } from '../../../shared/roomCode';
 import { CompetitionCard } from './CompetitionCard';
+import { CreateRoomDialog } from './CreateRoomDialog';
+
+/** Entrar a una sala (incluidas las privadas) escribiendo su código. */
+function JoinByCode() {
+  const navigate = useNavigate();
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const code = normalizeRoomCode(value);
+    if (!code) return setError(`El código tiene ${ROOM_CODE_LENGTH} letras.`);
+    setBusy(true);
+    setError(null);
+    try {
+      const room = await findOpenRoomByCode(code);
+      if (!room) {
+        setError(`No hay ninguna sala abierta con el código ${code}.`);
+        return;
+      }
+      navigate(`/c/${room.id}`);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-1">
+      <div className="flex">
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value.toUpperCase().replace(/[^A-Za-z]/g, '').slice(0, ROOM_CODE_LENGTH))}
+          placeholder="CÓDIGO"
+          aria-label="Código de sala"
+          autoCapitalize="characters"
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={ROOM_CODE_LENGTH}
+          className="h-10 w-28 border border-r-0 border-ink bg-paper px-3 text-center font-mono text-base font-semibold uppercase tracking-[0.3em] outline-none placeholder:tracking-widest placeholder:text-muted focus:bg-paper-2"
+        />
+        <Button type="submit" variant="secondary" loading={busy} disabled={value.length !== ROOM_CODE_LENGTH}>
+          Entrar
+        </Button>
+      </div>
+      {error && <p role="alert" className="max-w-xs text-xs text-accent">{error}</p>}
+    </form>
+  );
+}
 
 type Tab = 'public' | 'friends';
 
 export default function CompetitionsPage() {
   const { profile } = useSession();
   const [tab, setTab] = useState<Tab>('public');
+  const [params, setParams] = useSearchParams();
+  const creating = params.get('crear') === '1';
+  const rivalId = params.get('rival');
+  const rival = rivalId ? { uid: rivalId, name: params.get('name') ?? 'tu amigo' } : null;
+  const setCreating = (open: boolean) => setParams(open ? { crear: '1' } : {}, { replace: true });
   const { friendIds } = useFriends(profile.uid);
   // Firestore limita `in` a 30 valores: se usan los primeros 30 amigos.
   const friendKey = friendIds.slice(0, 30).sort().join(',');
@@ -57,11 +116,13 @@ export default function CompetitionsPage() {
         kicker="Competir"
         title="Salas abiertas"
         action={
-          <Link to="/jugar/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
-            + Crear
-          </Link>
+          <div className="flex flex-wrap items-start gap-3">
+            <JoinByCode />
+            <Button onClick={() => setCreating(true)}>+ Crear</Button>
+          </div>
         }
       />
+      <CreateRoomDialog key={rival?.uid ?? 'new'} open={creating} rival={rival} onClose={() => setCreating(false)} />
 
       <div className="mb-6 flex gap-1">
         {(['public', 'friends'] as const).map((value) => (

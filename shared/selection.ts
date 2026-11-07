@@ -18,6 +18,7 @@ export interface SelectionInput {
   tierMix: TierMix;
   count: number; // 'free': total; 'rounds': por dificultad.
   tierCounts?: Record<Difficulty, number>; // 'free': cantidades exactas por dificultad (Royale), en orden progresivo.
+  kindOf?: (id: string) => string | undefined; // Tipo de criptico (anagrama, contenedor…): evita dos seguidos del mismo.
   random?: () => number;
 }
 
@@ -38,6 +39,55 @@ export function shuffle<T>(items: T[], random: () => number = Math.random): T[] 
 /** Nunca vistos primero (en orden aleatorio); luego los vistos hace más tiempo. */
 export function byFreshness(ids: string[], lastSeen: Map<string, number>, random: () => number = Math.random): string[] {
   return shuffle(ids, random).sort((a, b) => (lastSeen.get(a) ?? -1) - (lastSeen.get(b) ?? -1));
+}
+
+/**
+ * Orden aleatorio sin dos cripticos seguidos del mismo tipo (si se puede).
+ * En cada paso elige un tipo distinto al anterior con probabilidad proporcional a lo que queda de cada uno:
+ * respeta la mezcla real del catálogo y evita quedarse al final con una racha del tipo más abundante.
+ * Los ids sin tipo conocido nunca chocan entre sí. `previous` encadena bloques (p. ej. orden progresivo).
+ */
+export function spreadByKind(
+  ids: string[],
+  kindOf: (id: string) => string | undefined,
+  random: () => number = Math.random,
+  previous?: string,
+): string[] {
+  const buckets = new Map<string, string[]>();
+  let untyped = 0;
+  for (const id of shuffle(ids, random)) {
+    const kind = kindOf(id) ?? `\u0000${untyped++}`; // Sin tipo: bucket propio.
+    const bucket = buckets.get(kind);
+    if (bucket) bucket.push(id);
+    else buckets.set(kind, [id]);
+  }
+  const out: string[] = [];
+  let last = previous;
+  while (buckets.size > 0) {
+    // Si el tipo anterior es el único que queda, se acepta la repetición.
+    const candidates = [...buckets.entries()].filter(([kind]) => kind !== last);
+    const pool = candidates.length > 0 ? candidates : [...buckets.entries()];
+    // Ponderado por tamaño restante, con prioridad al tipo que ya no cabe sin repetir (más de la mitad).
+    const remaining = pool.reduce((sum, [, bucket]) => sum + bucket.length, 0);
+    const total = [...buckets.values()].reduce((sum, bucket) => sum + bucket.length, 0);
+    const forced = pool.find(([, bucket]) => bucket.length * 2 > total);
+    let pick = forced ?? pool[pool.length - 1]!;
+    if (!forced) {
+      let roll = random() * remaining;
+      for (const entry of pool) {
+        roll -= entry[1].length;
+        if (roll < 0) {
+          pick = entry;
+          break;
+        }
+      }
+    }
+    const [kind, bucket] = pick;
+    out.push(bucket.shift()!);
+    if (bucket.length === 0) buckets.delete(kind);
+    last = kind;
+  }
+  return out;
 }
 
 /** Une los historiales de varios jugadores: para cada criptico, la vista más reciente. */
@@ -78,10 +128,18 @@ export function selectCryptics(input: SelectionInput): Selection {
     deficit -= extra.length;
   }
 
-  const crypticIds =
-    input.tierMix === 'progressive'
-      ? DIFFICULTIES.flatMap((tier) => chosen[tier])
-      : shuffle(DIFFICULTIES.flatMap((tier) => chosen[tier]), random);
+  const kindOf = input.kindOf ?? (() => undefined);
+  let crypticIds: string[];
+  if (input.tierMix === 'progressive') {
+    // Progresivo: bloques fácil → medio → difícil; dentro de cada bloque, aleatorio sin rachas de tipo.
+    crypticIds = [];
+    for (const tier of DIFFICULTIES) {
+      const previous = crypticIds.length > 0 ? kindOf(crypticIds[crypticIds.length - 1]!) : undefined;
+      crypticIds.push(...spreadByKind(chosen[tier], kindOf, random, previous));
+    }
+  } else {
+    crypticIds = spreadByKind(DIFFICULTIES.flatMap((tier) => chosen[tier]), kindOf, random);
+  }
   return { crypticIds: crypticIds.slice(0, input.count), pool: chosen };
 }
 

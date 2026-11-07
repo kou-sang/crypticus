@@ -13,6 +13,7 @@ export interface WorkerCrypticSecret {
   explanation?: string;
   answer?: string; // Forma legible para mostrar al final (los importes anteriores no la tienen).
   tiebreak?: boolean; // Pool de desempate: nunca entra en la selección normal.
+  kind?: string; // Tipo principal (primer tag). Importes anteriores a v1.0 no lo tienen.
 }
 
 const secrets = rawSecrets as unknown as Record<string, WorkerCrypticSecret>;
@@ -36,6 +37,11 @@ export function catalogByTier(): Record<Difficulty, string[]> {
   return buildByTier().regular;
 }
 
+/** Tipo de criptico para repartir la selección (undefined si el import no lo trae). */
+export function crypticKind(crypticId: string): string | undefined {
+  return getCrypticSecret(crypticId)?.kind;
+}
+
 /** Pool de desempate (respuestas de 2 y 3 palabras), por dificultad. */
 export function catalogTiebreak(): Record<Difficulty, string[]> {
   return buildByTier().tiebreak;
@@ -46,7 +52,7 @@ export function buildCatalog(ids: string[]): Record<string, CatalogEntry> {
   const catalog: Record<string, CatalogEntry> = {};
   for (const id of ids) {
     const secret = getCrypticSecret(id);
-    if (secret) catalog[id] = { tier: secret.tier, hintCount: secret.hints.length };
+    if (secret) catalog[id] = { tier: secret.tier, hintCount: secret.hints.length, ...(secret.kind ? { kind: secret.kind } : {}) };
   }
   return catalog;
 }

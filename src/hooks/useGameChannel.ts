@@ -11,8 +11,6 @@ export interface GameActions {
   answer: (crypticId: string, guess: string) => Promise<AnswerReply>;
   hint: (crypticId: string, reveal: boolean) => Promise<HintReply>;
   vote: (tier: Difficulty) => Promise<AckReply>;
-  extraTime: () => Promise<AckReply>;
-  skip: () => Promise<AckReply>;
   endVote: () => Promise<AckReply>;
   pass: () => Promise<AckReply>;
   surrender: () => Promise<AckReply>;
@@ -76,13 +74,11 @@ export function useGameChannel(competitionId: string, enabled: boolean): GameCha
             answer: (id, guess) => channel.answer(id, guess),
             hint: (id, reveal) => channel.hint(id, reveal),
             vote: (tier) => channel.vote(tier),
-            extraTime: () => channel.extraTime(),
-            skip: () => channel.skip(),
             endVote: () => channel.endVote(),
             pass: () => channel.pass(),
             surrender: () => channel.surrender(),
           }
-        : { answer: offline, hint: offline, vote: offline, extraTime: offline, skip: offline, endVote: offline, pass: offline, surrender: offline },
+        : { answer: offline, hint: offline, vote: offline, endVote: offline, pass: offline, surrender: offline },
     [channel],
   );
 

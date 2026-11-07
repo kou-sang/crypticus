@@ -23,8 +23,9 @@ export function Button({
     <button
       {...props}
       disabled={disabled || loading}
+      data-variant={variant}
       className={cx(
-        'inline-flex h-10 items-center justify-center gap-2 border px-4 text-sm font-semibold tracking-wide transition-colors duration-100 disabled:cursor-not-allowed disabled:opacity-50',
+        'btn inline-flex h-10 items-center justify-center gap-2 border px-4 text-sm font-semibold tracking-wide transition-colors duration-100 disabled:cursor-not-allowed disabled:opacity-50',
         buttonStyles[variant],
         className,
       )}
@@ -63,7 +64,7 @@ export function Select({ label, children, ...props }: SelectHTMLAttributes<HTMLS
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('border border-line bg-paper-2/40 p-5', className)}>{children}</div>;
+  return <div className={cx('surface border border-line bg-paper-2/40 p-5', className)}>{children}</div>;
 }
 
 export function Spinner({ small = false }: { small?: boolean }) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAnswer,
-  toggleSkip,
+  applyHint,
   createLiveState,
   nextDeadline,
   passCryptic,
@@ -60,7 +60,7 @@ describe('buildConfig', () => {
     const variants: ModeSettings[] = [
       { ...DEFAULT_MODE_SETTINGS, game: 'race' },
       { ...DEFAULT_MODE_SETTINGS, game: 'race', race: { ...DEFAULT_MODE_SETTINGS.race, intensity: 'peaceful', target: 7, hints: false } },
-      { ...DEFAULT_MODE_SETTINGS, game: 'royale', royale: { baseSec: 180, incrementSec: 0, cooldownSec: 3 } },
+      { ...DEFAULT_MODE_SETTINGS, game: 'royale', royale: { baseSec: 180, incrementSec: 0, cooldownSec: 3, skips: 2 } },
       { ...DEFAULT_MODE_SETTINGS, game: 'duel', duel: { ...DEFAULT_MODE_SETTINGS.duel, hp: 300, combo: false } },
     ];
     for (const settings of variants) {
@@ -76,7 +76,7 @@ describe('buildConfig', () => {
 });
 
 describe('Royale', () => {
-  const royale = { game: 'royale' as const, royale: { baseSec: 60, incrementSec: 5, cooldownSec: 0 } };
+  const royale = { game: 'royale' as const, royale: { baseSec: 60, incrementSec: 5, cooldownSec: 0, skips: 0 } };
 
   it('acertar suma segundos y avanza; el criptico es secuencial', () => {
     const state = start(royale);
@@ -86,11 +86,23 @@ describe('Royale', () => {
     expect(royaleRemaining(state, state.participants.a!, 1000)).toBe(64_000);
   });
 
+  it('saltear: solo si está habilitado, con usos limitados y restando el incremento', () => {
+    const off = start(royale);
+    expect(() => passCryptic(off, { uid: 'a', now: 1000 })).toThrow();
+    const state = start({ ...royale, royale: { ...royale.royale, skips: 1 } });
+    passCryptic(state, { uid: 'a', now: 1000 });
+    expect(state.participants.a!.cursor).toBe(1);
+    expect(royaleRemaining(state, state.participants.a!, 1000)).toBe(54_000); // 60 − 1 − 5
+    expect(() => passCryptic(state, { uid: 'a', now: 2000 })).toThrow();
+    const noIncrement = start({ ...royale, royale: { ...royale.royale, incrementSec: 0, skips: 2 } });
+    passCryptic(noIncrement, { uid: 'a', now: 0 });
+    expect(royaleRemaining(noIncrement, noIncrement.participants.a!, 0)).toBe(60_000); // sin incremento no cuesta
+  });
+
   it('el último en pie gana; el ranking sigue el orden de eliminación', () => {
     const state = start(royale, ['a', 'b', 'c']);
     answer(state, 'a', 'e1', true, 1000); // a: 65 s
     answer(state, 'b', 'e1', true, 1000); // b: 65 s
-    passCryptic(state, { uid: 'b', now: 2000 });
     expect(nextDeadline(state, 2000)).toBe(60_000); // c cae primero
     tick(state, 60_000);
     expect(state.participants.c!.eliminatedAt).toBe(60_000);
@@ -138,7 +150,7 @@ describe('Duel', () => {
       return before - Object.values(state.participants).find((p) => p.uid !== uid)!.score;
     };
     expect(hit('a')).toBe(40);
-    expect(hit('a')).toBe(50); // ×1.25
+    expect(hit('a')).toBe(46); // ×2 = +15 %
     expect(state.participants.a!.streak).toBe(2);
     expect(hit('b')).toBe(40); // b corta el combo de a
     expect(state.participants.a!.streak).toBe(0);
@@ -155,9 +167,8 @@ describe('Duel', () => {
     expect(hit()).toBe(40);
   });
 
-  it('no se saltea: se rinde con usos limitados y el rival tiene 5 s', () => {
+  it('se rinde con usos limitados y el rival tiene 5 s', () => {
     const state = start({ ...duel, duel: { ...duel.duel, surrender: { enabled: true, maxUses: 1 } } });
-    expect(() => toggleSkip(state, { uid: 'a', now: 1000 })).toThrow();
     const first = state.round!.crypticId;
     surrender(state, { uid: 'a', now: 1000 });
     expect(state.round!.closesAt).toBe(6000);
@@ -203,6 +214,27 @@ describe('Race hardcore', () => {
     expect(state.round!.closesAt).toBe(6000);
     answer(state, 'b', id, true, 3000);
     expect(state.round!.index).toBe(2);
+  });
+});
+
+describe('Race: pistas por partida', () => {
+  it('el tope cuenta en toda la partida, no por criptico', () => {
+    const state = start({ race: { ...DEFAULT_MODE_SETTINGS.race, intensity: 'peaceful', target: 3, hints: true, hintsPerGame: 1 } });
+    expect(state.config.hintsPerGame).toBe(1);
+    expect(applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, now: 1000 }).used).toBe(1);
+    // El criptico tiene 2 pistas, pero el tope de la partida ya se usó.
+    expect(() => applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, now: 1500 })).toThrow();
+    answer(state, 'a', 'e1', true, 2000);
+    const next = state.crypticIds[1]!;
+    expect(() => applyHint(state, { uid: 'a', crypticId: next, reveal: true, now: 10_000 })).toThrow();
+    // Otro jugador conserva su propia pista.
+    expect(applyHint(state, { uid: 'b', crypticId: 'e1', reveal: true, now: 2500 }).used).toBe(1);
+  });
+
+  it('sin pistas no se configura tope', () => {
+    const built = buildConfig({ ...DEFAULT_MODE_SETTINGS, race: { ...DEFAULT_MODE_SETTINGS.race, hints: false } });
+    expect(built.config.maxHintsPerClue).toBe(0);
+    expect(built.config.hintsPerGame).toBeUndefined();
   });
 });
 

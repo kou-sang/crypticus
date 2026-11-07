@@ -12,6 +12,7 @@ import {
   rankPrimary,
   type RankMetric,
 } from './scoring';
+import { isTeamDuel, startBlocker, TEAM_SIZE } from './teams';
 import {
   DIFFICULTIES,
   type CompetitionConfig,
@@ -32,6 +33,7 @@ export class GameError extends Error {
 export interface CatalogEntry {
   tier: Difficulty;
   hintCount: number;
+  kind?: string; // Tipo (anagrama, contenedor…). Solo en el servidor: se quita del estado que ven los clientes.
 }
 
 export interface RoundState {
@@ -70,8 +72,6 @@ export const TIEBREAK_TIME_MS = 90_000;
 export type GameEventKind =
   | 'solve'
   | 'round'
-  | 'skip'
-  | 'extraTime'
   | 'overtime'
   | 'hint'
   | 'heal'
@@ -120,8 +120,6 @@ export interface LiveState {
   usedIds: string[]; // 'rounds': cripticos ya jugados
   round: RoundState | null;
   boss: { maxHp: number; hp: number } | null;
-  extraTime: { usesLeft: number; votes: string[] };
-  skipVotes: string[];
   endVotes?: string[]; // Opcional: estados guardados antes de v0.5 no lo tienen.
   tiebreakIds?: string[]; // Cripticos de desempate reservados (secretos hasta abrir). Opcional: estados previos a v0.8.
   tiebreak?: TiebreakState | null;
@@ -152,9 +150,22 @@ export function createLiveState(input: CreateInput): LiveState {
   const random = input.random ?? Math.random;
   const participants: Record<string, Participant> = {};
   const { royale, duel } = input.config;
+  // Guardia del servidor: Duel exige la cantidad exacta de jugadores (sin rival, el daño sería 0).
+  const blocker = startBlocker(input.config, input.participants.map((p) => p.uid));
+  if (blocker) throw new GameError('bad_players', blocker);
+  if (isTeamDuel(input.config)) {
+    const sizes = [0, 1].map((t) => input.participants.filter((p) => p.team === t).length);
+    if (sizes[0] !== TEAM_SIZE || sizes[1] !== TEAM_SIZE) throw new GameError('bad_teams', 'Los equipos deben ser de 2 contra 2.');
+  }
   for (const p of input.participants) {
+    // Solo se copian campos de identidad: el doc de participante lo escribe el cliente, y cualquier
+    // otro campo (racha, saltos usados, desempate ganado…) sería una trampa al iniciar.
     participants[p.uid] = {
-      ...p,
+      uid: p.uid,
+      displayName: String(p.displayName ?? '').slice(0, 32) || 'Jugador',
+      joinedAt: Number(p.joinedAt) || 0,
+      ...(p.device === 'mobile' || p.device === 'desktop' ? { device: p.device } : {}),
+      ...(isTeamDuel(input.config) && (p.team === 0 || p.team === 1) ? { team: p.team } : {}),
       score: duel ? duel.hp : 0, // Duel: el puntaje es la vida restante.
       solvedIds: [],
       hintsByClue: {},
@@ -166,6 +177,8 @@ export function createLiveState(input: CreateInput): LiveState {
       ...(royale ? { bankMs: royale.baseSec * 1000, eliminatedAt: null } : {}),
       ...(isSequential(input.config) ? { cursor: 0, nextOpensAt: input.startedAt } : {}),
       surrenders: 0,
+      skipsUsed: 0,
+      streak: 0,
     };
   }
   // Solo se conservan cripticos con secreto disponible en el catálogo.
@@ -196,8 +209,6 @@ export function createLiveState(input: CreateInput): LiveState {
     usedIds: [],
     round: null,
     boss: input.config.mode === 'boss' ? { maxHp: 0, hp: 0 } : null,
-    extraTime: { usesLeft: input.config.extraTime.enabled ? input.config.extraTime.maxUses : 0, votes: [] },
-    skipVotes: [],
     endVotes: [],
     tiebreakIds: (input.tiebreakIds ?? []).filter(known),
     tiebreak: null,
@@ -246,7 +257,8 @@ export const SURRENDER_GRACE_MS = 5_000;
 export function duelMaxIncoming(state: LiveState, uid: string): number {
   const duel = state.config.duel;
   const me = state.participants[uid];
-  const rival = Object.values(state.participants).find((p) => p.uid !== uid);
+  const rivals = rivalsOf(state, uid);
+  const rival = rivals[0];
   if (!duel || !me || !rival) return 0;
   return computeDuelDamage({
     rule: duel.damage,
@@ -255,7 +267,7 @@ export function duelMaxIncoming(state: LiveState, uid: string): number {
     comeback: state.config.comeback,
     hp: rival.score,
     rivalHp: me.score,
-    streak: duel.combo === false ? 1 : (rival.streak ?? 0) + 1,
+    streak: duel.combo === false ? 1 : Math.max(...rivals.map((p) => p.streak ?? 0)) + 1,
   });
 }
 
@@ -273,6 +285,11 @@ export function royaleDeadline(state: LiveState, participant: Participant): numb
 }
 
 /** Tiempo restante del reloj de un jugador (Royale). */
+/** Royale: saltar cuesta lo mismo que suma un acierto (con incremento 0, no cuesta nada). */
+export function royaleSkipPenaltyMs(royale: { incrementSec: number }): number {
+  return Math.max(0, royale.incrementSec) * 1000;
+}
+
 export function royaleRemaining(state: LiveState, participant: Participant, now: number): number {
   if (participant.eliminatedAt != null) return 0;
   return Math.max(0, royaleDeadline(state, participant) - Math.max(now, state.startedAt));
@@ -293,7 +310,46 @@ export function inTiebreak(state: LiveState): boolean {
 }
 
 export function rankState(state: LiveState): RankedParticipant[] {
-  return rankParticipants(Object.values(state.participants), rankMetric(state.config));
+  const ranked = rankParticipants(Object.values(state.participants), rankMetric(state.config));
+  if (!isTeamDuel(state.config)) return ranked;
+  // 2 vs 2: el puesto es del equipo. Ganador (o mejor vida/desempate) primero; si siguen iguales, empate.
+  const sideKey = (team: 0 | 1) => {
+    const members = ranked.filter((p) => p.team === team);
+    const won = state.winnerId !== null && members.some((p) => p.uid === state.winnerId) ? 1 : 0;
+    const tiebreak = members.some((p) => p.tiebreakWon) ? 1 : 0;
+    return [won, members[0]?.score ?? 0, tiebreak] as const;
+  };
+  const [a, b] = [sideKey(0), sideKey(1)];
+  const cmp = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+  const rankOf = (team: 0 | 1) => (cmp === 0 ? 1 : (team === 0) === cmp > 0 ? 1 : TEAM_SIZE + 1);
+  return ranked
+    .map((p) => ({ ...p, rank: rankOf(p.team === 1 ? 1 : 0) }))
+    .sort((x, y) => x.rank - y.rank);
+}
+
+// ---------- Equipos ----------
+
+/** Mismo bando: el mismo jugador o compañeros de equipo en Duel 2 vs 2. */
+export function sameSide(state: LiveState, a: string, b: string): boolean {
+  if (a === b) return true;
+  if (!isTeamDuel(state.config)) return false;
+  const ta = state.participants[a]?.team;
+  return ta !== undefined && ta === state.participants[b]?.team;
+}
+
+/** Jugadores del bando de `uid` (él incluido). */
+export function sideOf(state: LiveState, uid: string): Participant[] {
+  return Object.values(state.participants).filter((p) => sameSide(state, uid, p.uid));
+}
+
+/** Rivales de `uid`: el otro jugador (1 vs 1) o el otro equipo (2 vs 2). */
+export function rivalsOf(state: LiveState, uid: string): Participant[] {
+  return Object.values(state.participants).filter((p) => !sameSide(state, uid, p.uid));
+}
+
+/** Ganó la partida (en 2 vs 2, también el compañero de quien figura como ganador). */
+export function isOnWinningSide(state: LiveState, uid: string): boolean {
+  return state.winnerId !== null && sameSide(state, uid, state.winnerId);
 }
 
 /** Fin del reloj de la partida (incluye prórroga). */
@@ -429,8 +485,6 @@ export function applyAnswer(
         state.boss.hp += heal;
         pushEvent(state, { at: now, kind: 'heal', uid, points: heal });
       }
-    } else if (state.config.wrongPenalty > 0) {
-      participant.score = Math.max(0, participant.score - state.config.wrongPenalty);
     }
     return { correct: false, points: 0, finished: evaluate(state, now).finished, stale: false };
   }
@@ -450,13 +504,16 @@ export function applyAnswer(
   }
 
   // Duel: acertar primero le quita vida al rival; los aciertos seguidos forman combo.
+  // En 2 vs 2 la vida y la racha son del equipo: cualquiera de los dos puede responder.
   if (state.config.duel) {
-    const rival = Object.values(state.participants).find((p) => p.uid !== uid);
+    const side = sideOf(state, uid);
+    const rivals = rivalsOf(state, uid);
+    const rival = rivals[0];
     // Sin combo, cada acierto vale como aislado (la racha se sigue contando solo como dato).
-    const streak = (participant.streak ?? 0) + 1;
-    participant.streak = streak;
+    const streak = Math.max(...side.map((p) => p.streak ?? 0)) + 1;
+    for (const p of side) p.streak = streak;
     const comboStreak = state.config.duel.combo === false ? 1 : streak;
-    if (rival) rival.streak = 0;
+    for (const p of rivals) p.streak = 0;
     const damage = rival
       ? Math.min(
           rival.score,
@@ -471,7 +528,7 @@ export function applyAnswer(
           }),
         )
       : 0;
-    if (rival) rival.score = Math.max(0, rival.score - damage);
+    for (const p of rivals) p.score = Math.max(0, p.score - damage);
     participant.solvedIds = [...participant.solvedIds, crypticId];
     participant.lastSolvedAt = now;
     pushEvent(state, { at: now, kind: 'damage', uid, crypticId, tier, points: damage, combo: comboStreak });
@@ -486,10 +543,7 @@ export function applyAnswer(
   } else {
     const leaderScore = Math.max(0, ...Object.values(state.participants).map((p) => p.score));
     points = computeSolvePoints({
-      rule: state.config.scoring,
       tier,
-      hintsUsed: participant.hintsByClue[crypticId] ?? 0,
-      remainingRatio: ratio,
       comeback: state.config.comeback,
       score: participant.score,
       leaderScore,
@@ -513,12 +567,18 @@ export interface HintOutcome {
   maxAllowed: number;
 }
 
+/** Pistas que le quedan al jugador en toda la partida (sin tope: infinitas). */
+export function gameHintsLeft(state: LiveState, participant: Participant): number {
+  const cap = state.config.hintsPerGame;
+  return cap === undefined ? Number.POSITIVE_INFINITY : Math.max(0, cap - participant.hintsUsed);
+}
+
 export function applyHint(state: LiveState, input: { uid: string; crypticId: string; reveal: boolean; now: number }): HintOutcome {
   const participant = requireParticipant(state, input.uid);
   const entry = state.catalog[input.crypticId];
   if (!entry) throw new GameError('unknown_cryptic', 'Criptico fuera de la competencia.');
   const used = participant.hintsByClue[input.crypticId] ?? 0;
-  const maxAllowed = Math.min(state.config.maxHintsPerClue, entry.hintCount);
+  const maxAllowed = Math.min(state.config.maxHintsPerClue, entry.hintCount, used + gameHintsLeft(state, participant));
   if (!input.reveal) return { used, maxAllowed };
 
   requireLive(state, input.now);
@@ -548,47 +608,6 @@ function toggle(list: string[], uid: string): string[] {
   return list.includes(uid) ? list.filter((id) => id !== uid) : [...list, uid];
 }
 
-function everyone(state: LiveState, votes: string[]): boolean {
-  return Object.keys(state.participants).every((uid) => votes.includes(uid));
-}
-
-/** Alterna la solicitud de tiempo extra; se aplica cuando TODOS la piden. */
-export function toggleExtraTime(state: LiveState, input: { uid: string; now: number }): { applied: boolean } {
-  requireLive(state, input.now);
-  requireNoTiebreak(state);
-  requireParticipant(state, input.uid);
-  if (!state.config.extraTime.enabled) throw new GameError('extra_disabled', 'El tiempo extra no está habilitado.');
-  if (state.extraTime.usesLeft <= 0) throw new GameError('extra_exhausted', 'No quedan usos de tiempo extra.');
-
-  state.extraTime.votes = toggle(state.extraTime.votes, input.uid);
-  if (!everyone(state, state.extraTime.votes)) return { applied: false };
-
-  const ms = state.config.extraTime.seconds * 1000;
-  if (state.overtimeEndsAt !== null) state.overtimeEndsAt += ms;
-  else state.endsAt += ms;
-  state.extraTime = { usesLeft: state.extraTime.usesLeft - 1, votes: [] };
-  pushEvent(state, { at: input.now, kind: 'extraTime', seconds: state.config.extraTime.seconds });
-  return { applied: true };
-}
-
-/** Rondas: alterna el voto para pasar el criptico actual; se pasa cuando TODOS votan. */
-export function toggleSkip(state: LiveState, input: { uid: string; now: number; random?: () => number }): { skipped: boolean } {
-  requireLive(state, input.now);
-  requireNoTiebreak(state);
-  requireParticipant(state, input.uid);
-  if (state.config.flow !== 'rounds' || !state.round) throw new GameError('skip_disabled', 'Solo disponible en rondas.');
-  if (state.config.game === 'race' || state.config.game === 'duel') {
-    throw new GameError('skip_disabled', 'En este modo no se saltea: usa rendirse.');
-  }
-
-  state.skipVotes = toggle(state.skipVotes, input.uid);
-  if (!everyone(state, state.skipVotes)) return { skipped: false };
-
-  pushEvent(state, { at: input.now, kind: 'skip', crypticId: state.round.crypticId, tier: state.round.tier });
-  advanceRound(state, input.now, input.random ?? Math.random);
-  evaluate(state, input.now);
-  return { skipped: true };
-}
 
 /** Avanza al siguiente criptico de la lista; se abre tras el intervalo del modo. */
 function advanceCursor(state: LiveState, participant: Participant, now: number): void {
@@ -648,8 +667,17 @@ export function passCryptic(state: LiveState, input: { uid: string; now: number 
   requireLive(state, input.now);
   requireNoTiebreak(state);
   const participant = requireParticipant(state, input.uid);
-  if (!state.config.royale) throw new GameError('pass_disabled', 'Solo disponible en Royale.');
+  const royale = state.config.royale;
+  if (!royale) throw new GameError('pass_disabled', 'Solo disponible en Royale.');
   if (participant.eliminatedAt != null) throw new GameError('eliminated', 'Ya fuiste eliminado.');
+  const used = participant.skipsUsed ?? 0;
+  if (used >= (royale.skips ?? 0)) throw new GameError('skip_exhausted', royale.skips ? 'No te quedan saltos.' : 'En esta partida no se saltea.');
+  const id = royaleCurrent(state, participant);
+  if (!id || !isPlayable(state, participant, id, input.now)) throw new GameError('not_playable', 'No hay criptico para saltear.');
+  // Saltar cuesta tiempo: lo mismo que suma un acierto.
+  participant.skipsUsed = used + 1;
+  participant.bankMs = (participant.bankMs ?? 0) - royaleSkipPenaltyMs(royale);
+  pushEvent(state, { at: input.now, kind: 'surrender', uid: input.uid, crypticId: id, seconds: -royaleSkipPenaltyMs(royale) / 1000 });
   advanceCursor(state, participant, input.now);
   evaluate(state, input.now);
   return { passed: true };
@@ -706,10 +734,15 @@ export function resolveVote(votes: Record<string, Difficulty>, ranked: RankedPar
 function drawFromPool(state: LiveState, preferred: Difficulty, random: () => number): { id: string; tier: Difficulty } | null {
   const order: Difficulty[] =
     preferred === 'easy' ? ['easy', 'medium', 'hard'] : preferred === 'hard' ? ['hard', 'medium', 'easy'] : ['medium', 'easy', 'hard'];
+  // Evita repetir el tipo del criptico anterior (si quedan otros de esa dificultad).
+  const lastId = state.usedIds[state.usedIds.length - 1];
+  const lastKind = lastId ? state.catalog[lastId]?.kind : undefined;
   for (const tier of order) {
     const available = state.pool[tier].filter((id) => !state.usedIds.includes(id));
     if (available.length > 0) {
-      const id = available[Math.floor(random() * available.length)] ?? available[0]!;
+      const varied = lastKind ? available.filter((id) => state.catalog[id]?.kind !== lastKind) : available;
+      const options = varied.length > 0 ? varied : available;
+      const id = options[Math.floor(random() * options.length)] ?? options[0]!;
       return { id, tier };
     }
   }
@@ -718,7 +751,6 @@ function drawFromPool(state: LiveState, preferred: Difficulty, random: () => num
 
 function openRound(state: LiveState, preferred: Difficulty, now: number, random: () => number): void {
   const drawn = drawFromPool(state, preferred, random);
-  state.skipVotes = [];
   if (!drawn) {
     state.round = null;
     return;
@@ -836,7 +868,7 @@ function evaluate(state: LiveState, now: number): { finished: boolean } {
   // Duel: gana quien deja al rival sin vida.
   if (config.duel) {
     const knockedOut = players.find((p) => p.score <= 0);
-    if (knockedOut) return finish(state, 'knockout', players.find((p) => p.uid !== knockedOut.uid)?.uid ?? null, now);
+    if (knockedOut) return finish(state, 'knockout', players.find((p) => !sameSide(state, knockedOut.uid, p.uid))?.uid ?? null, now);
   }
   const solvedLead = leader ? leader.solvedIds.length - (second?.solvedIds.length ?? 0) : 0;
   const hasMargin = !config.winByTwo || solvedLead >= LIMITS.winByTwoMargin;
@@ -920,7 +952,7 @@ function applyTiebreakAnswer(state: LiveState, participant: Participant, correct
     participant.wrongAttempts += 1; // Sin penalización: solo cuenta para las estadísticas.
     return { correct: false, points: 0, finished: false, stale: false };
   }
-  participant.tiebreakWon = true;
+  for (const p of sideOf(state, participant.uid)) p.tiebreakWon = true; // 2 vs 2: gana el equipo.
   participant.lastSolvedAt = now;
   tb.winnerId = participant.uid;
   pushEvent(state, { at: now, kind: 'tiebreak', uid: participant.uid, crypticId: tb.crypticId });

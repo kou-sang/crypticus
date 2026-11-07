@@ -85,8 +85,6 @@ export function TiebreakView({
               me={me}
               heading="Criptico de desempate"
               maxHintsPerClue={0}
-              hintCost={0}
-              wrongPenalty={0}
               isBoss={false}
               actions={actions}
               successLabel={() => '¡Ganaste el desempate!'}

@@ -19,6 +19,7 @@ interface Standing {
   solved: number;
   hintsUsed: number;
   ratingDelta: number;
+  team?: 0 | 1; // Duel 2 vs 2.
 }
 
 const REASONS: Record<string, string> = {
@@ -30,7 +31,7 @@ const REASONS: Record<string, string> = {
   bossSurvived: 'El jefe resistió.',
   voted: 'Terminada por votación.',
   lastStanding: 'Último en pie.',
-  knockout: 'Nocaut: un jugador se quedó sin vida.',
+  knockout: 'Nocaut: un bando se quedó sin vida.',
   tiebreak: 'Definido en la muerte súbita de desempate.',
 };
 
@@ -94,7 +95,9 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
   const standings = competition.finalStandings ?? [];
   const winner = standings.find((s) => s.uid === competition.winnerId);
   const isBoss = competition.mode === 'boss';
-  const won = isBoss ? competition.bossDefeated === true : competition.winnerId === meId;
+  // 2 vs 2: gana el equipo del ganador.
+  const winners = winner && winner.team !== undefined ? standings.filter((s) => s.team === winner.team) : winner ? [winner] : [];
+  const won = isBoss ? competition.bossDefeated === true : winners.some((s) => s.uid === meId);
   const { profile } = useSession();
 
   // Fanfarria al entrar en resultados.
@@ -119,7 +122,7 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
             )
           ) : winner ? (
             <>
-              Gana <em className="text-accent">{winner.displayName}</em>
+              {winners.length > 1 ? 'Ganan' : 'Gana'} <em className="text-accent">{winners.map((s) => s.displayName).join(' y ')}</em>
             </>
           ) : (
             'Empate'

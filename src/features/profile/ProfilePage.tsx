@@ -1,4 +1,4 @@
-// Perfil al estilo Lichess: ratings por modo a un lado; estadísticas, historial y evolución en el centro.
+// Perfil: resumen general y un panel por modo (estadísticas, evolución del Elo e historial desplegable).
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { doc } from 'firebase/firestore';
@@ -9,14 +9,14 @@ import { useFriends } from '../../hooks/useFriends';
 import { getHistory, sendFriendRequest } from '../../lib/repo';
 import { errorMessage, pairId } from '../../lib/utils';
 import { Avatar, Button, EmptyState, ErrorBanner, PageLoader, Spinner } from '../../components/ui';
-import type { HistoryEntry, UserProfile } from '../../../shared/types';
-import { RatingChart } from '../../components/RatingChart';
-import { HistoryTable } from '../../components/HistoryTable';
-import { ModeRatings } from '../../components/ModeRatings';
+import { RANKED_MODES, type HistoryEntry, type UserProfile } from '../../../shared/types';
 import { BackLink } from '../../components/BackLink';
+import { GAME_LABELS } from '../../../shared/scoring';
+import { ModePanel } from './ModePanel';
 
-const OWN_HISTORY = 50;
-const OTHER_HISTORY = 20;
+// Las partidas se reparten entre los tres paneles: se piden suficientes para que cada modo tenga historia.
+const OWN_HISTORY = 90;
+const OTHER_HISTORY = 45;
 const MEMBER_SINCE = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' });
 
 export default function ProfilePage() {
@@ -69,7 +69,7 @@ export default function ProfilePage() {
     }
   };
 
-  const challengeLink = `/jugar/nueva?rival=${encodeURIComponent(profile.uid)}&name=${encodeURIComponent(profile.displayName)}`;
+  const challengeLink = `/jugar?crear=1&rival=${encodeURIComponent(profile.uid)}&name=${encodeURIComponent(profile.displayName)}`;
 
   return (
     <>
@@ -105,41 +105,41 @@ export default function ProfilePage() {
       </header>
       <ErrorBanner error={error} />
 
-      <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="space-y-6">
-          <ModeRatings user={profile} />
-          <dl className="grid grid-cols-2 gap-4">
-            {[
-              ['Partidas', profile.stats.played],
-              ['Victorias', profile.stats.wins],
-              ['Resueltos', profile.stats.solved],
-              ['Pistas', profile.stats.hintsUsed],
-            ].map(([label, value]) => (
-              <div key={label} className="border-l-2 border-ink pl-3">
-                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted">{label}</dt>
-                <dd className="font-mono text-xl font-semibold">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </aside>
+      <dl className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {[
+          ['Partidas', profile.stats.played],
+          ['Victorias', profile.stats.wins],
+          ['Resueltos', profile.stats.solved],
+          ['Pistas', profile.stats.hintsUsed],
+        ].map(([label, value]) => (
+          <div key={label} className="border-l-2 border-ink pl-3">
+            <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted">{label}</dt>
+            <dd className="font-mono text-xl font-semibold">{value}</dd>
+          </div>
+        ))}
+      </dl>
 
-        <section className="min-w-0 space-y-8">
-          <div>
-            <h2 className="mb-4 font-display text-2xl">Partidas</h2>
-            {history === null ? (
-              <Spinner />
-            ) : history.length === 0 ? (
-              <EmptyState title="Sin partidas todavía" />
-            ) : (
-              <HistoryTable entries={history} />
-            )}
-          </div>
-          <div>
-            <h2 className="mb-4 font-display text-2xl">Evolución</h2>
-            <RatingChart history={history ?? []} />
-          </div>
-        </section>
-      </div>
+      {history === null ? (
+        <Spinner />
+      ) : (
+        <div className="space-y-6">
+          {RANKED_MODES.map((mode) => (
+            <ModePanel key={mode} mode={mode} user={profile} history={history} />
+          ))}
+          <section aria-label="Boss" className="border-2 border-dashed border-line px-4 py-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="font-display text-2xl text-muted">
+                <span aria-hidden className="mr-2">
+                  ♛
+                </span>
+                {GAME_LABELS.boss.title}
+              </h2>
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted">Pronto</span>
+            </div>
+            <p className="mt-2 text-sm text-muted">{GAME_LABELS.boss.description}</p>
+          </section>
+        </div>
+      )}
     </>
   );
 }

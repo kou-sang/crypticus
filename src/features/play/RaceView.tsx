@@ -1,6 +1,6 @@
 // Race: pista con el avance de cada jugador hacia la meta, flujo secuencial (Pacífico) y rendirse.
 import { memo, useMemo, useState } from 'react';
-import { cooldownMs, currentFor, type LiveState } from '../../../shared/engine';
+import { cooldownMs, currentFor, type LiveState, gameHintsLeft } from '../../../shared/engine';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { cx, errorMessage } from '../../lib/utils';
 import { Button, ErrorBanner, Spinner } from '../../components/ui';
@@ -30,7 +30,9 @@ export const RaceTrack = memo(function RaceTrack({ state, uid }: { state: LiveSt
               {leader && <span aria-label="Va primero">♛ </span>}
               {p.uid === uid ? 'Tú' : p.displayName}
             </span>
-            <div className="relative h-4 border border-ink bg-paper">
+            <div className="relative h-4 overflow-hidden border border-ink bg-paper">
+              {/* Destello al sumar un criptico (rivales): la key reinicia la animación. */}
+              {p.uid !== uid && solved > 0 && <span key={solved} aria-hidden className="lane-gain pointer-events-none absolute inset-0" />}
               <div
                 className={cx('h-full transition-[width] duration-500', p.uid === uid ? 'bg-accent' : 'bg-ink')}
                 style={{ width: `${Math.min(100, (solved / target) * 100)}%` }}
@@ -137,8 +139,7 @@ export function SequentialRace({ state, uid, actions, offsetMs }: { state: LiveS
           me={me}
           heading={`Criptico ${currentId ? cursor + 1 : cursor}`}
           maxHintsPerClue={state.config.maxHintsPerClue}
-          hintCost={0}
-          wrongPenalty={0}
+          gameHintsLeft={gameHintsLeft(state, me)}
           isBoss={false}
           actions={actions}
           successLabel={() => `¡Correcto! Llevas ${me.solvedIds.length + (currentId ? 1 : 0)}/${state.config.targetCount}`}

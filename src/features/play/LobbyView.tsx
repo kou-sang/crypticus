@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Competition, Participant, UserProfile } from '../../../shared/types';
 import { api } from '../../lib/api';
-import { configOf, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
-import { settingsFromConfig } from '../../../shared/gameModes';
-import type { RematchDraft } from './RematchPanel';
+import { chooseTeam, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
+import { assignTeams, isTeamDuel, startBlocker, TEAM_LABELS, TEAM_SIZE, type Team } from '../../../shared/teams';
+import { RoomSettingsDialog } from './RoomSettingsDialog';
 import { errorMessage } from '../../lib/utils';
 import { Avatar, Badge, Button, ErrorBanner } from '../../components/ui';
 import { describeMode, describeModifiers } from '../competitions/CompetitionCard';
@@ -24,11 +24,17 @@ export function LobbyView({
   const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'link' | 'code' | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const isHost = competition.hostId === profile.uid;
   const joined = competition.participantIds.includes(profile.uid);
   const full = competition.participantIds.length >= competition.maxPlayers;
+  // Lo mismo que valida el servidor al iniciar (p. ej. Duel sin rival).
+  const blocker = startBlocker(competition, competition.participantIds);
+  const teamDuel = isTeamDuel(competition);
+  const ordered = [...participants].sort((a, b) => a.joinedAt - b.joinedAt);
+  const teams = teamDuel ? assignTeams(ordered.map((p) => p.uid), competition.teams ?? {}) : {};
 
   // Revancha: empieza sola cuando aceptan todos los invitados.
   const invited = competition.rematchOf ? (competition.invitedIds ?? []) : [];
@@ -41,18 +47,11 @@ export function LobbyView({
     api.start(competition.id).catch((err: unknown) => setError(errorMessage(err)));
   }, [isHost, allAccepted, competition.id]);
 
-  const changeParameters = () => {
-    const draft: RematchDraft = {
-      fromId: competition.rematchOf!,
-      title: competition.title,
-      settings: settingsFromConfig(configOf(competition)),
-      visibility: competition.visibility,
-      invitedIds: invited,
-      invitedNames: competition.invitedNames ?? {},
-      replaceId: competition.id,
-    };
-    navigate('/jugar/nueva', { state: { rematch: draft } });
-  };
+  // Editar la sala actual en una ventana: los que ya entraron siguen dentro y ven las reglas nuevas.
+  const changeParameters = () => setEditing(true);
+  const code = competition.code ?? null;
+  // Enlace corto con el código (v1.0); salas anteriores usan la URL de la sala.
+  const shareLink = code ? `${window.location.origin}/s/${code}` : window.location.href;
 
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
@@ -66,18 +65,42 @@ export function LobbyView({
     }
   };
 
-  const copyLink = async () => {
+  const copy = async (what: 'link' | 'code') => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(what === 'code' && code ? code : shareLink);
+      setCopied(what);
+      window.setTimeout(() => setCopied(null), 1500);
     } catch {
-      setError('No se pudo copiar el enlace.');
+      setError(what === 'code' ? 'No se pudo copiar el código.' : 'No se pudo copiar el enlace.');
     }
   };
 
   return (
     <div className="space-y-6">
+      {isHost && <RoomSettingsDialog competition={competition} open={editing} onClose={() => setEditing(false)} />}
+      {code && (
+        <section aria-label="Código de sala" className="surface flex flex-wrap items-center gap-4 border-2 border-ink px-4 py-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Código de sala</p>
+            <p className="room-code font-mono text-4xl font-bold tracking-[0.35em]">{code}</p>
+          </div>
+          <p className="min-w-40 flex-1 text-xs text-muted">
+            {competition.visibility === 'private'
+              ? 'Sala privada: solo se entra con este código o el enlace.'
+              : competition.visibility === 'friends'
+                ? 'Sala de amigos: la ven tus amigos; con el código o el enlace también se puede abrir.'
+                : 'Sala pública: aparece en Jugar y también se entra con el código.'}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => void copy('code')}>
+              {copied === 'code' ? '✓ Copiado' : 'Copiar código'}
+            </Button>
+            <Button variant="ghost" onClick={() => void copy('link')}>
+              {copied === 'link' ? '✓ Copiado' : 'Copiar enlace'}
+            </Button>
+          </div>
+        </section>
+      )}
       <div className="flex flex-wrap gap-2">
         <Badge tone="ok">En sala</Badge>
         <Badge>{describeMode(competition)}</Badge>
@@ -87,6 +110,40 @@ export function LobbyView({
         {!competition.game && <Badge>{competition.maxHintsPerClue} pistas c/u</Badge>}
       </div>
 
+      {teamDuel ? (
+        <section aria-label="Equipos">
+          <h2 className="mb-3 font-display text-xl">
+            Equipos {competition.participantIds.length}/{competition.maxPlayers}
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([0, 1] as Team[]).map((team) => {
+              const members = ordered.filter((p) => teams[p.uid] === team);
+              const canMove = joined && teams[profile.uid] !== team && members.length < TEAM_SIZE;
+              return (
+                <div key={team} className="border border-ink p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">{TEAM_LABELS[team]} · vida compartida</p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {members.map((p) => (
+                      <li key={p.uid} className="flex items-center gap-2">
+                        <Avatar name={p.displayName} size="sm" />
+                        {p.uid === profile.uid ? 'Tú' : p.displayName}
+                      </li>
+                    ))}
+                    {Array.from({ length: TEAM_SIZE - members.length }, (_, i) => (
+                      <li key={`free${i}`} className="text-muted">Lugar libre</li>
+                    ))}
+                  </ul>
+                  {canMove && (
+                    <Button variant="ghost" className="mt-2" loading={busy === `team${team}`} onClick={() => run(`team${team}`, () => chooseTeam(competition.id, profile.uid, team))}>
+                      Pasarme a {TEAM_LABELS[team]}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : (
       <section>
         <h2 className="mb-3 font-display text-xl">
           Jugadores {competition.participantIds.length}/{competition.maxPlayers}
@@ -101,6 +158,9 @@ export function LobbyView({
           ))}
         </ul>
       </section>
+      )}
+
+      {blocker && <p className="border-l-4 border-line pl-3 text-sm text-muted">{blocker}</p>}
 
       {invited.length > 0 && (
         <section aria-label="Revancha" className="border-l-4 border-ink bg-paper-2/60 px-4 py-3 text-sm">
@@ -121,7 +181,7 @@ export function LobbyView({
               <Button variant="secondary" onClick={changeParameters}>
                 Cambiar parámetros
               </Button>
-              <span className="text-xs text-muted">o inicia igual con quienes aceptaron.</span>
+              {!blocker && <span className="text-xs text-muted">o inicia igual con quienes aceptaron.</span>}
             </div>
           )}
         </section>
@@ -132,8 +192,11 @@ export function LobbyView({
       <div className="flex flex-wrap gap-3">
         {isHost ? (
           <>
-            <Button loading={busy === 'start'} onClick={() => run('start', () => api.start(competition.id))}>
+            <Button loading={busy === 'start'} disabled={blocker !== null} onClick={() => run('start', () => api.start(competition.id))}>
               Iniciar competencia
+            </Button>
+            <Button variant="secondary" onClick={changeParameters}>
+              Parámetros
             </Button>
             <Button
               variant="danger"
@@ -161,9 +224,11 @@ export function LobbyView({
             {full ? 'Sala llena' : canJoin ? 'Unirme' : 'Solo amigos del anfitrión'}
           </Button>
         )}
-        <Button variant="ghost" onClick={copyLink}>
-          {copied ? '✓ Copiado' : 'Copiar enlace'}
-        </Button>
+        {!code && (
+          <Button variant="ghost" onClick={() => void copy('link')}>
+            {copied === 'link' ? '✓ Copiado' : 'Copiar enlace'}
+          </Button>
+        )}
       </div>
 
       {!isHost && joined && <p className="text-sm text-muted">Esperando a que {competition.hostName} inicie…</p>}

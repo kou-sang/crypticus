@@ -17,7 +17,6 @@ const TOAST_MS = 3_800;
 function toToast(event: GameEvent, state: LiveState): Toast | null {
   const name = event.uid ? (state.participants[event.uid]?.displayName ?? 'Un rival') : 'Un rival';
   const id = `${event.at}-${event.kind}-${event.uid ?? ''}`;
-  const hidden = state.config.hideScoreboard;
   switch (event.kind) {
     case 'damage':
       return {
@@ -37,7 +36,7 @@ function toToast(event: GameEvent, state: LiveState): Toast | null {
       if (state.config.game === 'race') return null;
       if (state.config.royale) return { id, title: `${name} acertó`, detail: `+${event.seconds ?? 0}s a su reloj`, tone: 'rival' };
       const tier = event.tier ? DIFFICULTY_LABELS[event.tier].toLowerCase() : '';
-      const detail = state.boss ? `Golpeó al jefe (−${event.points})` : hidden ? `Resolvió uno ${tier}` : `Uno ${tier} · +${event.points}`;
+      const detail = state.boss ? `Golpeó al jefe (−${event.points})` : `Uno ${tier} · +${event.points}`;
       return { id, title: `${name} acertó`, detail, tone: 'rival' };
     }
     case 'countdown':
@@ -81,7 +80,7 @@ export const RivalToasts = memo(function RivalToasts({ state, uid }: { state: Li
         <div
           key={toast.id}
           className={cx(
-            'toast-in border-l-4 bg-paper px-4 py-3 shadow-[4px_4px_0_var(--ink)] ring-1 ring-ink',
+            'toast-in rival-toast surface border-l-4 bg-paper px-4 py-3 shadow-[4px_4px_0_var(--ink)] ring-1 ring-ink',
             toast.tone === 'rival' && 'border-accent',
             toast.tone === 'warn' && 'border-ink',
             toast.tone === 'heal' && 'border-ok',

@@ -18,9 +18,8 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn();
       allow create: if isUser(uid)
-        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'handle', 'rating', 'stats', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'handle', 'stats', 'createdAt'])
         && request.resource.data.uid == uid
-        && request.resource.data.rating == 1200
         && request.resource.data.stats == { 'played': 0, 'wins': 0, 'solved': 0, 'hintsUsed': 0 }
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() >= 2
@@ -66,33 +65,8 @@ service cloud.firestore {
 
       allow read: if signedIn();
 
-      allow create: if signedIn()
-        && next().hostId == request.auth.uid
-        && next().status == 'lobby'
-        && next().participantIds == [request.auth.uid]
-        && next().crypticIds is list
-        && next().crypticIds.size() >= 1
-        && next().crypticIds.size() <= 150
-        && next().pool is map
-        && next().maxPlayers is int
-        && next().maxPlayers >= 1
-        && next().maxPlayers <= 50
-        && next().mode in ['timed', 'count', 'boss']
-        && next().scoring in ['standard', 'fewestHints', 'speed']
-        && next().flow in ['free', 'rounds']
-        && next().winByTwo is bool
-        && next().difficultyVote is bool
-        && next().rivalCountdownSec is int && next().rivalCountdownSec >= 0 && next().rivalCountdownSec <= 120
-        && next().hideScoreboard is bool
-        && next().comeback in ['off', 'low', 'high']
-        && next().bossLevel in ['normal', 'hard', 'epic']
-        && next().tierMix in ['balanced', 'easy', 'hard', 'progressive']
-        && next().extraTime is map
-        && next().wrongPenalty is int && next().wrongPenalty >= 0 && next().wrongPenalty <= 100
-        && next().visibility in ['public', 'friends', 'private']
-        && next().title is string && next().title.size() >= 3 && next().title.size() <= 60
-        && next().startedAt == null && next().endsAt == null
-        && next().finishedAt == null && next().winnerId == null;
+      // Las salas se crean y editan en el Worker (POST/PATCH /api/competitions), que valida las reglas.
+      allow create: if false;
 
       // Unirse / salir del lobby: solo se modifica participantIds con el propio uid.
       allow update: if signedIn()
@@ -109,13 +83,13 @@ service cloud.firestore {
             && next().participantIds.size() == comp().participantIds.size() - 1)
         );
 
-      // Revancha: un jugador de la partida terminada enlaza su propuesta (la última reemplaza a la anterior).
+      // Duel 2 vs 2: cada jugador elige su equipo en la sala (solo su propia entrada, 0 o 1).
       allow update: if signedIn()
-        && comp().status == 'finished'
+        && comp().status == 'lobby'
         && request.auth.uid in comp().participantIds
-        && onlyChanged(['rematchId'])
-        && next().rematchId is string
-        && exists(/databases/$(database)/documents/competitions/$(next().rematchId));
+        && onlyChanged(['teams'])
+        && next().teams.diff(comp().get('teams', {})).affectedKeys().hasOnly([request.auth.uid])
+        && next().teams[request.auth.uid] in [0, 1];
 
       // Revancha: un invitado la rechaza agregándose a declinedIds.
       allow update: if signedIn()
@@ -130,6 +104,11 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if isUser(uid)
           && request.auth.uid in getAfter(/databases/$(database)/documents/competitions/$(competitionId)).data.participantIds
+          && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'solvedIds', 'hintsByClue', 'hintsUsed',
+               'attempts', 'wrongAttempts', 'lastSolvedAt', 'lastAttemptAt', 'joinedAt', 'device'])
+          && request.resource.data.uid == uid
+          // Nombre real: el del perfil, no uno inventado.
+          && request.resource.data.displayName == get(/databases/$(database)/documents/users/$(uid)).data.displayName
           && request.resource.data.score == 0
           && request.resource.data.solvedIds == []
           && request.resource.data.hintsUsed == 0
