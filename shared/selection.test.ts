@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byFreshness, mergeLastSeen, selectCryptics } from './selection';
+import { byFreshness, mergeLastSeen, selectCryptics, spreadByKind } from './selection';
 
 const byTier = { easy: ['e1', 'e2', 'e3'], medium: ['m1', 'm2', 'm3'], hard: ['h1', 'h2', 'h3'] };
 const fixed = () => 0;
@@ -54,5 +54,64 @@ describe('selectCryptics', () => {
       random: fixed,
     });
     expect(crypticIds).toHaveLength(4);
+  });
+});
+
+describe('spreadByKind', () => {
+  const kinds: Record<string, string> = { a1: 'ana', a2: 'ana', a3: 'ana', c1: 'cont', c2: 'cont', h1: 'hom', d1: 'dd', d2: 'dd' };
+  const kindOf = (id: string) => kinds[id];
+
+  // Generador determinista para recorrer muchas semillas.
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1664525 + 1013904223) % 2 ** 32;
+    return seed / 2 ** 32;
+  };
+
+  it('nunca pone dos del mismo tipo seguidos cuando es posible', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const order = spreadByKind(Object.keys(kinds), kindOf, seeded(seed));
+      expect(order).toHaveLength(8);
+      expect(new Set(order).size).toBe(8);
+      for (let i = 1; i < order.length; i++) expect(kindOf(order[i]!)).not.toBe(kindOf(order[i - 1]!));
+    }
+  });
+
+  it('sigue siendo aleatorio: el primer elemento varía según la semilla', () => {
+    const firsts = new Set(Array.from({ length: 50 }, (_, seed) => spreadByKind(Object.keys(kinds), kindOf, seeded(seed + 1))[0]));
+    expect(firsts.size).toBeGreaterThan(3);
+  });
+
+  it('acepta repeticiones solo si no queda otro tipo', () => {
+    const order = spreadByKind(['a1', 'a2', 'a3', 'c1'], kindOf, seeded(7));
+    expect(order).toHaveLength(4);
+    expect(kindOf(order[0]!)).toBe('ana');
+  });
+
+  it('respeta el tipo anterior al encadenar bloques', () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const order = spreadByKind(['a1', 'c1'], kindOf, seeded(seed), 'ana');
+      expect(order[0]).toBe('c1');
+    }
+  });
+
+  it('sin tipos conocidos se comporta como un barajado normal', () => {
+    const order = spreadByKind(['x', 'y', 'z'], () => undefined, seeded(3));
+    expect([...order].sort()).toEqual(['x', 'y', 'z']);
+  });
+
+  it('selectCryptics reparte tipos también en orden progresivo', () => {
+    const tiers = { easy: ['a1', 'a2', 'c1', 'h1'], medium: ['a3', 'c2', 'd1', 'd2'], hard: [] };
+    for (let seed = 1; seed <= 100; seed++) {
+      const { crypticIds } = selectCryptics({
+        byTier: tiers,
+        lastSeen: new Map(),
+        flow: 'free',
+        tierMix: 'progressive',
+        count: 8,
+        kindOf,
+        random: seeded(seed),
+      });
+      for (let i = 1; i < crypticIds.length; i++) expect(kindOf(crypticIds[i]!)).not.toBe(kindOf(crypticIds[i - 1]!));
+    }
   });
 });

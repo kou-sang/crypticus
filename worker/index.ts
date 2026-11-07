@@ -7,7 +7,7 @@ import type { Competition, CompetitionConfig, Difficulty, Participant } from '..
 import { mergeLastSeen, selectCryptics, selectTiebreakers } from '../shared/selection';
 import { assignTeams, isTeamDuel, startBlocker } from '../shared/teams';
 import { ROYALE_TIER_COUNTS } from '../shared/gameModes';
-import { catalogByTier, catalogTiebreak } from './secrets';
+import { catalogByTier, catalogTiebreak, crypticKind } from './secrets';
 import { validateConfig } from '../shared/scoring';
 import { normalizeConfig } from '../shared/config';
 import { handleCreate, handleUpdate } from './rooms';
@@ -65,6 +65,7 @@ async function selectUnseen(
     flow: competition.flow,
     tierMix: competition.tierMix,
     count,
+    kindOf: crypticKind,
     // Royale: 10 fáciles, 10 medios y después solo difíciles.
     ...(competition.game === 'royale' ? { tierCounts: ROYALE_TIER_COUNTS } : {}),
   });

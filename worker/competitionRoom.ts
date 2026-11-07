@@ -106,7 +106,12 @@ function publicState(state: LiveState, now: number, uid: string | null): LiveSta
     crypticIds: visible,
     usedIds: state.usedIds.filter((id) => allowed.has(id)),
     pool: { easy: [], medium: [], hard: [] },
-    catalog: Object.fromEntries(Object.entries(state.catalog).filter(([id]) => allowed.has(id))),
+    // Sin `kind`: el tipo de criptico sería una pista gratis.
+    catalog: Object.fromEntries(
+      Object.entries(state.catalog)
+        .filter(([id]) => allowed.has(id))
+        .map(([id, entry]) => [id, { tier: entry.tier, hintCount: entry.hintCount }]),
+    ),
     round: round && pendingRound ? { ...round, crypticId: '' } : round,
   };
 }
