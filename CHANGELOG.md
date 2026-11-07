@@ -4,6 +4,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-07
+
+### Changed
+
+- Cyber: la fuente de rotulación cyberpunk queda desactivada; los títulos usan Chakra Petch en negrita, con el mismo amarillo neón y eco cian. El archivo `public/fonts/cyber-display.ttf` se conserva para reactivarla (instrucciones en `src/themes/cyber.css`).
+
 ## [1.1.2] - 2026-11-07
 
 ### Fixed

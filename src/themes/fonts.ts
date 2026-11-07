@@ -1,7 +1,7 @@
 // Fuentes de los temas Cripta (Cinzel) y Cyber (Chakra Petch para el texto): self-hosted vía @fontsource y
 // cargadas solo al elegir el tema, para no sumar peso a quien juega con el Normal.
 // Instalación (una vez): npm i @fontsource-variable/cinzel @fontsource/chakra-petch
-// La fuente de títulos de Cyber es un archivo propio en public/fonts/ (@font-face en themes.css).
+// La fuente de rotulación cyberpunk (public/fonts/cyber-display.ttf) está desactivada desde v1.1.3; ver cyber.css.
 // Se resuelven con import.meta.glob: si el paquete aún no está instalado, el tema usa fuentes de respaldo
 // (ver --font-* en themes.css) y el build no falla.
 import { getSettings, subscribeSettings, type Skin } from '../lib/settings';

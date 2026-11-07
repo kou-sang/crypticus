@@ -1,7 +1,9 @@
 /* Tema Cyber: visor de realidad virtual (importado desde main.tsx después de index.css). */
 /*
- * Fuente de títulos del tema Cyber: archivo propio en public/fonts/ (ver docs/THEME_ASSETS.md).
- * El navegador solo la descarga si hay texto con esta familia; si falta el archivo, los títulos usan Chakra Petch.
+ * Fuente de rotulación cyberpunk (public/fonts/cyber-display.ttf): DESACTIVADA desde v1.1.3, los títulos usan Chakra Petch.
+ * Se conserva el archivo y esta declaración: el navegador no la descarga mientras ninguna regla la use.
+ * Para reactivarla, antepón 'Crypticus Cyber Display' en --font-display (más abajo) y vuelve a los estilos de .font-display de v1.1.2
+ * (trazo engrosado con -webkit-text-stroke, sin negrita).
  */
 @font-face {
   font-family: 'Crypticus Cyber Display';
@@ -26,7 +28,8 @@
   --ok: #19f0b0;
   --neon: #f5e400;
   --cyan: #00e1ff;
-  --font-display: 'Crypticus Cyber Display', 'Chakra Petch', 'Bahnschrift', 'Arial Narrow', system-ui, sans-serif;
+  /* Rotulación desactivada: con la fuente cyberpunk sería 'Crypticus Cyber Display', 'Chakra Petch', … */
+  --font-display: 'Chakra Petch', 'Bahnschrift', 'Arial Narrow', system-ui, sans-serif;
   --font-sans: 'Chakra Petch', 'Bahnschrift', 'DIN Alternate', 'Arial Narrow', system-ui, sans-serif;
   color-scheme: dark;
   background: #03040a;
@@ -34,23 +37,15 @@
 :root[data-skin='cyber'] body {
   background: transparent;
 }
-/* Las fuentes de exhibición no traen negritas: sin negrita sintética que las deforme. */
-/*
- * Rotulación cyberpunk (como la referencia): trazo engrosado con -webkit-text-stroke para que la fuente
- * se lea compacta y no "rasgada", amarillo neón y un eco cian sólido desplazado. Las tildes y la ñ ya no
- * existen en el archivo de la fuente (se dibujan como la letra base).
- */
+/* Títulos en Chakra Petch negrita: amarillo neón con eco cian sólido desplazado. */
 [data-skin='cyber'] .font-display {
-  font-synthesis: none;
-  font-weight: 400;
-  letter-spacing: -0.01em; /* El espaciado ya viene ajustado en el archivo (letras que se tocan). */
+  font-weight: 700;
+  letter-spacing: 0.01em;
   color: var(--neon);
-  -webkit-text-stroke: 0.05em currentColor;
-  paint-order: stroke fill;
   text-shadow: 0.06em 0.06em 0 var(--cyan), 0 0 0.4em rgba(245, 228, 0, 0.3);
   line-height: 1.15;
 }
-/* Enunciados de cripticos: siempre legibles y con sus tildes (la fuente de rotulación es solo para títulos). */
+/* Enunciados de cripticos: texto normal, sin el estilo de título (y con sus tildes si se reactiva la rotulación). */
 [data-skin='cyber'] .clue-text {
   font-family: var(--font-sans);
   font-weight: 600;
