@@ -13,7 +13,7 @@ import { TiebreakView } from './TiebreakView';
 import { cooldownMs, isSequential, gameHintsLeft } from '../../../shared/engine';
 
 
-/** Solución de la última ronda cerrada: en rondas el criptico cambia al instante y no daría tiempo a leerla. */
+/** Solución de la ronda que acaba de cerrar: solo durante la pausa entre rondas (después queda en los resultados). */
 function PreviousRound({ solution, state, uid }: { solution: Solution; state: LiveState; uid: string }) {
   const { cryptics } = useCryptics([solution.crypticId]);
   const cryptic = cryptics.get(solution.crypticId);
@@ -98,7 +98,6 @@ function RoundsFlow({
         )}
       </section>
       <aside className="space-y-6">
-        {previous && !waiting && <PreviousRound key={previous.crypticId} solution={previous} state={state} uid={uid} />}
         {state.config.difficultyVote && <DifficultyVote state={state} uid={uid} actions={actions} />}
       </aside>
     </div>

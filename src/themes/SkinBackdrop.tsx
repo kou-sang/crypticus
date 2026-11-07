@@ -1,30 +1,46 @@
 // Escenario de fondo de cada tema (detrás del contenido, sin eventos de puntero).
-// Medieval: muro de cripta (imagen en /themes/medieval/ con respaldo procedural) y antorchas que titilan.
+// Cripta: muro (imagen en /themes/crypt/ con respaldo procedural), antorchas de Gemini con viento y luz viva;
+// la escena se desplaza con la navegación y el puntero (ver cryptLight.ts y crypt.css).
 // Cyber: suelo de rejilla en perspectiva que gira al cambiar de sección, horizonte y lente de visor VR.
+import { useEffect, useRef } from 'react';
 import { useSettings } from '../lib/settings';
+import { startCryptLight } from './cryptLight';
 
 function Torch({ side }: { side: 'left' | 'right' }) {
   return (
-    <div className={`torch torch-${side}`}>
-      <span className="torch-glow" />
+    <div className={`torch torch-${side}`} data-torch={side}>
+      <span className="torch-light" />
+      <img className="torch-sprite" src="/themes/crypt/torch-1.webp" alt="" draggable={false} decoding="async" />
       <span className="torch-flame" />
-      <span className="torch-sconce" />
+      <span className="torch-sparks">
+        <i />
+        <i />
+        <i />
+      </span>
+    </div>
+  );
+}
+
+function CryptScene() {
+  const { motion } = useSettings();
+  const scene = useRef<HTMLDivElement>(null);
+  // Se reinicia si cambia la preferencia de movimiento (reducido = luz fija).
+  useEffect(() => (scene.current ? startCryptLight(scene.current) : undefined), [motion]);
+  return (
+    <div aria-hidden className="skin-backdrop">
+      <div ref={scene} className="crypt-scene">
+        <div className="crypt-wall" />
+        <div className="crypt-shade" />
+        <Torch side="left" />
+        <Torch side="right" />
+      </div>
     </div>
   );
 }
 
 export function SkinBackdrop() {
   const { skin } = useSettings();
-  if (skin === 'medieval') {
-    return (
-      <div aria-hidden className="skin-backdrop">
-        <div className="medieval-wall" />
-        <div className="medieval-shade" />
-        <Torch side="left" />
-        <Torch side="right" />
-      </div>
-    );
-  }
+  if (skin === 'crypt') return <CryptScene />;
   if (skin === 'cyber') {
     return (
       <>

@@ -57,7 +57,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
 /** Muestra de cada tema: tres franjas con sus colores reales. */
 const SKIN_SWATCH: Record<Skin, [string, string, string]> = {
   normal: ['#f4efe4', '#1b1a17', '#c8361d'],
-  medieval: ['#15110d', '#e2d4b4', '#f2a03a'],
+  crypt: ['#2a2520', '#c9b48a', '#f2a03a'],
   cyber: ['#060814', '#00e1ff', '#f5e400'],
 };
 

@@ -1,5 +1,5 @@
 // Sonidos sintetizados con Web Audio (sin archivos: carga cero y sin licencias), con un paquete por tema:
-// Normal (madera, papel y campanitas), Medieval (piedra, campanas y metal en una cripta con eco) y
+// Normal (madera, papel y campanitas), Cripta (piedra, campanas y metal en una cripta con eco) y
 // Cyber (láseres, sables de luz y blips holográficos). Ruido filtrado + envolventes + reverb generada
 // para que no suenen a pitidos de 8 bits. Todo se crea por evento y se libera solo al terminar.
 import { getSettings, type Skin, type SoundGroup } from './settings';
@@ -17,7 +17,8 @@ export type Cue =
   | 'eliminated'
   | 'lowHealth'
   | 'danger'
-  | 'combo';
+  | 'combo'
+  | 'go'; // Arranque de la partida (fin del 3-2-1).
 
 export type UiCue = 'click' | 'tab' | 'open' | 'close' | 'toggle' | 'type' | 'erase' | 'submit';
 
@@ -30,6 +31,7 @@ const CUE_GROUP: Record<Cue | UiCue, SoundGroup> = {
   heal: 'rivals',
   eliminated: 'rivals',
   tick: 'countdown',
+  go: 'countdown',
   victory: 'results',
   defeat: 'results',
   lowTime: 'lowTime',
@@ -60,10 +62,10 @@ let reverb: ConvolverNode | null = null;
 let reverbSkin: Skin | null = null;
 const noiseCache = new Map<'white' | 'pink' | 'brown', AudioBuffer>();
 
-// Reverb por tema: sala chica (Normal), cripta de piedra (Medieval), cámara metálica corta (Cyber).
+// Reverb por tema: sala chica (Normal), cripta de piedra (Cripta), cámara metálica corta (Cyber).
 const REVERB: Record<Skin, { seconds: number; decay: number; level: number }> = {
   normal: { seconds: 0.9, decay: 3.2, level: 0.22 },
-  medieval: { seconds: 3.2, decay: 2.2, level: 0.55 },
+  crypt: { seconds: 3.2, decay: 2.2, level: 0.55 },
   cyber: { seconds: 1.4, decay: 3.8, level: 0.3 },
 };
 
@@ -254,7 +256,7 @@ function marimba(b: Bus, f: number, at = 0, gain = 0.35, dur = 0.5): void {
   noise(b, { at, dur: 0.02, gain: gain * 0.4, f: f * 6, q: 2, wet: 0 });
 }
 
-/** Campana: parciales inarmónicos (cripta, victoria medieval). */
+/** Campana: parciales inarmónicos (cripta, victoria en Cripta). */
 function bell(b: Bus, f: number, at = 0, gain = 0.25, dur = 2.2): void {
   const partials: Array<[number, number]> = [
     [1, 1],
@@ -363,6 +365,10 @@ const NORMAL: Pack = {
   },
   heal: (b) => [392, 494, 587].forEach((f, i) => marimba(b, f, i * 0.08, 0.16, 0.45)),
   tick: (b) => marimba(b, 1320, 0, 0.12, 0.12),
+  go: (b) => {
+    [C5, E5, G5].forEach((f) => marimba(b, f, 0, 0.22, 0.6));
+    marimba(b, C6, 0.06, 0.2, 0.7);
+  },
   lowTime: (b) => {
     marimba(b, 1568, 0, 0.18, 0.12);
     marimba(b, 1568, 0.13, 0.18, 0.12);
@@ -384,7 +390,7 @@ const NORMAL: Pack = {
   defeat: (b) => [392, 311.13, 261.63].forEach((f, i) => marimba(b, f, i * 0.22, 0.26, 0.7)),
 };
 
-const MEDIEVAL: Pack = {
+const CRYPT: Pack = {
   // Interfaz: piedra que se desliza, cincel y portones.
   click: (b) => {
     stoneSlide(b, vary(0.09, 0.2), 0, 0.42, 700, 260);
@@ -428,6 +434,12 @@ const MEDIEVAL: Pack = {
   tick: (b) => {
     // Gota de agua en la cripta.
     tone(b, { f: vary(1200, 0.1), slide: 2400, dur: 0.06, gain: 0.18, wet: 0.7 });
+  },
+  go: (b) => {
+    // Golpe de portón y campana: se abre la cripta.
+    thud(b, 70, 0, 0.8, 0.35);
+    bell(b, 392, 0.05, 0.2, 2.4);
+    bell(b, 523.25, 0.12, 0.14, 2.4);
   },
   lowTime: (b) => {
     bell(b, 196, 0, 0.18, 1.6);
@@ -501,6 +513,10 @@ const CYBER: Pack = {
     tone(b, { f: 450, slide: 1800, dur: 0.45, type: 'sine', gain: 0.08, wet: 0.4 });
   },
   tick: (b) => blip(b, 1400, 0, 0.14, 0.07), // Sonar.
+  go: (b) => {
+    laser(b, 400, 3200, 0.25, 0, 0.16);
+    saber(b, 0.4, true, 0.05, 0.14);
+  },
   lowTime: (b) => {
     tone(b, { f: 880, slide: 1320, dur: 0.18, type: 'square', gain: 0.07, lowpass: 3000, wet: 0.2 });
     tone(b, { f: 880, slide: 1320, at: 0.22, dur: 0.18, type: 'square', gain: 0.07, lowpass: 3000, wet: 0.2 });
@@ -529,7 +545,7 @@ const CYBER: Pack = {
   },
 };
 
-const PACKS: Record<Skin, Pack> = { normal: NORMAL, medieval: MEDIEVAL, cyber: CYBER };
+const PACKS: Record<Skin, Pack> = { normal: NORMAL, crypt: CRYPT, cyber: CYBER };
 
 // El tipeo y los clics rápidos no se apilan: como mucho uno cada `THROTTLE_MS` por sonido.
 const THROTTLE_MS: Partial<Record<Cue | UiCue, number>> = { type: 28, erase: 40, click: 45, tab: 80 };

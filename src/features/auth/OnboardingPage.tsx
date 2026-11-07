@@ -50,6 +50,12 @@ export default function OnboardingPage() {
           value={handle}
           onChange={(e) => setHandle(toHandle(e.target.value))}
           hint="Tus amigos te encontrarán como @usuario."
+          // iOS: sin mayúscula inicial ni autocorrector (cambiaban el texto mientras se escribía).
+          autoCapitalize="none"
+          autoCorrect="off"
+          autoComplete="username"
+          spellCheck={false}
+          inputMode="text"
           required
         />
         <ErrorBanner error={error} />

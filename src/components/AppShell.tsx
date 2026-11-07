@@ -7,6 +7,7 @@ import { Avatar, PageLoader } from './ui';
 import { Logo } from './Logo';
 import { SettingsDialog } from './SettingsDialog';
 import { prefetchAppRoutes, prefetchPath } from '../routes';
+import { confirmLeaveGame, usePlaying } from '../lib/playing';
 
 // Historial vive en el perfil (botón de avatar); el navbar no repite accesos.
 const NAV_ITEMS = [
@@ -39,6 +40,8 @@ export function AppShell() {
   useEffect(() => prefetchAppRoutes(), []);
   const prefetch = (to: string) => () => prefetchPath(to);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Durante una partida: sin barra inferior en el celular y con confirmación en los enlaces de arriba.
+  const playing = usePlaying();
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   // Al navegar a otra pantalla, la ventana de ajustes se cierra.
   const { pathname } = useLocation();
@@ -57,10 +60,10 @@ export function AppShell() {
   }, [index]);
 
   return (
-    <div className="min-h-dvh pb-20 md:pb-0">
+    <div className={cx('min-h-dvh md:pb-0', playing ? 'pb-[env(safe-area-inset-bottom)]' : 'pb-20')}>
       <header className="app-header sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
-          <Link to="/inicio" aria-label="Inicio">
+          <Link to="/inicio" aria-label="Inicio" onClick={confirmLeaveGame}>
             <Logo />
           </Link>
           <nav className="hidden flex-1 gap-1 md:flex">
@@ -70,6 +73,7 @@ export function AppShell() {
                 to={item.to}
                 onPointerEnter={prefetch(item.to)}
                 onFocus={prefetch(item.to)}
+                onClick={confirmLeaveGame}
                 className={({ isActive }) =>
                   cx('px-3 py-1.5 text-sm font-medium transition-colors', isActive ? 'bg-ink text-paper' : 'hover:bg-paper-2')
                 }
@@ -82,6 +86,7 @@ export function AppShell() {
             {profile && (
               <NavLink
                 to={`/u/${profile.uid}`}
+                onClick={confirmLeaveGame}
                 aria-label="Mi perfil"
                 title="Mi perfil"
                 className={({ isActive }) =>
@@ -121,7 +126,7 @@ export function AppShell() {
         </div>
       </main>
 
-      <nav className="app-tabbar fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav hidden={playing} className="app-tabbar fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

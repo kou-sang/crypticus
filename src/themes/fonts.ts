@@ -1,4 +1,4 @@
-// Fuentes de los temas Medieval (Cinzel) y Cyber (Chakra Petch para el texto): self-hosted vía @fontsource y
+// Fuentes de los temas Cripta (Cinzel) y Cyber (Chakra Petch para el texto): self-hosted vía @fontsource y
 // cargadas solo al elegir el tema, para no sumar peso a quien juega con el Normal.
 // Instalación (una vez): npm i @fontsource-variable/cinzel @fontsource/chakra-petch
 // La fuente de títulos de Cyber es un archivo propio en public/fonts/ (@font-face en themes.css).
@@ -7,7 +7,7 @@
 import { getSettings, subscribeSettings, type Skin } from '../lib/settings';
 
 const SKIN_FONTS: Record<Exclude<Skin, 'normal'>, Record<string, () => Promise<unknown>>> = {
-  medieval: import.meta.glob('/node_modules/@fontsource-variable/cinzel/index.css', { exhaustive: true }),
+  crypt: import.meta.glob('/node_modules/@fontsource-variable/cinzel/index.css', { exhaustive: true }),
   cyber: import.meta.glob(
     [
       '/node_modules/@fontsource/chakra-petch/400.css',
