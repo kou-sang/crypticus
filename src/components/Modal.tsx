@@ -63,7 +63,7 @@ export function Modal({
   if (!mounted) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:p-6" data-closing={closing || undefined}>
-      <button type="button" aria-label="Cerrar" tabIndex={-1} data-sound="off" onClick={requestClose} className="modal-backdrop absolute inset-0 bg-black/50" />
+      <button type="button" aria-label="Cerrar" tabIndex={-1} data-sound="off" onClick={requestClose} className="backdrop modal-backdrop absolute inset-0 bg-black/50" />
       <div
         ref={panel}
         role="dialog"
