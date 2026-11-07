@@ -37,7 +37,7 @@ export function DemoCryptic() {
   return (
     <figure className="border-2 border-ink p-5">
       <p className="font-mono text-[11px] uppercase tracking-widest text-muted">Ejemplo</p>
-      <blockquote className="mt-2 font-display text-xl leading-snug sm:text-2xl">
+      <blockquote className="clue-text mt-2 font-display text-xl leading-snug sm:text-2xl">
         {DEMO.clue} <span className="text-muted">{DEMO.enumeration}</span>
       </blockquote>
       <div className="mt-4">

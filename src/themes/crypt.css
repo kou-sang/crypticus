@@ -367,3 +367,20 @@
 [data-skin='crypt'] .count-ring { border-color: var(--torch); box-shadow: 0 0 30px rgba(242, 160, 58, 0.5); }
 [data-skin='crypt'] .count-pop { text-shadow: 0 0 24px rgba(242, 160, 58, 0.55), 0 2px 0 #000; }
 [data-skin='crypt'] .is-urgent .clock-beat { text-shadow: 0 0 16px rgba(242, 120, 40, 0.8); }
+
+/*
+ * Pestañas y opciones sobre el pergamino (Públicas/Amigos, Global/Amigos, modos, chips): con borde de tinta
+ * y un fondo más oscuro para que se distingan del papel; la elegida, en cuero oscuro con letra clara.
+ */
+[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) :is(.seg-tab, [role='tab'], [role='radio'], [aria-pressed]):not(.btn) {
+  border-color: #6f5432;
+}
+[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) :is(.seg-tab, [role='tab'], [role='radio'], [aria-pressed]):not(.btn):not(.bg-ink) {
+  background-color: rgba(110, 75, 35, 0.16);
+  color: #3a2814;
+}
+[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) .bg-ink {
+  background: linear-gradient(#4d3520, #2e1f10);
+  color: #f3e6c8;
+  box-shadow: inset 0 1px 0 rgba(255, 230, 190, 0.15), 0 1px 2px rgba(40, 20, 5, 0.5);
+}

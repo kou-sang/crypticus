@@ -60,7 +60,7 @@ export default function RankingsPage() {
             role="tab"
             aria-selected={view.mode === mode}
             onClick={() => setView((v) => ({ ...v, mode }))}
-            className={cx('py-2 font-display text-lg uppercase', view.mode === mode ? 'bg-ink text-paper' : 'hover:bg-paper-2')}
+            className={cx('seg-tab py-2 font-display text-lg uppercase', view.mode === mode ? 'bg-ink text-paper' : 'hover:bg-paper-2')}
           >
             {GAME_LABELS[mode].title}
           </button>
@@ -71,7 +71,11 @@ export default function RankingsPage() {
           <button
             key={scope}
             onClick={() => setView((v) => ({ ...v, scope }))}
-            className={cx('px-3 py-1.5 text-sm font-semibold', view.scope === scope ? 'bg-paper-2 ring-1 ring-ink' : 'text-muted hover:text-ink')}
+            aria-pressed={view.scope === scope}
+            className={cx(
+              'seg-tab border px-3 py-1.5 text-sm font-semibold transition-colors',
+              view.scope === scope ? 'border-ink bg-ink text-paper' : 'border-line bg-paper-2/50 hover:border-ink',
+            )}
           >
             {scope === 'global' ? 'Global' : 'Amigos'}
           </button>

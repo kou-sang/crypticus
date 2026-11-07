@@ -4,6 +4,14 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-07
+
+### Fixed
+
+- Cyber: la fuente de rotulación nunca dibuja tildes ni ñ (Á, é, ñ… se muestran como A, e, n), en cualquier texto que la use.
+- Cyber: rotulación más legible y menos tenebrosa, como la referencia: trazo engrosado, amarillo neón con eco cian sólido y fondo bordó → azul noche con viñeta más suave. Los enunciados de los cripticos ya no usan esa fuente (siempre legibles y con tildes).
+- Cripta: Públicas/De amigos (Jugar), Global/Amigos y los modos (Ranking) y demás opciones sobre el pergamino ahora tienen borde y fondo propios; la elegida va en cuero oscuro.
+
 ## [1.1.1] - 2026-11-07
 
 ### Performance
