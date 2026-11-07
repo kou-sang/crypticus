@@ -18,6 +18,7 @@ interface ValidItem {
   id: string;
   publicData: Omit<CrypticPublic, 'id'>;
   secretData: CrypticSecret;
+  tiebreak: boolean;
 }
 
 function stableId(item: CrypticImportItem): string {
@@ -58,6 +59,7 @@ function validateItem(item: unknown, index: number): ValidItem {
       hints,
       ...(raw.explanation ? { explanation: raw.explanation } : {}),
     },
+    tiebreak: raw.tiebreak === true,
   };
 }
 
@@ -102,6 +104,7 @@ async function main(): Promise<void> {
       hints: item.secretData.hints,
       answer: item.secretData.answer,
       ...(item.secretData.explanation ? { explanation: item.secretData.explanation } : {}),
+      ...(item.tiebreak ? { tiebreak: true } : {}),
     };
   }
   await mkdir('worker/generated', { recursive: true });

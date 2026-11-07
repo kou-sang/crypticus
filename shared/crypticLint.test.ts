@@ -38,6 +38,16 @@ describe('lintCryptics', () => {
     expect(report.warnings.length).toBe(2);
   });
 
+  it('los de desempate tienen 2 o 3 palabras y enumeración por palabra', () => {
+    const ok = { ...valid, clue: 'Pareja ideal o mitad de un cítrico (5,7)', answer: 'media naranja', tiebreak: true };
+    expect(lintCryptics([ok]).errors).toEqual([]);
+    expect(lintCryptics([ok]).tiebreak).toBe(1);
+    const oneWord = lintCryptics([{ ...valid, tiebreak: true }]);
+    expect(oneWord.errors.some((e) => e.includes('2 o 3 palabras'))).toBe(true);
+    const badEnum = lintCryptics([{ ...ok, clue: 'Pareja ideal o mitad de un cítrico (12)' }]);
+    expect(badEnum.errors.some((e) => e.includes('(5,7)'))).toBe(true);
+  });
+
   it('rechaza un archivo que no es un array', () => {
     expect(lintCryptics({}).errors).toEqual(['El archivo debe contener un array de cripticos.']);
   });

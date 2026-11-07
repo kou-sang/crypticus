@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAnswer,
+  toggleSkip,
   createLiveState,
   nextDeadline,
   passCryptic,
@@ -14,7 +15,7 @@ import {
   tick,
   type LiveState,
 } from './engine';
-import { buildConfig, DEFAULT_MODE_SETTINGS, type ModeSettings } from './gameModes';
+import { buildConfig, DEFAULT_MODE_SETTINGS, settingsFromConfig, type ModeSettings } from './gameModes';
 import { validateConfig } from './scoring';
 import { makeParticipant } from './testUtils';
 import type { Difficulty } from './types';
@@ -55,6 +56,19 @@ describe('buildConfig', () => {
     expect(peaceful.config.difficultyVote).toBe(false);
   });
 
+  it('settingsFromConfig reconstruye los ajustes de cada modo (revancha con otros parámetros)', () => {
+    const variants: ModeSettings[] = [
+      { ...DEFAULT_MODE_SETTINGS, game: 'race' },
+      { ...DEFAULT_MODE_SETTINGS, game: 'race', race: { ...DEFAULT_MODE_SETTINGS.race, intensity: 'peaceful', target: 7, hints: false } },
+      { ...DEFAULT_MODE_SETTINGS, game: 'royale', royale: { baseSec: 180, incrementSec: 0, cooldownSec: 3 } },
+      { ...DEFAULT_MODE_SETTINGS, game: 'duel', duel: { ...DEFAULT_MODE_SETTINGS.duel, hp: 300, combo: false } },
+    ];
+    for (const settings of variants) {
+      const built = buildConfig(settings);
+      expect(buildConfig(settingsFromConfig(built.config)).config).toEqual(built.config);
+    }
+  });
+
   it('Boss queda deshabilitado (próximamente)', () => {
     const built = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'boss' });
     expect(validateConfig(built.config, built.maxPlayers).length > 0).toBe(true);
@@ -91,7 +105,17 @@ describe('Royale', () => {
 });
 
 describe('Duel', () => {
-  const duel = { game: 'duel' as const, duel: { hp: 100, damage: 'difficulty' as const, comeback: 'off' as const, cooldownSec: 0 } };
+  const duel = {
+    game: 'duel' as const,
+    duel: {
+      ...DEFAULT_MODE_SETTINGS.duel,
+      hp: 100,
+      damage: 'difficulty' as const,
+      comeback: 'off' as const,
+      cooldownSec: 0,
+      surrender: { enabled: false, maxUses: 2 },
+    },
+  };
 
   it('acertar primero daña al rival, cierra el criptico y abre otro tras 3 s', () => {
     const state = start(duel);
@@ -118,6 +142,38 @@ describe('Duel', () => {
     expect(state.participants.a!.streak).toBe(2);
     expect(hit('b')).toBe(40); // b corta el combo de a
     expect(state.participants.a!.streak).toBe(0);
+  });
+
+  it('sin combo, los aciertos seguidos pegan igual', () => {
+    const state = start({ ...duel, duel: { ...duel.duel, damage: 'speed', combo: false } });
+    const hit = () => {
+      const before = state.participants.b!.score;
+      answer(state, 'a', state.round!.crypticId, true, state.round!.opensAt!);
+      return before - state.participants.b!.score;
+    };
+    expect(hit()).toBe(40);
+    expect(hit()).toBe(40);
+  });
+
+  it('no se saltea: se rinde con usos limitados y el rival tiene 5 s', () => {
+    const state = start({ ...duel, duel: { ...duel.duel, surrender: { enabled: true, maxUses: 1 } } });
+    expect(() => toggleSkip(state, { uid: 'a', now: 1000 })).toThrow();
+    const first = state.round!.crypticId;
+    surrender(state, { uid: 'a', now: 1000 });
+    expect(state.round!.closesAt).toBe(6000);
+    expect(() => surrender(state, { uid: 'a', now: 1500 })).toThrow(); // ya se rindió en este criptico
+    tick(state, 6000);
+    expect(state.round!.crypticId).not.toBe(first);
+    expect(() => surrender(state, { uid: 'a', now: 10_000 })).toThrow(); // sin usos
+  });
+
+  it('vida personalizada de a 50, entre 50 y 1000', () => {
+    const valid = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'duel', duel: { ...DEFAULT_MODE_SETTINGS.duel, hp: 750 } });
+    expect(validateConfig(valid.config, valid.maxPlayers)).toEqual([]);
+    for (const hp of [40, 175, 1050]) {
+      const bad = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'duel', duel: { ...DEFAULT_MODE_SETTINGS.duel, hp } });
+      expect(validateConfig(bad.config, bad.maxPlayers).length).toBe(1);
+    }
   });
 
   it('avisa cuando un jugador está a un golpe de perder', () => {

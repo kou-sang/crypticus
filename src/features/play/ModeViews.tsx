@@ -135,7 +135,8 @@ export const DuelBars = memo(function DuelBars({ state, uid }: { state: LiveStat
         const ratio = hp / maxHp;
         const low = hp > 0 && ratio <= LOW_HEALTH_RATIO;
         const lethal = duelOneHitFromDeath(state, p.uid);
-        const streak = p.streak ?? 0;
+        // Sin combo la racha no cambia el daño: no se muestra.
+        const streak = state.config.duel?.combo === false ? 0 : (p.streak ?? 0);
         return (
           <div key={p.uid} className={cx(index === 1 && 'text-right')}>
             <p className={cx('flex items-center gap-1.5 text-xs font-semibold', index === 1 && 'justify-end')}>
@@ -179,7 +180,7 @@ export const DuelAlerts = memo(function DuelAlerts({ state, uid }: { state: Live
   const hp = Math.max(0, me?.score ?? 0);
   const ratio = hp / maxHp;
   const lethal = duelOneHitFromDeath(state, uid);
-  const streak = me?.streak ?? 0;
+  const streak = state.config.duel?.combo === false ? 0 : (me?.streak ?? 0);
   const previous = useRef({ ratio, lethal, streak });
   const [flash, setFlash] = useState(0);
 
@@ -225,7 +226,15 @@ export const DuelAlerts = memo(function DuelAlerts({ state, uid }: { state: Live
 // ---------- Pausa entre cripticos ----------
 
 /** Cuenta los segundos hasta que abre el siguiente criptico (con tic por segundo). */
-export const NextCountdown = memo(function NextCountdown({ opensAt, offsetMs }: { opensAt: number; offsetMs: number }) {
+export const NextCountdown = memo(function NextCountdown({
+  opensAt,
+  offsetMs,
+  label = 'Siguiente criptico en',
+}: {
+  opensAt: number;
+  offsetMs: number;
+  label?: string;
+}) {
   const now = useNow(100) + offsetMs;
   const seconds = Math.max(0, Math.ceil((opensAt - now) / 1000));
   const last = useRef<number | null>(null);
@@ -237,7 +246,7 @@ export const NextCountdown = memo(function NextCountdown({ opensAt, offsetMs }: 
   }, [seconds]);
   return (
     <div className="flex items-baseline gap-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted">Siguiente criptico en</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted">{label}</p>
       <p key={seconds} className="font-display text-5xl fade-in">
         {seconds}
       </p>

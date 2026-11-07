@@ -94,9 +94,10 @@ export default function AuthPage() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-4 py-10 fade-in">
-      <Link to="/" className="mb-10 self-start">
+      <Link to="/" className="mb-4 self-start">
         <Logo large />
       </Link>
+      <p className="mb-8 text-sm text-muted">Cripticos en español, en tiempo real y contra otras personas.</p>
 
       <div className="mb-6 grid grid-cols-2 border border-ink">
         {(['login', 'register'] as const).map((tab) => (

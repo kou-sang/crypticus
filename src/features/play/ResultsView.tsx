@@ -1,6 +1,7 @@
 // Resultados finales (standings congelados por el servidor al cerrar).
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { useSession } from '../../hooks/useAuth';
+import { RematchPanel } from './RematchPanel';
 import { playCue } from '../../lib/sound';
 import { api } from '../../lib/api';
 import type { Competition } from '../../../shared/types';
@@ -30,6 +31,7 @@ const REASONS: Record<string, string> = {
   voted: 'Terminada por votación.',
   lastStanding: 'Último en pie.',
   knockout: 'Nocaut: un jugador se quedó sin vida.',
+  tiebreak: 'Definido en la muerte súbita de desempate.',
 };
 
 type FinishedCompetition = Competition & {
@@ -93,6 +95,7 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
   const winner = standings.find((s) => s.uid === competition.winnerId);
   const isBoss = competition.mode === 'boss';
   const won = isBoss ? competition.bossDefeated === true : competition.winnerId === meId;
+  const { profile } = useSession();
 
   // Fanfarria al entrar en resultados.
   useEffect(() => {
@@ -164,9 +167,9 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
         </section>
       )}
 
-      <Link to="/jugar/nueva" className="inline-flex h-10 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
-        Revancha
-      </Link>
+      {competition.participantIds.includes(meId) && !isBoss && (
+        <RematchPanel target={{ competition, names: Object.fromEntries(standings.map((s) => [s.uid, s.displayName])) }} profile={profile} />
+      )}
     </div>
   );
 }

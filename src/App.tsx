@@ -1,4 +1,4 @@
-// Enrutado con carga diferida por sección: el bundle inicial solo trae la landing.
+// Enrutado con carga diferida por sección. La portada "/" es Inicio (invitados pasan por /entrar).
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AuthProvider } from './hooks/useAuth';
@@ -7,7 +7,6 @@ import { GuestOnly, OwnProfileRedirect, RequireAuth } from './components/Require
 import { PageLoader } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UpdateBanner } from './components/UpdateBanner';
-import { LandingPage } from './features/landing/LandingPage';
 import { loaders } from './routes';
 
 const AuthPage = lazy(loaders.auth);
@@ -29,7 +28,7 @@ export function App() {
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
             <Routes>
-              <Route path="/" element={<LandingPage />} />
+              <Route path="/" element={<Navigate to="/inicio" replace />} />
               <Route element={<GuestOnly />}>
                 <Route path="/entrar" element={<AuthPage />} />
               </Route>

@@ -9,6 +9,7 @@ import {
   computeSolvePoints,
   LIMITS,
   rankParticipants,
+  rankPrimary,
   type RankMetric,
 } from './scoring';
 import {
@@ -45,6 +46,27 @@ export interface RoundState {
   surrenderedBy?: string[]; // Jugadores que se rindieron en esta ronda.
 }
 
+/**
+ * Muerte súbita de desempate: si la partida termina con empate en la cima, los empatados
+ * reciben cripticos de varias palabras (pool aparte). El primero que acierta gana.
+ */
+export interface TiebreakState {
+  uids: string[]; // Empatados: solo ellos responden.
+  index: number; // Criptico actual (0-based).
+  total: number;
+  crypticId: string;
+  opensAt: number;
+  closesAt: number;
+  reason: EndReason; // Motivo con el que habría terminado la partida.
+  played: string[]; // Cripticos de desempate que llegaron a abrirse.
+  winnerId: string | null;
+}
+
+/** Aviso antes de abrir el primer criptico de desempate y pausa entre uno y otro. */
+export const TIEBREAK_INTRO_MS = 3_000;
+/** Tiempo para cada criptico de desempate. */
+export const TIEBREAK_TIME_MS = 90_000;
+
 export type GameEventKind =
   | 'solve'
   | 'round'
@@ -56,6 +78,7 @@ export type GameEventKind =
   | 'countdown'
   | 'eliminated'
   | 'damage'
+  | 'tiebreak'
   | 'surrender';
 
 export interface GameEvent {
@@ -79,6 +102,7 @@ export type EndReason =
   | 'voted'
   | 'lastStanding' // Royale
   | 'knockout' // Duel
+  | 'tiebreak' // Ganada en la muerte súbita
   | null;
 
 export interface LiveState {
@@ -99,6 +123,8 @@ export interface LiveState {
   extraTime: { usesLeft: number; votes: string[] };
   skipVotes: string[];
   endVotes?: string[]; // Opcional: estados guardados antes de v0.5 no lo tienen.
+  tiebreakIds?: string[]; // Cripticos de desempate reservados (secretos hasta abrir). Opcional: estados previos a v0.8.
+  tiebreak?: TiebreakState | null;
   events: GameEvent[];
   winnerId: string | null;
   endReason: EndReason;
@@ -114,6 +140,7 @@ export interface CreateInput {
   pool: Record<Difficulty, string[]>;
   catalog: Record<string, CatalogEntry>;
   startedAt: number;
+  tiebreakIds?: string[];
   random?: () => number;
 }
 
@@ -172,6 +199,8 @@ export function createLiveState(input: CreateInput): LiveState {
     extraTime: { usesLeft: input.config.extraTime.enabled ? input.config.extraTime.maxUses : 0, votes: [] },
     skipVotes: [],
     endVotes: [],
+    tiebreakIds: (input.tiebreakIds ?? []).filter(known),
+    tiebreak: null,
     events: [],
     winnerId: null,
     endReason: null,
@@ -226,7 +255,7 @@ export function duelMaxIncoming(state: LiveState, uid: string): number {
     comeback: state.config.comeback,
     hp: rival.score,
     rivalHp: me.score,
-    streak: (rival.streak ?? 0) + 1,
+    streak: duel.combo === false ? 1 : (rival.streak ?? 0) + 1,
   });
 }
 
@@ -258,6 +287,11 @@ export function royaleCurrent(state: LiveState, participant: Participant): strin
   return currentFor(state, participant);
 }
 
+/** Hay una muerte súbita en curso. */
+export function inTiebreak(state: LiveState): boolean {
+  return state.status === 'live' && state.tiebreak != null;
+}
+
 export function rankState(state: LiveState): RankedParticipant[] {
   return rankParticipants(Object.values(state.participants), rankMetric(state.config));
 }
@@ -272,6 +306,8 @@ export function gameDeadline(state: LiveState): number {
  * apertura del siguiente criptico (para revelarlo) o eliminación de un jugador en Royale.
  */
 export function nextDeadline(state: LiveState, now = 0): number {
+  const tb = state.tiebreak;
+  if (tb && state.status === 'live') return tb.opensAt > now ? tb.opensAt : tb.closesAt;
   const candidates = [gameDeadline(state)];
   const round = state.round;
   if (round?.closesAt != null) candidates.push(round.closesAt);
@@ -291,6 +327,10 @@ export function remainingRatio(state: LiveState, now: number): number {
 
 /** Criptico que el jugador puede intentar ahora (en 'free' cualquiera no resuelto de la lista). */
 function isPlayable(state: LiveState, participant: Participant, crypticId: string, now: number): boolean {
+  const tb = state.tiebreak;
+  if (tb && state.status === 'live') {
+    return tb.uids.includes(participant.uid) && tb.crypticId === crypticId && now >= tb.opensAt && now < tb.closesAt;
+  }
   if (isSequential(state.config)) {
     if (state.config.royale && (participant.eliminatedAt != null || royaleRemaining(state, participant, now) <= 0)) return false;
     return now >= (participant.nextOpensAt ?? 0) && currentFor(state, participant) === crypticId;
@@ -312,6 +352,11 @@ function requireLive(state: LiveState, now: number): void {
   if (now < state.startedAt) throw new GameError('not_started', 'Aún no empieza.');
 }
 
+/** Durante la muerte súbita solo se responde: sin pistas, votos ni rendiciones. */
+function requireNoTiebreak(state: LiveState): void {
+  if (inTiebreak(state)) throw new GameError('tiebreak', 'Desempate en curso.');
+}
+
 function requireParticipant(state: LiveState, uid: string): Participant {
   const participant = state.participants[uid];
   if (!participant) throw new GameError('not_participant', 'No participas en esta competencia.');
@@ -330,8 +375,10 @@ function pushEvent(state: LiveState, event: GameEvent): void {
  */
 export function reserveAttempt(state: LiveState, uid: string, crypticId: string, now: number): void {
   requireLive(state, now);
-  if (now >= gameDeadline(state)) throw new GameError('time_up', 'Se acabó el tiempo.');
-  if (state.round?.closesAt != null && now >= state.round.closesAt) throw new GameError('not_playable', 'La ronda ya cerró.');
+  if (!inTiebreak(state)) {
+    if (now >= gameDeadline(state)) throw new GameError('time_up', 'Se acabó el tiempo.');
+    if (state.round?.closesAt != null && now >= state.round.closesAt) throw new GameError('not_playable', 'La ronda ya cerró.');
+  }
   const participant = requireParticipant(state, uid);
   if (!(crypticId in state.catalog)) throw new GameError('unknown_cryptic', 'Criptico fuera de la competencia.');
   if (!isPlayable(state, participant, crypticId, now)) throw new GameError('not_playable', 'Ese criptico ya no está en juego.');
@@ -358,6 +405,10 @@ export function applyAnswer(
   input: { uid: string; crypticId: string; correct: boolean; now: number; random?: () => number },
 ): AnswerOutcome {
   const { uid, crypticId, now } = input;
+  // Acierto que llegó después del ganador de la muerte súbita (arbitraje): se informa como tardío.
+  if (state.status === 'finished' && state.tiebreak?.crypticId === crypticId) {
+    return { correct: false, points: 0, finished: true, stale: input.correct };
+  }
   requireLive(state, now);
   const participant = requireParticipant(state, uid);
   participant.attempts += 1;
@@ -366,6 +417,8 @@ export function applyAnswer(
   if (!isPlayable(state, participant, crypticId, now)) {
     return { correct: false, points: 0, finished: false, stale: input.correct };
   }
+
+  if (inTiebreak(state)) return applyTiebreakAnswer(state, participant, input.correct, now);
 
   if (!input.correct) {
     participant.wrongAttempts += 1;
@@ -399,8 +452,10 @@ export function applyAnswer(
   // Duel: acertar primero le quita vida al rival; los aciertos seguidos forman combo.
   if (state.config.duel) {
     const rival = Object.values(state.participants).find((p) => p.uid !== uid);
+    // Sin combo, cada acierto vale como aislado (la racha se sigue contando solo como dato).
     const streak = (participant.streak ?? 0) + 1;
     participant.streak = streak;
+    const comboStreak = state.config.duel.combo === false ? 1 : streak;
     if (rival) rival.streak = 0;
     const damage = rival
       ? Math.min(
@@ -412,14 +467,14 @@ export function applyAnswer(
             comeback: state.config.comeback,
             hp: participant.score,
             rivalHp: rival.score,
-            streak,
+            streak: comboStreak,
           }),
         )
       : 0;
     if (rival) rival.score = Math.max(0, rival.score - damage);
     participant.solvedIds = [...participant.solvedIds, crypticId];
     participant.lastSolvedAt = now;
-    pushEvent(state, { at: now, kind: 'damage', uid, crypticId, tier, points: damage, combo: streak });
+    pushEvent(state, { at: now, kind: 'damage', uid, crypticId, tier, points: damage, combo: comboStreak });
     onRoundSolved(state, uid, now, input.random ?? Math.random);
     return { correct: true, points: damage, finished: evaluate(state, now).finished, stale: false };
   }
@@ -467,6 +522,7 @@ export function applyHint(state: LiveState, input: { uid: string; crypticId: str
   if (!input.reveal) return { used, maxAllowed };
 
   requireLive(state, input.now);
+  requireNoTiebreak(state);
   if (!isPlayable(state, participant, input.crypticId, input.now)) throw new GameError('not_playable', 'Ese criptico ya no está en juego.');
   if (used >= maxAllowed) throw new GameError('no_more_hints', 'No quedan pistas.');
   participant.hintsByClue = { ...participant.hintsByClue, [input.crypticId]: used + 1 };
@@ -479,6 +535,7 @@ export function applyHint(state: LiveState, input: { uid: string; crypticId: str
 
 export function applyDifficultyVote(state: LiveState, input: { uid: string; tier: Difficulty; now: number }): void {
   requireLive(state, input.now);
+  requireNoTiebreak(state);
   requireParticipant(state, input.uid);
   if (state.config.flow !== 'rounds' || !state.config.difficultyVote || !state.round) {
     throw new GameError('vote_disabled', 'La votación de dificultad no está activa.');
@@ -498,6 +555,7 @@ function everyone(state: LiveState, votes: string[]): boolean {
 /** Alterna la solicitud de tiempo extra; se aplica cuando TODOS la piden. */
 export function toggleExtraTime(state: LiveState, input: { uid: string; now: number }): { applied: boolean } {
   requireLive(state, input.now);
+  requireNoTiebreak(state);
   requireParticipant(state, input.uid);
   if (!state.config.extraTime.enabled) throw new GameError('extra_disabled', 'El tiempo extra no está habilitado.');
   if (state.extraTime.usesLeft <= 0) throw new GameError('extra_exhausted', 'No quedan usos de tiempo extra.');
@@ -516,9 +574,12 @@ export function toggleExtraTime(state: LiveState, input: { uid: string; now: num
 /** Rondas: alterna el voto para pasar el criptico actual; se pasa cuando TODOS votan. */
 export function toggleSkip(state: LiveState, input: { uid: string; now: number; random?: () => number }): { skipped: boolean } {
   requireLive(state, input.now);
+  requireNoTiebreak(state);
   requireParticipant(state, input.uid);
   if (state.config.flow !== 'rounds' || !state.round) throw new GameError('skip_disabled', 'Solo disponible en rondas.');
-  if (state.config.game === 'race') throw new GameError('skip_disabled', 'En Race no se saltea: usa rendirse.');
+  if (state.config.game === 'race' || state.config.game === 'duel') {
+    throw new GameError('skip_disabled', 'En este modo no se saltea: usa rendirse.');
+  }
 
   state.skipVotes = toggle(state.skipVotes, input.uid);
   if (!everyone(state, state.skipVotes)) return { skipped: false };
@@ -543,6 +604,7 @@ function advanceCursor(state: LiveState, participant: Participant, now: number):
 export function surrender(state: LiveState, input: { uid: string; now: number; random?: () => number }): { applied: boolean } {
   const { uid, now } = input;
   requireLive(state, now);
+  requireNoTiebreak(state);
   const participant = requireParticipant(state, uid);
   const rule = state.config.surrender;
   if (!rule?.enabled) throw new GameError('surrender_disabled', 'Rendirse no está habilitado.');
@@ -584,6 +646,7 @@ function roundSettled(state: LiveState): boolean {
 /** Royale: pasar al siguiente criptico (sin volver atrás y sin ganar tiempo). */
 export function passCryptic(state: LiveState, input: { uid: string; now: number }): { passed: boolean } {
   requireLive(state, input.now);
+  requireNoTiebreak(state);
   const participant = requireParticipant(state, input.uid);
   if (!state.config.royale) throw new GameError('pass_disabled', 'Solo disponible en Royale.');
   if (participant.eliminatedAt != null) throw new GameError('eliminated', 'Ya fuiste eliminado.');
@@ -711,6 +774,7 @@ function advanceRound(state: LiveState, now: number, random: () => number): void
 /** Re-evaluación periódica (alarma). */
 export function tick(state: LiveState, now: number, random: () => number = Math.random): { finished: boolean } {
   if (state.status !== 'live') return { finished: state.status === 'finished' };
+  if (state.tiebreak) return tickTiebreak(state, now);
   if (state.round?.closesAt != null && now >= state.round.closesAt) advanceRound(state, now, random);
   if (state.config.royale) eliminateExpired(state, now);
   return { finished: evaluate(state, now).finished };
@@ -737,6 +801,7 @@ function finish(state: LiveState, reason: EndReason, winnerId: string | null, no
 
 function evaluate(state: LiveState, now: number): { finished: boolean } {
   if (state.status !== 'live') return { finished: state.status === 'finished' };
+  if (state.tiebreak) return { finished: false }; // La muerte súbita la cierra un acierto o `tick`.
   const { config } = state;
   const players = Object.values(state.participants);
 
@@ -760,10 +825,11 @@ function evaluate(state: LiveState, now: number): { finished: boolean } {
     const reranked = rankState(state);
     const top = reranked[0];
     const uniqueTop = top && reranked.filter((p) => p.rank === 1).length === 1 ? top.uid : null;
-    if (players.length > 1 && alive.length <= 1) return finish(state, 'lastStanding', alive[0]?.uid ?? uniqueTop, now);
+    if (players.length > 1 && alive.length === 1) return finish(state, 'lastStanding', alive[0]!.uid, now);
+    if (players.length > 1 && alive.length === 0) return finishOrTiebreak(state, 'lastStanding', uniqueTop, now);
     if (players.length === 1 && alive.length === 0) return finish(state, 'time', null, now);
-    if (alive.every((p) => royaleCurrent(state, p) === null)) return finish(state, 'exhausted', uniqueTop, now);
-    if (now >= gameDeadline(state)) return finish(state, 'time', uniqueTop, now);
+    if (alive.every((p) => royaleCurrent(state, p) === null)) return finishOrTiebreak(state, 'exhausted', uniqueTop, now);
+    if (now >= gameDeadline(state)) return finishOrTiebreak(state, 'time', uniqueTop, now);
     return { finished: false };
   }
 
@@ -787,7 +853,7 @@ function evaluate(state: LiveState, now: number): { finished: boolean } {
     }
   }
 
-  if (isExhausted(state, players)) return finish(state, 'exhausted', uniqueLeader, now);
+  if (isExhausted(state, players)) return finishOrTiebreak(state, 'exhausted', uniqueLeader, now);
 
   // Tiempo
   if (now >= state.endsAt && state.overtimeEndsAt === null) {
@@ -796,10 +862,89 @@ function evaluate(state: LiveState, now: number): { finished: boolean } {
       pushEvent(state, { at: now, kind: 'overtime' });
       return { finished: false };
     }
-    return finish(state, 'time', uniqueLeader, now);
+    return finishOrTiebreak(state, 'time', uniqueLeader, now);
   }
-  if (state.overtimeEndsAt !== null && now >= state.overtimeEndsAt) return finish(state, 'time', uniqueLeader, now);
+  if (state.overtimeEndsAt !== null && now >= state.overtimeEndsAt) return finishOrTiebreak(state, 'time', uniqueLeader, now);
 
+  return { finished: false };
+}
+
+// ---------- Desempate (muerte súbita) ----------
+
+/** Jugadores empatados en la cima por el resultado visible (métrica del modo y puntaje). */
+export function tiedLeaders(state: LiveState): string[] {
+  const metric = rankMetric(state.config);
+  const ranked = rankState(state);
+  const top = ranked[0];
+  if (!top) return [];
+  return ranked.filter((p) => rankPrimary(p, metric) === rankPrimary(top, metric) && p.score === top.score).map((p) => p.uid);
+}
+
+/** Termina la partida o, si hay empate en la cima y cripticos de desempate, abre la muerte súbita. */
+function finishOrTiebreak(state: LiveState, reason: EndReason, winnerId: string | null, now: number): { finished: boolean } {
+  const ids = state.tiebreakIds ?? [];
+  if (!state.boss && !state.tiebreak && ids.length > 0) {
+    const tied = tiedLeaders(state);
+    if (tied.length >= 2) {
+      const opensAt = now + TIEBREAK_INTRO_MS;
+      state.round = state.round ? { ...state.round, closesAt: null } : null;
+      state.tiebreak = {
+        uids: tied,
+        index: 0,
+        total: ids.length,
+        crypticId: ids[0]!,
+        opensAt,
+        closesAt: opensAt + TIEBREAK_TIME_MS,
+        reason,
+        played: [ids[0]!],
+        winnerId: null,
+      };
+      pushEvent(state, { at: now, kind: 'tiebreak', crypticId: ids[0]! });
+      return { finished: false };
+    }
+  }
+  return finish(state, reason, winnerId, now);
+}
+
+/** Ganador según el ranking completo (pistas y hora del último acierto) o nadie si siguen empatados. */
+function rankedWinner(state: LiveState): string | null {
+  const ranked = rankState(state);
+  const leader = ranked[0];
+  const second = ranked[1];
+  return leader && (!second || second.rank !== leader.rank) ? leader.uid : null;
+}
+
+function applyTiebreakAnswer(state: LiveState, participant: Participant, correct: boolean, now: number): AnswerOutcome {
+  const tb = state.tiebreak!;
+  if (!correct) {
+    participant.wrongAttempts += 1; // Sin penalización: solo cuenta para las estadísticas.
+    return { correct: false, points: 0, finished: false, stale: false };
+  }
+  participant.tiebreakWon = true;
+  participant.lastSolvedAt = now;
+  tb.winnerId = participant.uid;
+  pushEvent(state, { at: now, kind: 'tiebreak', uid: participant.uid, crypticId: tb.crypticId });
+  finish(state, 'tiebreak', participant.uid, now);
+  return { correct: true, points: 0, finished: true, stale: false };
+}
+
+/** Nadie acertó a tiempo: siguiente criptico de desempate o, sin más, final con el ranking completo. */
+function tickTiebreak(state: LiveState, now: number): { finished: boolean } {
+  const tb = state.tiebreak!;
+  if (now < tb.closesAt) return { finished: false };
+  const ids = state.tiebreakIds ?? [];
+  const next = ids[tb.index + 1];
+  if (!next) return finish(state, tb.reason, rankedWinner(state), now);
+  const opensAt = now + TIEBREAK_INTRO_MS;
+  state.tiebreak = {
+    ...tb,
+    index: tb.index + 1,
+    crypticId: next,
+    opensAt,
+    closesAt: opensAt + TIEBREAK_TIME_MS,
+    played: [...tb.played, next],
+  };
+  pushEvent(state, { at: now, kind: 'tiebreak', crypticId: next });
   return { finished: false };
 }
 
@@ -818,6 +963,16 @@ function isExhausted(state: LiveState, players: Participant[]): boolean {
  * - 'free' en vivo: ninguno (los rivales podrían seguir con el mismo criptico).
  */
 export function revealableIds(state: LiveState): string[] {
+  const base = baseRevealableIds(state);
+  const tb = state.tiebreak;
+  if (!tb) return base;
+  // Desempate: los ya cerrados en vivo; al terminar, los que llegaron a abrirse.
+  const finishedAt = state.finishedAt ?? Number.POSITIVE_INFINITY;
+  const closed = state.status === 'finished' ? tb.played.filter((id) => id !== tb.crypticId || tb.opensAt <= finishedAt) : tb.played.slice(0, tb.index);
+  return [...base, ...closed.filter((id) => !base.includes(id))];
+}
+
+function baseRevealableIds(state: LiveState): string[] {
   const finishedAt = state.finishedAt ?? Number.POSITIVE_INFINITY;
   if (state.config.flow === 'rounds') {
     const round = state.round;

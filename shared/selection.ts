@@ -84,3 +84,23 @@ export function selectCryptics(input: SelectionInput): Selection {
       : shuffle(DIFFICULTIES.flatMap((tier) => chosen[tier]), random);
   return { crypticIds: crypticIds.slice(0, input.count), pool: chosen };
 }
+
+/** Cripticos de desempate por partida: uno por dificultad, de menor a mayor. */
+export const TIEBREAK_COUNT = 3;
+
+/**
+ * Elige los cripticos de muerte súbita (pool aparte, respuestas de 2 o 3 palabras):
+ * el menos visto de cada dificultad, en orden fácil → medio → difícil. Si una dificultad
+ * no tiene, se completa con las otras para llegar a `TIEBREAK_COUNT`.
+ */
+export function selectTiebreakers(byTier: ByTier, lastSeen: Map<string, number>, random: () => number = Math.random): string[] {
+  const ordered = DIFFICULTIES.map((tier) => byFreshness(byTier[tier] ?? [], lastSeen, random));
+  const picked = ordered.map((ids) => ids[0]).filter((id): id is string => id !== undefined);
+  for (const ids of ordered) {
+    for (const id of ids.slice(1)) {
+      if (picked.length >= TIEBREAK_COUNT) break;
+      picked.push(id);
+    }
+  }
+  return picked.slice(0, TIEBREAK_COUNT);
+}

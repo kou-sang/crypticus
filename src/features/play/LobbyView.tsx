@@ -1,9 +1,11 @@
 // Sala de espera: unirse, salir, compartir enlace e iniciar.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Competition, Participant, UserProfile } from '../../../shared/types';
 import { api } from '../../lib/api';
-import { deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
+import { configOf, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
+import { settingsFromConfig } from '../../../shared/gameModes';
+import type { RematchDraft } from './RematchPanel';
 import { errorMessage } from '../../lib/utils';
 import { Avatar, Badge, Button, ErrorBanner } from '../../components/ui';
 import { describeMode, describeModifiers } from '../competitions/CompetitionCard';
@@ -27,6 +29,30 @@ export function LobbyView({
   const isHost = competition.hostId === profile.uid;
   const joined = competition.participantIds.includes(profile.uid);
   const full = competition.participantIds.length >= competition.maxPlayers;
+
+  // Revancha: empieza sola cuando aceptan todos los invitados.
+  const invited = competition.rematchOf ? (competition.invitedIds ?? []) : [];
+  const declined = competition.declinedIds ?? [];
+  const allAccepted = invited.length > 0 && invited.every((id) => competition.participantIds.includes(id));
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!isHost || !allAccepted || autoStarted.current) return;
+    autoStarted.current = true;
+    api.start(competition.id).catch((err: unknown) => setError(errorMessage(err)));
+  }, [isHost, allAccepted, competition.id]);
+
+  const changeParameters = () => {
+    const draft: RematchDraft = {
+      fromId: competition.rematchOf!,
+      title: competition.title,
+      settings: settingsFromConfig(configOf(competition)),
+      visibility: competition.visibility,
+      invitedIds: invited,
+      invitedNames: competition.invitedNames ?? {},
+      replaceId: competition.id,
+    };
+    navigate('/jugar/nueva', { state: { rematch: draft } });
+  };
 
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
@@ -75,6 +101,31 @@ export function LobbyView({
           ))}
         </ul>
       </section>
+
+      {invited.length > 0 && (
+        <section aria-label="Revancha" className="border-l-4 border-ink bg-paper-2/60 px-4 py-3 text-sm">
+          <p className="font-semibold">Revancha: empieza cuando acepten todos.</p>
+          <ul className="mt-2 space-y-1">
+            {invited.map((id) => {
+              const status = competition.participantIds.includes(id) ? 'aceptó' : declined.includes(id) ? 'rechazó' : 'pendiente';
+              return (
+                <li key={id} className="flex justify-between gap-4">
+                  <span>{competition.invitedNames?.[id] ?? 'Jugador'}</span>
+                  <span className={status === 'aceptó' ? 'text-ok' : status === 'rechazó' ? 'text-accent' : 'text-muted'}>{status}</span>
+                </li>
+              );
+            })}
+          </ul>
+          {isHost && declined.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button variant="secondary" onClick={changeParameters}>
+                Cambiar parámetros
+              </Button>
+              <span className="text-xs text-muted">o inicia igual con quienes aceptaron.</span>
+            </div>
+          )}
+        </section>
+      )}
 
       <ErrorBanner error={error} />
 

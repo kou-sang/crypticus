@@ -1,9 +1,11 @@
 // Crear partida: un modo, su parámetro principal y opciones compactas con botón de información.
 // La configuración de cada modo se recuerda entre visitas. Con ?rival=uid&name=... crea un desafío privado.
+// Con state.rematch (desde resultados) propone una revancha con otros parámetros a los mismos jugadores.
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useSession } from '../../hooks/useAuth';
-import { createCompetition } from '../../lib/repo';
+import { createCompetition, deleteCompetition, proposeCustomRematch } from '../../lib/repo';
+import type { RematchDraft } from '../play/RematchPanel';
 import { cx, errorMessage } from '../../lib/utils';
 import { loadJson, saveJson } from '../../lib/storage';
 import {
@@ -18,7 +20,7 @@ import {
   SURRENDER_USES_OPTIONS,
   type ModeSettings,
 } from '../../../shared/gameModes';
-import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, validateConfig } from '../../../shared/scoring';
+import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, LIMITS, validateConfig } from '../../../shared/scoring';
 import { GAME_MODES, type ComebackLevel, type CompetitionVisibility, type DuelDamage, type GameMode } from '../../../shared/types';
 import { Button, ErrorBanner, PageHeader } from '../../components/ui';
 import { BackLink } from '../../components/BackLink';
@@ -32,8 +34,8 @@ interface Stored {
 
 const DEFAULT_STORED: Stored = { settings: DEFAULT_MODE_SETTINGS, visibility: 'public' };
 
-function loadStored(): Stored {
-  const stored = loadJson<Stored>(STORAGE_KEY, DEFAULT_STORED);
+function loadStored(draft?: RematchDraft | null): Stored {
+  const stored: Stored = draft ? { settings: draft.settings, visibility: draft.visibility } : loadJson<Stored>(STORAGE_KEY, DEFAULT_STORED);
   // Mezcla profunda: versiones guardadas antes de agregar un campo no lo pierden.
   const settings = stored.settings ?? DEFAULT_MODE_SETTINGS;
   return {
@@ -142,6 +144,7 @@ function NumberField({
   max,
   suffix,
   label,
+  step = 1,
 }: {
   value: number;
   onChange: (value: number) => void;
@@ -149,7 +152,13 @@ function NumberField({
   max: number;
   suffix?: string;
   label: string;
+  step?: number;
 }) {
+  // Se acota al rango y se lleva al múltiplo de `step` más cercano.
+  const clamp = (raw: number) => Math.min(max, Math.max(min, Math.round((Number.isFinite(raw) ? raw : min) / step) * step));
+  // Borrador local: se puede escribir libremente y el valor se ajusta al salir del campo.
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
   return (
     <label className="inline-flex items-center gap-1.5 text-sm">
       <input
@@ -158,8 +167,18 @@ function NumberField({
         aria-label={label}
         min={min}
         max={max}
-        value={value}
-        onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))}
+        step={step}
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const n = Number(e.target.value);
+          if (n >= min && n <= max && n % step === 0) onChange(n);
+        }}
+        onBlur={() => {
+          const next = clamp(Number(draft));
+          setDraft(String(next));
+          onChange(next);
+        }}
         className="h-9 w-16 border border-line bg-paper px-2 text-center font-mono focus:border-ink focus:outline-none"
       />
       {suffix && <span className="text-muted">{suffix}</span>}
@@ -229,26 +248,11 @@ function RacePanel({ settings, update }: { settings: ModeSettings['race']; updat
       <Option title="Diferencia de dos" info="Para ganar hay que llegar a la meta con 2 cripticos de ventaja. Si no, hay prórroga.">
         <Toggle label="Diferencia de dos" checked={settings.winByTwo} onChange={(winByTwo) => update({ winByTwo })} />
       </Option>
-      <Option
-        title="Rendirse"
+      <SurrenderOption
+        value={settings.surrender}
+        onChange={(surrender) => update({ surrender })}
         info="Cada jugador puede rendirse ante el criptico actual un número limitado de veces. En Hardcore, el resto tiene 5 segundos para acertarlo antes de pasar al siguiente. En Pacífico, solo tú pasas al siguiente."
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <Toggle
-            label="Rendirse"
-            checked={settings.surrender.enabled}
-            onChange={(enabled) => update({ surrender: { ...settings.surrender, enabled } })}
-          />
-          {settings.surrender.enabled && (
-            <Chips<number>
-              label="Usos por jugador"
-              value={settings.surrender.maxUses}
-              options={SURRENDER_USES_OPTIONS.map((n): [number, string] => [n, `${n}×`])}
-              onChange={(maxUses) => update({ surrender: { ...settings.surrender, maxUses } })}
-            />
-          )}
-        </div>
-      </Option>
+      />
       <Option title="Pedir pista" info="Hasta 2 pistas por criptico.">
         <Toggle label="Pedir pista" checked={settings.hints} onChange={(hints) => update({ hints })} />
       </Option>
@@ -257,6 +261,33 @@ function RacePanel({ settings, update }: { settings: ModeSettings['race']; updat
         <span className="text-sm text-muted">10 min máx.</span>
       </Option>
     </>
+  );
+}
+
+/** Rendirse ante el criptico actual, con usos limitados (Race y Duel). */
+function SurrenderOption({
+  value,
+  onChange,
+  info,
+}: {
+  value: { enabled: boolean; maxUses: number };
+  onChange: (value: { enabled: boolean; maxUses: number }) => void;
+  info: string;
+}) {
+  return (
+    <Option title="Rendirse" info={info}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Toggle label="Rendirse" checked={value.enabled} onChange={(enabled) => onChange({ ...value, enabled })} />
+        {value.enabled && (
+          <Chips<number>
+            label="Usos por jugador"
+            value={value.maxUses}
+            options={SURRENDER_USES_OPTIONS.map((n): [number, string] => [n, `${n}×`])}
+            onChange={(maxUses) => onChange({ ...value, maxUses })}
+          />
+        )}
+      </div>
+    </Option>
   );
 }
 
@@ -331,11 +362,42 @@ function RoyalePanel({ settings, update }: { settings: ModeSettings['royale']; u
 }
 
 function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; update: (patch: Partial<ModeSettings['duel']>) => void }) {
+  const preset = (DUEL_HP_OPTIONS as readonly number[]).includes(settings.hp);
+  const [custom, setCustom] = useState(!preset);
   return (
     <>
       <section className="py-2">
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Vida</p>
-        <Chips<number> label="Vida" value={settings.hp} options={DUEL_HP_OPTIONS.map((hp): [number, string] => [hp, `${hp}`])} onChange={(hp) => update({ hp })} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Chips<number>
+            label="Vida"
+            value={custom ? -1 : settings.hp}
+            options={DUEL_HP_OPTIONS.map((hp): [number, string] => [hp, `${hp}`])}
+            onChange={(hp) => {
+              setCustom(false);
+              update({ hp });
+            }}
+          />
+          <button
+            type="button"
+            aria-pressed={custom}
+            onClick={() => setCustom(true)}
+            className={cx('h-9 border px-3 text-sm font-semibold', custom ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink')}
+          >
+            Otra
+          </button>
+          {custom && (
+            <NumberField
+              label="Vida personalizada"
+              value={settings.hp}
+              min={LIMITS.duelMinHp}
+              max={LIMITS.duelMaxHp}
+              step={LIMITS.duelHpStep}
+              suffix={`de a ${LIMITS.duelHpStep}`}
+              onChange={(hp) => update({ hp })}
+            />
+          )}
+        </div>
       </section>
       <Option
         title="Puntaje"
@@ -352,8 +414,13 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
         />
       </Option>
       <Option title="Combo" info={DUEL_COMBO_INFO}>
-        <span className="text-sm text-muted">Siempre activo</span>
+        <Toggle label="Combo" checked={settings.combo} onChange={(combo) => update({ combo })} />
       </Option>
+      <SurrenderOption
+        value={settings.surrender}
+        onChange={(surrender) => update({ surrender })}
+        info="En vez de saltear: cada jugador puede rendirse ante el criptico actual un número limitado de veces. El rival tiene 5 segundos para acertarlo; si no, se pasa al siguiente."
+      />
       <Option
         title="Remontada"
         info="Quien tiene menos vida golpea más fuerte con cripticos medios y difíciles, en proporción a la diferencia de vida."
@@ -380,8 +447,10 @@ export default function CreateCompetitionPage() {
   const rivalId = params.get('rival');
   const rivalName = params.get('name') ?? 'tu amigo';
 
-  const [stored, setStored] = useState<Stored>(loadStored);
-  const [title, setTitle] = useState('');
+  const location = useLocation();
+  const rematch = (location.state as { rematch?: RematchDraft } | null)?.rematch ?? null;
+  const [stored, setStored] = useState<Stored>(() => loadStored(rematch));
+  const [title, setTitle] = useState(rematch?.title ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => saveJson(STORAGE_KEY, stored), [stored]);
@@ -404,14 +473,27 @@ export default function CreateCompetitionPage() {
     setError(null);
     setBusy(true);
     try {
-      const id = await createCompetition(profile, {
+      const input = {
         ...built.config,
         title: (title.trim() || (rivalId ? `Desafío · ${built.title}` : built.title)).slice(0, 60),
         visibility,
         maxPlayers: built.maxPlayers,
         clueCount: built.clueCount,
         ...(rivalId ? { invitedIds: [rivalId] } : {}),
-      });
+      };
+      let id: string;
+      if (rematch) {
+        id = await proposeCustomRematch(profile, rematch.fromId, {
+          ...input,
+          invitedIds: rematch.invitedIds,
+          invitedNames: rematch.invitedNames,
+          rematchOf: rematch.fromId,
+        });
+        // La propuesta anterior (rechazada) se reemplaza por esta.
+        if (rematch.replaceId) await deleteCompetition(rematch.replaceId, profile.uid).catch(() => undefined);
+      } else {
+        id = await createCompetition(profile, input);
+      }
       navigate(`/c/${id}`, { replace: true });
     } catch (err) {
       setError(errorMessage(err));
@@ -422,7 +504,12 @@ export default function CreateCompetitionPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <BackLink fallback="/jugar" />
-      <PageHeader kicker="Jugar" title={rivalId ? `Desafiar a ${rivalName}` : 'Nueva partida'} />
+      <PageHeader kicker="Jugar" title={rematch ? 'Revancha con otros parámetros' : rivalId ? `Desafiar a ${rivalName}` : 'Nueva partida'} />
+      {rematch && (
+        <p className="-mt-4 mb-6 text-sm text-muted">
+          Se enviará a {Object.values(rematch.invitedNames).join(', ') || 'los mismos jugadores'}. Empieza cuando acepten todos.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div role="tablist" aria-label="Modo de juego" className="grid grid-cols-4 border border-ink">

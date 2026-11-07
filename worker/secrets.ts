@@ -12,6 +12,7 @@ export interface WorkerCrypticSecret {
   hints: string[];
   explanation?: string;
   answer?: string; // Forma legible para mostrar al final (los importes anteriores no la tienen).
+  tiebreak?: boolean; // Pool de desempate: nunca entra en la selección normal.
 }
 
 const secrets = rawSecrets as unknown as Record<string, WorkerCrypticSecret>;
@@ -20,14 +21,24 @@ export function getCrypticSecret(crypticId: string): WorkerCrypticSecret | null 
   return Object.prototype.hasOwnProperty.call(secrets, crypticId) ? (secrets[crypticId] ?? null) : null;
 }
 
-/** Todos los cripticos empaquetados, por dificultad (base de la selección sin repetir). */
-let byTierCache: Record<Difficulty, string[]> | null = null;
-export function catalogByTier(): Record<Difficulty, string[]> {
+/** Todos los cripticos empaquetados, por dificultad: los normales y los de desempate por separado. */
+let byTierCache: { regular: Record<Difficulty, string[]>; tiebreak: Record<Difficulty, string[]> } | null = null;
+function buildByTier() {
   if (!byTierCache) {
-    byTierCache = { easy: [], medium: [], hard: [] };
-    for (const [id, secret] of Object.entries(secrets)) byTierCache[secret.tier]?.push(id);
+    byTierCache = { regular: { easy: [], medium: [], hard: [] }, tiebreak: { easy: [], medium: [], hard: [] } };
+    for (const [id, secret] of Object.entries(secrets)) byTierCache[secret.tiebreak ? 'tiebreak' : 'regular'][secret.tier]?.push(id);
   }
   return byTierCache;
+}
+
+/** Base de la selección sin repetir (excluye el pool de desempate). */
+export function catalogByTier(): Record<Difficulty, string[]> {
+  return buildByTier().regular;
+}
+
+/** Pool de desempate (respuestas de 2 y 3 palabras), por dificultad. */
+export function catalogTiebreak(): Record<Difficulty, string[]> {
+  return buildByTier().tiebreak;
 }
 
 /** Catálogo (dificultad + nº de pistas) de los ids que tengan secreto disponible. */
@@ -49,7 +60,10 @@ export function solutionsFor(state: LiveState): Solution[] {
       crypticId,
       answer: secret?.answer ?? null,
       explanation: secret?.explanation ?? null,
-      solvedBy: participants.filter((p) => p.solvedIds.includes(crypticId)).map((p) => p.uid),
+      solvedBy:
+        state.tiebreak?.played.includes(crypticId) === true
+          ? state.tiebreak.winnerId && state.tiebreak.crypticId === crypticId ? [state.tiebreak.winnerId] : []
+          : participants.filter((p) => p.solvedIds.includes(crypticId)).map((p) => p.uid),
     };
   });
 }

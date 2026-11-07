@@ -1,32 +1,12 @@
-// Inicio: bienvenida, fecha y guía breve de cómo usar Crypticus.
+// Inicio (también es la portada "/"): saludo, fecha y un resumen breve de qué es Crypticus y cómo se juega.
 import { Link } from 'react-router';
+import { DemoCryptic } from '../../components/DemoCryptic';
 import { useSession } from '../../hooks/useAuth';
 import { useFriends } from '../../hooks/useFriends';
+import { GAME_LABELS } from '../../../shared/scoring';
+import { RANKED_MODES } from '../../../shared/types';
 
 const TODAY = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
-const STEPS = [
-  {
-    title: 'Jugar',
-    to: '/jugar',
-    text: 'Crea una sala (pública, solo amigos o privada por enlace) o únete a una abierta. Configura modo, tiempo y reglas antes de empezar.',
-  },
-  {
-    title: 'Resolver',
-    to: null,
-    text: 'Cada criptico tiene una definición y un juego de palabras. Escribe en las casillas; el número entre paréntesis indica las letras.',
-  },
-  {
-    title: 'Aprender',
-    to: null,
-    text: 'Al cerrar cada criptico verás la respuesta y su explicación. Nunca se repite un criptico que ya jugaste.',
-  },
-  {
-    title: 'Amigos y ranking',
-    to: '/amigos',
-    text: 'Agrega amigos, desafíalos y sigue tu progreso en el ranking por modo.',
-  },
-] as const;
 
 export default function DashboardPage() {
   const { profile } = useSession();
@@ -35,41 +15,53 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <header className="mb-8 border-b-2 border-ink pb-5">
+      <header className="mb-6 border-b-2 border-ink pb-5">
         <h1 className="font-display text-4xl leading-tight md:text-5xl">Hola, {profile.displayName.split(' ')[0]}</h1>
         <p className="mt-2 text-sm capitalize text-muted">{today}</p>
       </header>
 
       {incoming.length > 0 && (
-        <Link to="/amigos" className="mb-8 block border-l-4 border-accent bg-accent/10 px-4 py-3 text-sm">
+        <Link to="/amigos" className="mb-6 block border-l-4 border-accent bg-accent/10 px-4 py-3 text-sm">
           Tienes <strong>{incoming.length}</strong> {incoming.length > 1 ? 'solicitudes' : 'solicitud'} de amistad →
         </Link>
       )}
 
       <p className="text-lg leading-relaxed">
-        <strong>Crypticus</strong> es una arena de cripticos en tiempo real: compites contra otras personas resolviendo
-        pistas crípticas en español. Gana quien combine rapidez y buen ojo para el doble sentido.
+        Cripticos en español, en tiempo real y contra otras personas. Cada pista tiene una explicación, y nunca se repite.
       </p>
 
-      <ol className="mt-8 divide-y divide-line border-y border-line">
-        {STEPS.map((step, index) => (
-          <li key={step.title} className="grid grid-cols-[2rem_1fr] gap-3 py-4">
-            <span className="font-display text-2xl text-accent">{index + 1}</span>
-            <div>
-              <h2 className="font-semibold">
-                {step.to ? (
-                  <Link to={step.to} className="underline-offset-4 hover:underline">
-                    {step.title} →
-                  </Link>
-                ) : (
-                  step.title
-                )}
-              </h2>
-              <p className="mt-1 text-sm text-muted">{step.text}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
+      <div className="mt-6">
+        <DemoCryptic />
+      </div>
+
+      <section className="mt-8" aria-labelledby="modos">
+        <div className="flex items-baseline justify-between">
+          <h2 id="modos" className="font-display text-2xl">Modos</h2>
+          <Link to="/jugar" className="text-sm font-semibold underline-offset-4 hover:underline">
+            Jugar →
+          </Link>
+        </div>
+        <ul className="mt-3 grid gap-px border border-ink bg-ink sm:grid-cols-3">
+          {RANKED_MODES.map((mode) => (
+            <li key={mode} className="bg-paper p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">{GAME_LABELS[mode].tagline}</p>
+              <p className="mt-1 font-display text-xl uppercase">{GAME_LABELS[mode].title}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <p className="mt-6 text-sm text-muted">
+        Agrega amigos para desafiarlos en{' '}
+        <Link to="/amigos" className="underline underline-offset-4">
+          Amigos
+        </Link>{' '}
+        y sigue tu Elo por modo en{' '}
+        <Link to="/rankings" className="underline underline-offset-4">
+          Ranking
+        </Link>
+        .
+      </p>
     </div>
   );
 }

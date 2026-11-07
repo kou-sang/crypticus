@@ -24,6 +24,7 @@ export type DuelDamage = 'difficulty' | 'speed';
 export interface DuelConfig {
   hp: number; // Vida inicial de cada jugador.
   damage: DuelDamage; // El daño depende de la dificultad o de la velocidad.
+  combo?: boolean; // Aciertos seguidos golpean más fuerte. Ausente (salas previas a v0.9) = activo.
 }
 
 export interface RoyaleConfig {
@@ -107,6 +108,8 @@ export interface CrypticImportItem {
   explanation?: string;
   setter?: string;
   tags?: string[];
+  /** Pool de desempate (respuestas de 2 o 3 palabras): solo se usa en la muerte súbita. */
+  tiebreak?: boolean;
 }
 
 export interface Competition extends CompetitionConfig {
@@ -127,6 +130,10 @@ export interface Competition extends CompetitionConfig {
   winnerId: string | null;
   invitedIds?: string[]; // Desafío: amigos invitados (ven la sala en Amigos).
   clueCount?: number; // Cantidad pedida al crear; el servidor elige los cripticos al iniciar.
+  rematchId?: string; // Partida terminada: última propuesta de revancha (la ven todos los jugadores).
+  rematchOf?: string; // Sala de revancha: partida de origen.
+  invitedNames?: Record<string, string>; // Sala de revancha: nombres de los invitados (para mostrar quién falta).
+  declinedIds?: string[]; // Sala de revancha: invitados que la rechazaron.
 }
 
 export interface Participant {
@@ -151,6 +158,7 @@ export interface Participant {
   // ---- Secuencial (Race Pacífico, Royale) ----
   nextOpensAt?: number; // El criptico en `cursor` no se muestra ni se puede responder antes.
   surrenders?: number; // Rendiciones usadas.
+  tiebreakWon?: boolean; // Ganó la muerte súbita de desempate.
 }
 
 /** Estadísticas por modo (escritas por el servidor). */

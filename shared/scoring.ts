@@ -35,6 +35,9 @@ export const DEFAULT_CONFIG: CompetitionConfig = {
 };
 
 export const LIMITS = {
+  duelMinHp: 50,
+  duelMaxHp: 1000,
+  duelHpStep: 50,
   minDurationSec: 60,
   maxDurationSec: 3 * 60 * 60,
   minTargetCount: 1,
@@ -63,13 +66,13 @@ export const GAME_LABELS: Record<GameMode, { title: string; tagline: string; des
   },
   royale: {
     title: 'Royale',
-    tagline: 'Reloj de ajedrez',
+    tagline: 'Supervivencia',
     description: 'Cada acierto suma segundos a tu reloj; cada duda los consume. La dificultad sube sin pausa. Queda uno solo.',
   },
   duel: {
     title: 'Duel',
     tagline: 'Uno contra uno',
-    description: 'El mismo criptico para los dos. Quien lo resuelve primero golpea, y los aciertos seguidos golpean más fuerte.',
+    description: 'El mismo criptico para los dos. Quien lo resuelve primero golpea; con combo, los aciertos seguidos golpean más fuerte.',
   },
   boss: { title: 'Boss', tagline: 'Próximamente', description: 'Hasta cuatro jugadores contra un mismo adversario. En preparación.' },
 };
@@ -253,7 +256,10 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
   if (config.game === 'boss') errors.push('El modo Boss estará disponible próximamente.');
   if (config.game === 'duel') {
     if (maxPlayers !== 2) errors.push('Duel es solo para 2 jugadores.');
-    if (!config.duel || config.duel.hp < 50 || config.duel.hp > 500) errors.push('La vida del duelo debe estar entre 50 y 500.');
+    const hp = config.duel?.hp ?? 0;
+    if (hp < LIMITS.duelMinHp || hp > LIMITS.duelMaxHp || hp % LIMITS.duelHpStep !== 0) {
+      errors.push(`La vida del duelo debe estar entre ${LIMITS.duelMinHp} y ${LIMITS.duelMaxHp}, de a ${LIMITS.duelHpStep}.`);
+    }
   }
   if ((config.game === 'race' || config.game === 'royale') && maxPlayers > LIMITS.maxModePlayers) {
     errors.push(`Este modo admite hasta ${LIMITS.maxModePlayers} jugadores.`);
@@ -280,16 +286,21 @@ export type RankMetric = 'score' | 'solved' | 'survival';
  * > resolvió antes > se unió antes. Empates exactos comparten posición.
  * Supervivencia: los que siguen en pie primero; entre eliminados, quien cayó más tarde.
  */
+/** Valor principal del ranking según la métrica del modo (mayor es mejor). */
+export function rankPrimary(p: Participant, metric: RankMetric): number {
+  if (metric === 'solved') return p.solvedIds.length;
+  if (metric === 'survival') return (p.eliminatedAt == null ? 1e15 : p.eliminatedAt * 100) + Math.min(99, p.solvedIds.length);
+  return p.score;
+}
+
 export function rankParticipants(participants: Participant[], metric: RankMetric = 'score'): RankedParticipant[] {
-  const primary = (p: Participant) =>
-    metric === 'solved'
-      ? p.solvedIds.length
-      : metric === 'survival'
-        ? (p.eliminatedAt == null ? 1e15 : p.eliminatedAt * 100) + Math.min(99, p.solvedIds.length)
-        : p.score;
+  const primary = (p: Participant) => rankPrimary(p, metric);
+  const won = (p: Participant) => (p.tiebreakWon === true ? 1 : 0);
   const sorted = [...participants].sort((a, b) => {
     if (primary(b) !== primary(a)) return primary(b) - primary(a);
     if (b.score !== a.score) return b.score - a.score;
+    // Quien ganó la muerte súbita queda por delante de los empatados.
+    if (won(b) !== won(a)) return won(b) - won(a);
     if (a.hintsUsed !== b.hintsUsed) return a.hintsUsed - b.hintsUsed;
     const aTime = a.lastSolvedAt ?? Number.POSITIVE_INFINITY;
     const bTime = b.lastSolvedAt ?? Number.POSITIVE_INFINITY;
@@ -304,6 +315,7 @@ export function rankParticipants(participants: Participant[], metric: RankMetric
       previous !== undefined &&
       primary(previous) === primary(participant) &&
       previous.score === participant.score &&
+      won(previous) === won(participant) &&
       previous.hintsUsed === participant.hintsUsed &&
       previous.lastSolvedAt === participant.lastSolvedAt;
     ranked.push({ ...participant, rank: tied ? previous.rank : index + 1 });
