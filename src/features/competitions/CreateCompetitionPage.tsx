@@ -17,6 +17,7 @@ import {
   COOLDOWN_OPTIONS,
   RACE_TARGET_OPTIONS,
   ROYALE_PRESETS,
+  ROYALE_SKIP_OPTIONS,
   SUDDEN_DEATH_OPTIONS,
   SURRENDER_USES_OPTIONS,
   type DuelFormat,
@@ -372,6 +373,17 @@ function RoyalePanel({ settings, update }: { settings: ModeSettings['royale']; u
       </section>
       <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option
+        title="Saltear"
+        info={`Cada jugador puede saltear el criptico actual 1 o 2 veces en toda la partida. Cada salto resta del reloj lo mismo que suma un acierto (${settings.incrementSec > 0 ? `${settings.incrementSec} s` : '5 s si no hay incremento'}).`}
+      >
+        <Chips<number>
+          label="Saltear"
+          value={settings.skips}
+          options={ROYALE_SKIP_OPTIONS.map((n): [number, string] => [n, n === 0 ? 'No' : `${n}×`])}
+          onChange={(skips) => update({ skips })}
+        />
+      </Option>
+      <Option
         title="Cómo se juega"
         info="Primer número: minutos de tu reloj. Segundo: segundos que suma cada acierto. Los cripticos son siempre los mismos para todos y cada vez más difíciles (10 fáciles, 10 medios, después difíciles). Sin pausas: al acertar pasas al siguiente. Quien llega a 0 queda eliminado; gana el último en pie."
       >
@@ -457,7 +469,7 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
       />
       <Option
         title="Remontada"
-        info="Quien tiene menos vida golpea más fuerte con cripticos medios y difíciles, en proporción a la diferencia de vida."
+        info="Quien va perdiendo golpea más fuerte según la brecha con el líder: brecha = (vida del líder − tu vida) / vida del líder. Suave: ×(1 + brecha). Fuerte: ×(1 + 2 × brecha)."
       >
         <Chips<ComebackLevel> label="Remontada" value={settings.comeback} options={COMEBACK} onChange={(comeback) => update({ comeback })} />
       </Option>

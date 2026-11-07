@@ -1,11 +1,11 @@
 // Vistas específicas de cada modo: relojes de Royale, barras de vida de Duel y pausa entre cripticos.
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { cooldownMs, duelOneHitFromDeath, royaleCurrent, royaleRemaining, type LiveState, rivalsOf, sideOf } from '../../../shared/engine';
+import { cooldownMs, duelOneHitFromDeath, royaleCurrent, royaleRemaining, royaleSkipPenaltyMs, type LiveState, rivalsOf, sideOf } from '../../../shared/engine';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { useNow } from '../../hooks/useNow';
 import { playCue } from '../../lib/sound';
-import { cx, formatClock } from '../../lib/utils';
-import { Button, Spinner } from '../../components/ui';
+import { cx, errorMessage, formatClock } from '../../lib/utils';
+import { Button, ErrorBanner, Spinner } from '../../components/ui';
 import { CluePanel } from './CluePanel';
 import { useCryptics } from './useCryptics';
 
@@ -111,11 +111,40 @@ export function RoyaleFlow({ state, uid, actions, offsetMs }: { state: LiveState
             isBoss={false}
             actions={actions}
           />
-          <Button variant="ghost" onClick={() => void actions.pass().catch(() => undefined)}>
-            Pasar al siguiente →
-          </Button>
+          <RoyaleSkip state={state} uid={uid} actions={actions} />
         </>
       )}
+    </div>
+  );
+}
+
+/** Saltar en Royale: usos limitados y cuesta tiempo del reloj. */
+function RoyaleSkip({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const royale = state.config.royale;
+  const allowed = royale?.skips ?? 0;
+  if (!royale || allowed <= 0) return null;
+  const left = allowed - (state.participants[uid]?.skipsUsed ?? 0);
+  const cost = royaleSkipPenaltyMs(royale) / 1000;
+  if (left <= 0) return <p className="text-xs text-muted">Sin saltos.</p>;
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await actions.pass();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      <Button variant="ghost" loading={busy} onClick={() => void run()}>
+        Saltear (−{cost} s) · quedan {left}
+      </Button>
+      <ErrorBanner error={error} />
     </div>
   );
 }

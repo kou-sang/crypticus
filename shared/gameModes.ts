@@ -36,7 +36,11 @@ export interface RoyaleSettings {
   baseSec: number;
   incrementSec: number;
   cooldownSec: number;
+  skips: number; // 0 = sin saltear; 1 o 2 usos (ver ROYALE_SKIP_OPTIONS).
 }
+
+/** Royale: saltos permitidos por jugador. */
+export const ROYALE_SKIP_OPTIONS = [0, 1, 2] as const;
 
 export interface DuelSettings {
   hp: number; // De a 50 (ver LIMITS.duelHpStep).
@@ -83,7 +87,7 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
     hintsPerGame: 2,
     cooldownSec: 2,
   },
-  royale: { baseSec: 120, incrementSec: 5, cooldownSec: 1 },
+  royale: { baseSec: 120, incrementSec: 5, cooldownSec: 1, skips: 0 },
   duel: { hp: 150, damage: 'difficulty', comeback: 'low', cooldownSec: 2, combo: true, surrender: { enabled: true, maxUses: 2 }, format: '1v1' },
 };
 
@@ -105,7 +109,7 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
   const base: CompetitionConfig = { ...DEFAULT_CONFIG, game: settings.game, intervalSec: 0, maxHintsPerClue: 0 };
 
   if (settings.game === 'royale') {
-    const { baseSec, incrementSec } = settings.royale;
+    const { baseSec, incrementSec, skips } = settings.royale;
     return {
       config: {
         ...base,
@@ -113,7 +117,7 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
         flow: 'free',
         tierMix: 'progressive',
         durationSec: 60 * 60,
-        royale: { baseSec, incrementSec },
+        royale: { baseSec, incrementSec, skips },
         cooldownSec: settings.royale.cooldownSec,
       },
       maxPlayers: MODE_MAX_PLAYERS.royale,
@@ -197,7 +201,12 @@ export function settingsFromConfig(config: CompetitionConfig): ModeSettings {
           }
         : d.race,
     royale: config.royale
-      ? { baseSec: config.royale.baseSec, incrementSec: config.royale.incrementSec, cooldownSec: config.cooldownSec ?? d.royale.cooldownSec }
+      ? {
+          baseSec: config.royale.baseSec,
+          incrementSec: config.royale.incrementSec,
+          cooldownSec: config.cooldownSec ?? d.royale.cooldownSec,
+          skips: config.royale.skips ?? 0,
+        }
       : d.royale,
     duel: config.duel
       ? {

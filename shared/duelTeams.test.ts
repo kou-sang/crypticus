@@ -80,8 +80,8 @@ describe('Duel 2 vs 2', () => {
   it('el combo es del equipo: aciertos seguidos de compañeros distintos lo suman', () => {
     const state = start('2v2', team2v2);
     hit(state, 'a'); // 40
-    hit(state, 'b'); // 50 (×1.25)
-    expect(state.participants.c!.score).toBe(10);
+    hit(state, 'b'); // 46 (×2 = +15 %)
+    expect(state.participants.c!.score).toBe(14);
     expect(state.participants.a!.streak).toBe(2);
     hit(state, 'd'); // corta el combo de A-B
     expect(state.participants.a!.streak).toBe(0);

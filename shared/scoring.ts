@@ -81,7 +81,8 @@ export const DUEL_DAMAGE_LABELS: Record<DuelDamage, { title: string; description
   difficulty: { title: 'Dificultad', description: 'Fácil 20, medio 30, difícil 40 de daño.' },
   speed: { title: 'Velocidad', description: 'Hasta 40 de daño; baja cuanto más tardas (mín. 10).' },
 };
-export const DUEL_COMBO_INFO = 'Combo: acertar primero varias veces seguidas suma +25 % de daño por golpe (máx. ×2). Se corta cuando el rival acierta.';
+export const DUEL_COMBO_INFO =
+  'Combo ×N = N aciertos seguidos. Daño extra: ×2 +15 %, ×3 +30 %, ×4 +50 %, ×5 +80 %, ×6 o más +110 %. Se corta cuando el rival acierta.';
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil' };
 
@@ -125,9 +126,8 @@ export const BOSS_HP_PER_PLAYER: Record<BossLevel, number> = { normal: 350, hard
 export const BOSS_HEAL_ON_MISS: Record<BossLevel, number> = { normal: 15, hard: 25, epic: 40 };
 
 const TIER_MULTIPLIER: Record<Difficulty, number> = { easy: 1, medium: 1.5, hard: 2 };
-/** Peso de la dificultad en la remontada: los fáciles no dan bonus de remontada. */
-const TIER_COMEBACK_WEIGHT: Record<Difficulty, number> = { easy: 0, medium: 0.5, hard: 1 };
-const COMEBACK_STRENGTH: Record<ComebackLevel, number> = { off: 0, low: 0.5, high: 1 };
+/** Remontada: suave = 1 + 1·brecha; fuerte = 1 + 2·brecha (brecha = (líder − tú) / líder). */
+export const COMEBACK_STRENGTH: Record<ComebackLevel, number> = { off: 0, low: 1, high: 2 };
 
 export function tierMultiplier(tier: Difficulty): number {
   return TIER_MULTIPLIER[tier];
@@ -140,11 +140,11 @@ export function gapRatio(score: number, leaderScore: number): number {
 }
 
 /**
- * Multiplicador de remontada, proporcional al puntaje propio respecto del líder.
- * Ej.: remontada fuerte, difícil, con la mitad de puntos del líder => ×1.5.
+ * Multiplicador de remontada según la distancia al líder (igual para cualquier dificultad).
+ * Ej.: con la mitad del puntaje del líder, suave ×1.5 y fuerte ×2; el líder siempre ×1.
  */
-export function comebackFactor(level: ComebackLevel, tier: Difficulty, score: number, leaderScore: number): number {
-  return 1 + COMEBACK_STRENGTH[level] * TIER_COMEBACK_WEIGHT[tier] * gapRatio(score, leaderScore);
+export function comebackFactor(level: ComebackLevel, score: number, leaderScore: number): number {
+  return 1 + COMEBACK_STRENGTH[level] * gapRatio(score, leaderScore);
 }
 
 export interface SolveInput {
@@ -168,7 +168,7 @@ export function computeSolvePoints(input: SolveInput): number {
   } else {
     raw = base;
   }
-  return Math.round(raw * comebackFactor(input.comeback, input.tier, input.score, input.leaderScore));
+  return Math.round(raw * comebackFactor(input.comeback, input.score, input.leaderScore));
 }
 
 /** Daño al jefe: proporcional al tiempo restante (con un mínimo del 10 %). */
@@ -187,16 +187,17 @@ const DUEL_SPEED_MAX = 40;
 const DUEL_SPEED_WINDOW_MS = 90_000; // A los 90 s el daño por velocidad llega a su mínimo.
 const DUEL_SPEED_MIN_RATIO = 0.25;
 /** Combo: cada acierto consecutivo (sin que el rival acierte en medio) suma +25 % de daño, hasta ×2. */
-export const DUEL_COMBO_STEP = 0.25;
-export const DUEL_COMBO_MAX = 5;
+/** Combo ×N (N aciertos seguidos): daño extra 0 %, 15 %, 30 %, 50 %, 80 % y 110 % desde ×6. */
+export const DUEL_COMBO_BONUS = [0, 0.15, 0.3, 0.5, 0.8, 1.1] as const;
 
 export function duelComboMultiplier(streak: number): number {
-  return 1 + DUEL_COMBO_STEP * (Math.min(Math.max(streak, 1), DUEL_COMBO_MAX) - 1);
+  const index = Math.min(Math.max(Math.floor(streak), 1), DUEL_COMBO_BONUS.length) - 1;
+  return 1 + DUEL_COMBO_BONUS[index]!;
 }
 
 /**
  * Daño que recibe el rival en un duelo. La remontada usa la vida como puntaje:
- * quien tiene menos vida golpea más fuerte (en medio y difícil).
+ * quien tiene menos vida golpea más fuerte, según la brecha con el rival.
  */
 export function computeDuelDamage(input: {
   rule: DuelDamage;
@@ -212,7 +213,7 @@ export function computeDuelDamage(input: {
       ? DUEL_SPEED_MAX * Math.max(DUEL_SPEED_MIN_RATIO, 1 - Math.max(0, input.elapsedMs) / DUEL_SPEED_WINDOW_MS)
       : DUEL_TIER_DAMAGE[input.tier];
   return Math.round(
-    base * comebackFactor(input.comeback, input.tier, input.hp, input.rivalHp) * duelComboMultiplier(input.streak ?? 1),
+    base * comebackFactor(input.comeback, input.hp, input.rivalHp) * duelComboMultiplier(input.streak ?? 1),
   );
 }
 
@@ -272,6 +273,7 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
     const royale = config.royale;
     if (!royale || royale.baseSec < 30 || royale.baseSec > 30 * 60) errors.push('El tiempo de Royale debe estar entre 30 s y 30 min.');
     if (royale && (royale.incrementSec < 0 || royale.incrementSec > 60)) errors.push('El incremento debe estar entre 0 y 60 s.');
+    if (royale && ((royale.skips ?? 0) < 0 || (royale.skips ?? 0) > 2)) errors.push('Los saltos deben ser 0, 1 o 2.');
   }
   if ((config.intervalSec ?? 0) < 0 || (config.intervalSec ?? 0) > 30) errors.push('El intervalo debe estar entre 0 y 30 s.');
   if ((config.cooldownSec ?? 0) < 0 || (config.cooldownSec ?? 0) > 10) errors.push('El cooldown debe estar entre 0 y 10 s.');

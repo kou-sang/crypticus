@@ -31,6 +31,7 @@ export interface DuelConfig {
 export interface RoyaleConfig {
   baseSec: number; // Tiempo inicial del reloj de cada jugador.
   incrementSec: number; // Segundos que suma cada acierto.
+  skips?: number; // Saltos permitidos por jugador (0 = no se saltea). Cada uno resta tiempo del reloj.
 }
 
 /** Cómo se puntúa cada criptico resuelto (modos competitivos). */
@@ -162,6 +163,7 @@ export interface Participant {
   // ---- Secuencial (Race Pacífico, Royale) ----
   nextOpensAt?: number; // El criptico en `cursor` no se muestra ni se puede responder antes.
   surrenders?: number; // Rendiciones usadas.
+  skipsUsed?: number; // Royale: saltos usados.
   tiebreakWon?: boolean; // Ganó la muerte súbita de desempate.
 }
 
