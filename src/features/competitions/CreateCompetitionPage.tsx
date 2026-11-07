@@ -12,6 +12,7 @@ import {
   buildConfig,
   DEFAULT_MODE_SETTINGS,
   DUEL_HP_OPTIONS,
+  HINTS_PER_GAME_OPTIONS,
   formatTimeControl,
   COOLDOWN_OPTIONS,
   RACE_TARGET_OPTIONS,
@@ -253,8 +254,26 @@ function RacePanel({ settings, update }: { settings: ModeSettings['race']; updat
         onChange={(surrender) => update({ surrender })}
         info="Cada jugador puede rendirse ante el criptico actual un número limitado de veces. En Hardcore, el resto tiene 5 segundos para acertarlo antes de pasar al siguiente. En Pacífico, solo tú pasas al siguiente."
       />
-      <Option title="Pedir pista" info="Hasta 2 pistas por criptico.">
-        <Toggle label="Pedir pista" checked={settings.hints} onChange={(hints) => update({ hints })} />
+      <Option title="Pedir pista" info="Sí: cada jugador puede pedir 1 o 2 pistas en total durante toda la partida, en los cripticos que elija.">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chips<'no' | 'yes'>
+            label="Pedir pista"
+            value={settings.hints ? 'yes' : 'no'}
+            options={[
+              ['no', 'No'],
+              ['yes', 'Sí'],
+            ]}
+            onChange={(choice) => update({ hints: choice === 'yes' })}
+          />
+          {settings.hints && (
+            <Chips<number>
+              label="Pistas en toda la partida"
+              value={settings.hintsPerGame}
+              options={HINTS_PER_GAME_OPTIONS.map((n): [number, string] => [n, `${n} en total`])}
+              onChange={(hintsPerGame) => update({ hintsPerGame })}
+            />
+          )}
+        </div>
       </Option>
       <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option title="Duración" info="Una carrera dura como máximo 10 minutos. Si nadie llega a la meta, gana quien más cripticos resolvió.">

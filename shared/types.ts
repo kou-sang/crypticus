@@ -66,6 +66,7 @@ export interface CompetitionConfig {
   extraTime: ExtraTimeConfig;
   bossLevel: BossLevel;
   maxHintsPerClue: number;
+  hintsPerGame?: number; // Tope de pistas por jugador en toda la partida (Race). Ausente = sin tope.
   wrongPenalty: number; // Puntos restados por respuesta incorrecta.
   tierMix: TierMix; // Solo 'free': proporción/orden de dificultades.
   hideScoreboard: boolean; // Puntajes ocultos hasta el final.

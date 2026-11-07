@@ -13,7 +13,7 @@ import { useCryptics } from './useCryptics';
 import { DuelAlerts, DuelBars, NextCountdown, RoyaleFlow } from './ModeViews';
 import { RaceTrack, SequentialRace, SurrenderButton } from './RaceView';
 import { TiebreakView } from './TiebreakView';
-import { cooldownMs, isSequential } from '../../../shared/engine';
+import { cooldownMs, isSequential, gameHintsLeft } from '../../../shared/engine';
 
 /** Coste visible de una pista según la regla de puntaje. */
 const hintCostOf = (state: LiveState) => (state.config.scoring === 'fewestHints' && state.boss === null ? HINT_PENALTY : 0);
@@ -163,6 +163,7 @@ function RoundsFlow({
             me={me}
             heading={state.config.game ? `Criptico ${round.index}` : `Ronda ${round.index}`}
             maxHintsPerClue={state.config.maxHintsPerClue}
+            gameHintsLeft={gameHintsLeft(state, me)}
             hintCost={state.config.game === 'race' ? 0 : hintCostOf(state)}
             wrongPenalty={state.config.wrongPenalty}
             isBoss={state.boss !== null}

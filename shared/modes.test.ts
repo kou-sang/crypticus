@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAnswer,
+  applyHint,
   toggleSkip,
   createLiveState,
   nextDeadline,
@@ -203,6 +204,27 @@ describe('Race hardcore', () => {
     expect(state.round!.closesAt).toBe(6000);
     answer(state, 'b', id, true, 3000);
     expect(state.round!.index).toBe(2);
+  });
+});
+
+describe('Race: pistas por partida', () => {
+  it('el tope cuenta en toda la partida, no por criptico', () => {
+    const state = start({ race: { ...DEFAULT_MODE_SETTINGS.race, intensity: 'peaceful', target: 3, hints: true, hintsPerGame: 1 } });
+    expect(state.config.hintsPerGame).toBe(1);
+    expect(applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, now: 1000 }).used).toBe(1);
+    // El criptico tiene 2 pistas, pero el tope de la partida ya se usó.
+    expect(() => applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, now: 1500 })).toThrow();
+    answer(state, 'a', 'e1', true, 2000);
+    const next = state.crypticIds[1]!;
+    expect(() => applyHint(state, { uid: 'a', crypticId: next, reveal: true, now: 10_000 })).toThrow();
+    // Otro jugador conserva su propia pista.
+    expect(applyHint(state, { uid: 'b', crypticId: 'e1', reveal: true, now: 2500 }).used).toBe(1);
+  });
+
+  it('sin pistas no se configura tope', () => {
+    const built = buildConfig({ ...DEFAULT_MODE_SETTINGS, race: { ...DEFAULT_MODE_SETTINGS.race, hints: false } });
+    expect(built.config.maxHintsPerClue).toBe(0);
+    expect(built.config.hintsPerGame).toBeUndefined();
   });
 });
 

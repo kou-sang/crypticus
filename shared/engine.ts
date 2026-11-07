@@ -513,12 +513,18 @@ export interface HintOutcome {
   maxAllowed: number;
 }
 
+/** Pistas que le quedan al jugador en toda la partida (sin tope: infinitas). */
+export function gameHintsLeft(state: LiveState, participant: Participant): number {
+  const cap = state.config.hintsPerGame;
+  return cap === undefined ? Number.POSITIVE_INFINITY : Math.max(0, cap - participant.hintsUsed);
+}
+
 export function applyHint(state: LiveState, input: { uid: string; crypticId: string; reveal: boolean; now: number }): HintOutcome {
   const participant = requireParticipant(state, input.uid);
   const entry = state.catalog[input.crypticId];
   if (!entry) throw new GameError('unknown_cryptic', 'Criptico fuera de la competencia.');
   const used = participant.hintsByClue[input.crypticId] ?? 0;
-  const maxAllowed = Math.min(state.config.maxHintsPerClue, entry.hintCount);
+  const maxAllowed = Math.min(state.config.maxHintsPerClue, entry.hintCount, used + gameHintsLeft(state, participant));
   if (!input.reveal) return { used, maxAllowed };
 
   requireLive(state, input.now);

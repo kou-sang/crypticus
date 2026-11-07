@@ -71,6 +71,7 @@ export function CluePanel({
   successLabel,
   cooldownMs = 0,
   footer,
+  gameHintsLeft = Number.POSITIVE_INFINITY,
 }: {
   cryptic: CrypticPublic;
   me: Participant;
@@ -84,6 +85,7 @@ export function CluePanel({
   successLabel?: (points: number) => string; // Texto al acertar (por defecto, puntos o daño al jefe).
   cooldownMs?: number; // Espera tras un intento antes de poder enviar otro.
   footer?: ReactNode; // Acciones extra del modo (p. ej. rendirse).
+  gameHintsLeft?: number; // Pistas que quedan en toda la partida (Race).
 }) {
   const length = answerLengthFromEnumeration(cryptic.enumeration);
   const [letters, setLetters] = useState<string[]>(() => Array.from({ length }, () => ''));
@@ -96,7 +98,7 @@ export function CluePanel({
   const solvedNow = feedback?.kind === 'correct';
   const solved = solvedNow || me.solvedIds.includes(cryptic.id);
   const hintsUsed = me.hintsByClue[cryptic.id] ?? 0;
-  const hintsAvailable = Math.max(0, Math.min(maxHintsPerClue, cryptic.hintCount) - hintsUsed);
+  const hintsAvailable = Math.max(0, Math.min(Math.min(maxHintsPerClue, cryptic.hintCount) - hintsUsed, gameHintsLeft));
   const complete = letters.every(Boolean);
 
   // Recupera pistas ya reveladas (p. ej. tras recargar).

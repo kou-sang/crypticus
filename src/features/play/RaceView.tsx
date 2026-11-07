@@ -1,6 +1,6 @@
 // Race: pista con el avance de cada jugador hacia la meta, flujo secuencial (Pacífico) y rendirse.
 import { memo, useMemo, useState } from 'react';
-import { cooldownMs, currentFor, type LiveState } from '../../../shared/engine';
+import { cooldownMs, currentFor, type LiveState, gameHintsLeft } from '../../../shared/engine';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { cx, errorMessage } from '../../lib/utils';
 import { Button, ErrorBanner, Spinner } from '../../components/ui';
@@ -137,6 +137,7 @@ export function SequentialRace({ state, uid, actions, offsetMs }: { state: LiveS
           me={me}
           heading={`Criptico ${currentId ? cursor + 1 : cursor}`}
           maxHintsPerClue={state.config.maxHintsPerClue}
+          gameHintsLeft={gameHintsLeft(state, me)}
           hintCost={0}
           wrongPenalty={0}
           isBoss={false}
