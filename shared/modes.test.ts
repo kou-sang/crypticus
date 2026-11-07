@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAnswer,
   applyHint,
-  toggleSkip,
   createLiveState,
   nextDeadline,
   passCryptic,
@@ -168,9 +167,8 @@ describe('Duel', () => {
     expect(hit()).toBe(40);
   });
 
-  it('no se saltea: se rinde con usos limitados y el rival tiene 5 s', () => {
+  it('se rinde con usos limitados y el rival tiene 5 s', () => {
     const state = start({ ...duel, duel: { ...duel.duel, surrender: { enabled: true, maxUses: 1 } } });
-    expect(() => toggleSkip(state, { uid: 'a', now: 1000 })).toThrow();
     const first = state.round!.crypticId;
     surrender(state, { uid: 'a', now: 1000 });
     expect(state.round!.closesAt).toBe(6000);

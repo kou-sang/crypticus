@@ -15,10 +15,7 @@ import { makeParticipant } from './testUtils';
 
 const solve = (overrides: Partial<Parameters<typeof computeSolvePoints>[0]> = {}) =>
   computeSolvePoints({
-    rule: 'standard',
     tier: 'easy',
-    hintsUsed: 0,
-    remainingRatio: 1,
     comeback: 'off',
     score: 0,
     leaderScore: 0,
@@ -30,16 +27,6 @@ describe('computeSolvePoints', () => {
     expect(solve({ tier: 'easy' })).toBe(100);
     expect(solve({ tier: 'medium' })).toBe(150);
     expect(solve({ tier: 'hard' })).toBe(200);
-  });
-
-  it('fewestHints penaliza pistas con mínimo', () => {
-    expect(solve({ rule: 'fewestHints', hintsUsed: 1 })).toBe(70);
-    expect(solve({ rule: 'fewestHints', hintsUsed: 10 })).toBe(10);
-  });
-
-  it('speed suma bonus según tiempo restante', () => {
-    expect(solve({ rule: 'speed', remainingRatio: 1 })).toBe(200);
-    expect(solve({ rule: 'speed', remainingRatio: 0 })).toBe(100);
   });
 
   it('remontada: suave 1 + brecha, fuerte 1 + 2·brecha, igual en cualquier dificultad', () => {
@@ -114,7 +101,7 @@ describe('validateConfig', () => {
   it('rechaza combinaciones inválidas', () => {
     expect(validateConfig({ ...DEFAULT_CONFIG, mode: 'boss', winByTwo: true }, 4).length).toBeGreaterThan(0);
     expect(validateConfig({ ...DEFAULT_CONFIG, difficultyVote: true, flow: 'free' }, 4).length).toBeGreaterThan(0);
-    expect(validateConfig({ ...DEFAULT_CONFIG, extraTime: { enabled: true, seconds: 5, maxUses: 1 } }, 4).length).toBeGreaterThan(0);
+    expect(validateConfig({ ...DEFAULT_CONFIG, maxHintsPerClue: 11 }, 4).length).toBeGreaterThan(0);
   });
 });
 
