@@ -4,6 +4,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-11-07
+
+### Fixed
+
+- Cripta: con una ventana abierta (p. ej. Crear sala), pasar el mouse cerca de su borde hacía parpadear todo el fondo. El fondo oscuro de las ventanas es un botón a pantalla completa y recibía el brillo de antorcha del hover; ahora queda excluido.
+
 ## [1.1.3] - 2026-11-07
 
 ### Changed

@@ -19,7 +19,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
   if (!open) return null;
   return (
     <div className="fixed inset-x-0 bottom-0 top-14 z-[15] flex justify-end">
-      <button type="button" aria-label="Cerrar ajustes" onClick={onClose} className="absolute inset-0 bg-ink/30 fade-in" tabIndex={-1} />
+      <button type="button" aria-label="Cerrar ajustes" onClick={onClose} className="backdrop absolute inset-0 bg-ink/30 fade-in" tabIndex={-1} />
       <div
         ref={panel}
         role="dialog"

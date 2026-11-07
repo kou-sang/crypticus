@@ -309,13 +309,14 @@
 }
 
 /* ---------- Hover: cada elemento interactivo se ilumina como al acercarle una antorcha ---------- */
+/* .backdrop (fondo oscuro detrás de una ventana) es un botón a pantalla completa: queda fuera, si no parpadea entero. */
 
-[data-skin='crypt'] :is(button, [role='tab'], [role='radio'], [role='switch'], [role='checkbox'], summary, select, input[type='text'], a[href][class~='border']):not(:disabled):hover {
+[data-skin='crypt'] :is(button, [role='tab'], [role='radio'], [role='switch'], [role='checkbox'], summary, select, input[type='text'], a[href][class~='border']):not(:disabled):not(.backdrop):hover {
   border-color: var(--torch);
   animation: torch-near 1.7s ease-in-out infinite;
 }
 /* Al presionar: se hunde como piedra (misma especificidad que el hover, va después para ganarle). */
-[data-skin='crypt'] :is(button, [role='tab'], [role='radio'], [role='switch'], [role='checkbox'], summary, select, input[type='text'], a[href][class~='border']):not(:disabled):active {
+[data-skin='crypt'] :is(button, [role='tab'], [role='radio'], [role='switch'], [role='checkbox'], summary, select, input[type='text'], a[href][class~='border']):not(:disabled):not(.backdrop):active {
   animation: stone-press 200ms ease-out, torch-near 1.7s ease-in-out infinite;
 }
 [data-skin='crypt'] .btn:is([data-variant='primary'], [data-variant='secondary']):not(:disabled):hover { color: #fff3da; }
