@@ -1,13 +1,20 @@
 // Amigos: desafíos recibidos, lista al estilo Lichess (ratings por modo + Desafiar), búsqueda y solicitudes.
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { collection, limit, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useLiveQuery } from '../../hooks/useFirestore';
 import { useSession } from '../../hooks/useAuth';
 import { useFriends, type FriendRequest } from '../../hooks/useFriends';
 import { useUsers } from '../../hooks/useUsers';
-import { acceptFriendRequest, findUserByHandle, removeFriendRequest, sendFriendRequest } from '../../lib/repo';
+import {
+  acceptFriendRequest,
+  declineRematch,
+  findUserByHandle,
+  joinCompetition,
+  removeFriendRequest,
+  sendFriendRequest,
+} from '../../lib/repo';
 import { errorMessage, pairId } from '../../lib/utils';
 import { Avatar, Button, EmptyState, ErrorBanner, Input, PageHeader, Spinner } from '../../components/ui';
 import type { Competition, UserProfile } from '../../../shared/types';
@@ -59,7 +66,11 @@ export default function FriendsPage() {
     query(collection(db, 'competitions'), where('invitedIds', 'array-contains', profile.uid), limit(10)),
     [profile.uid],
   );
-  const challenges = invites.data.filter((c) => c.status === 'lobby');
+  // Pendientes: en espera, sin haber entrado ni rechazado.
+  const challenges = invites.data.filter(
+    (c) => c.status === 'lobby' && !c.participantIds.includes(profile.uid) && !(c.declinedIds ?? []).includes(profile.uid),
+  );
+  const navigate = useNavigate();
 
   const run = async (key: string, action: () => Promise<void>) => {
     setBusy(key);
@@ -95,11 +106,24 @@ export default function FriendsPage() {
             {challenges.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-3 py-2">
                 <span className="min-w-0 flex-1 text-sm">
-                  <strong>{c.hostName}</strong> te desafía · {describeMode(c)}
+                  <strong>{c.hostName}</strong> {c.rematchOf ? 'te pide revancha' : 'te desafía'} · {describeMode(c)}
                 </span>
-                <Link to={`/c/${c.id}`} className="inline-flex h-9 items-center bg-ink px-4 text-sm font-semibold text-paper hover:bg-accent">
-                  Aceptar
-                </Link>
+                {/* Aceptar = entrar a la sala directamente. */}
+                <Button
+                  loading={busy === `join${c.id}`}
+                  disabled={c.participantIds.length >= c.maxPlayers}
+                  onClick={() =>
+                    run(`join${c.id}`, async () => {
+                      await joinCompetition(c.id, profile);
+                      navigate(`/c/${c.id}`);
+                    })
+                  }
+                >
+                  {c.participantIds.length >= c.maxPlayers ? 'Sala llena' : 'Aceptar'}
+                </Button>
+                <Button variant="ghost" loading={busy === `no${c.id}`} onClick={() => run(`no${c.id}`, () => declineRematch(c.id, profile.uid))}>
+                  Rechazar
+                </Button>
               </li>
             ))}
           </ul>
