@@ -37,30 +37,23 @@
   background: transparent;
 }
 
-/* Muro: imagen pintada (ver docs/THEME_ASSETS.md) sobre un respaldo procedural de sillares, moho y humedad. */
+/*
+ * Muro: ilustración (ver docs/THEME_ASSETS.md) sobre un respaldo de piedras redondeadas con moho
+ * (public/themes/medieval/wall-fallback.svg, mismo estilo y paleta oscura). Si la imagen no existe, se ve el respaldo.
+ */
 .medieval-wall {
   position: absolute;
   inset: 0;
-  background-color: #14110d;
-  background-image:
-    url('/themes/medieval/wall.webp'),
-    radial-gradient(ellipse 40% 30% at 8% 96%, rgba(79, 106, 44, 0.42), transparent 70%),
-    radial-gradient(ellipse 30% 22% at 92% 88%, rgba(79, 106, 44, 0.32), transparent 70%),
-    radial-gradient(ellipse 22% 40% at 50% 0%, rgba(60, 82, 40, 0.22), transparent 70%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .16 0 0 0 0 .14 0 0 0 0 .11 0 0 0 .7 0'/%3E%3C/filter%3E%3Crect width='260' height='170' fill='%230c0a08'/%3E%3Cg stroke='%23090706' stroke-width='4'%3E%3Crect x='3' y='3' width='124' height='80' rx='7' fill='%232a231b'/%3E%3Crect x='133' y='3' width='124' height='80' rx='9' fill='%23251f18'/%3E%3Crect x='-62' y='88' width='124' height='79' rx='8' fill='%23231d17'/%3E%3Crect x='68' y='88' width='124' height='79' rx='6' fill='%232c251d'/%3E%3Crect x='198' y='88' width='124' height='79' rx='8' fill='%23231d17'/%3E%3C/g%3E%3Crect width='260' height='170' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: cover, auto, auto, auto, 260px 170px;
-  background-position: center, 0 0, 0 0, 0 0, center;
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+  background-color: #0b0907;
+  background-image: url('/themes/medieval/wall.webp'), url('/themes/medieval/wall-fallback.svg');
+  background-size: cover, 480px 360px;
+  background-position: center, center;
+  background-repeat: no-repeat, repeat;
 }
 @media (orientation: portrait) {
   .medieval-wall {
-    background-image:
-      url('/themes/medieval/wall-mobile.webp'),
-      radial-gradient(ellipse 60% 25% at 10% 98%, rgba(79, 106, 44, 0.42), transparent 70%),
-      radial-gradient(ellipse 50% 20% at 90% 90%, rgba(79, 106, 44, 0.3), transparent 70%),
-      radial-gradient(ellipse 40% 30% at 50% 0%, rgba(60, 82, 40, 0.2), transparent 70%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='130'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .16 0 0 0 0 .14 0 0 0 0 .11 0 0 0 .7 0'/%3E%3C/filter%3E%3Crect width='200' height='130' fill='%230c0a08'/%3E%3Cg stroke='%23090706' stroke-width='4'%3E%3Crect x='3' y='3' width='94' height='60' rx='6' fill='%232a231b'/%3E%3Crect x='103' y='3' width='94' height='60' rx='7' fill='%23251f18'/%3E%3Crect x='-47' y='67' width='94' height='60' rx='7' fill='%23231d17'/%3E%3Crect x='53' y='67' width='94' height='60' rx='6' fill='%232c251d'/%3E%3Crect x='153' y='67' width='94' height='60' rx='7' fill='%23231d17'/%3E%3C/g%3E%3Crect width='200' height='130' filter='url(%23n)'/%3E%3C/svg%3E");
-    background-size: cover, auto, auto, auto, 200px 130px;
+    background-image: url('/themes/medieval/wall-mobile.webp'), url('/themes/medieval/wall-fallback.svg');
+    background-size: cover, 360px 270px;
   }
 }
 
@@ -285,6 +278,19 @@
   text-shadow: 0 1px 0 #000, 0 -1px 0 rgba(255, 240, 210, 0.08), 0 0 22px rgba(242, 160, 58, 0.25);
 }
 
+/*
+ * Fuente de títulos del tema Cyber: archivo propio en public/fonts/ (ver docs/THEME_ASSETS.md).
+ * El navegador solo la descarga si hay texto con esta familia; si falta el archivo, los títulos usan Chakra Petch.
+ */
+@font-face {
+  font-family: 'Crypticus Cyber Display';
+  src:
+    url('/fonts/cyber-display.woff2') format('woff2'),
+    url('/fonts/cyber-display.ttf') format('truetype'),
+    url('/fonts/cyber-display.otf') format('opentype');
+  font-display: swap;
+}
+
 /* =====================================================================
  * CYBER — dentro de un visor de realidad virtual. Neón amarillo y cian, cristal translúcido.
  * ===================================================================== */
@@ -299,14 +305,19 @@
   --ok: #19f0b0;
   --neon: #f5e400;
   --cyan: #00e1ff;
-  --font-display: 'Rajdhani', 'Bahnschrift', 'DIN Alternate', 'Arial Narrow', system-ui, sans-serif;
-  --font-sans: 'Rajdhani', 'Bahnschrift', 'DIN Alternate', 'Arial Narrow', system-ui, sans-serif;
+  --font-display: 'Crypticus Cyber Display', 'Chakra Petch', 'Bahnschrift', 'Arial Narrow', system-ui, sans-serif;
+  --font-sans: 'Chakra Petch', 'Bahnschrift', 'DIN Alternate', 'Arial Narrow', system-ui, sans-serif;
   color-scheme: dark;
   background: #03040a;
 }
 :root[data-skin='cyber'] body {
   background: transparent;
-  font-weight: 500;
+}
+/* Las fuentes de exhibición no traen negritas: sin negrita sintética que las deforme. */
+[data-skin='cyber'] .font-display {
+  font-synthesis: none;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 /* Espacio virtual: neblina de neón y un suelo de rejilla que gira hacia la sección elegida. */
