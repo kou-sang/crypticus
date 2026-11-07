@@ -133,6 +133,36 @@ function buildReverb(ctx: AudioContext, skin: Skin): ConvolverNode {
   return convolver;
 }
 
+let reverbPending: Skin | null = null;
+let silentSend: GainNode | null = null;
+
+/**
+ * La respuesta al impulso (hasta 3 s de muestras) se genera fuera del clic, cuando el navegador está libre:
+ * antes se calculaba dentro del primer sonido y trababa ese cuadro. Mientras tanto, los sonidos salen sin eco.
+ */
+function scheduleReverb(ctx: AudioContext, skin: Skin): void {
+  if (reverbPending === skin) return;
+  reverbPending = skin;
+  const build = () => {
+    try {
+      if (reverbPending !== skin || !master) return;
+      const next = buildReverb(ctx, skin);
+      const level = ctx.createGain();
+      level.gain.value = REVERB[skin].level;
+      next.connect(level).connect(master);
+      reverb?.disconnect();
+      reverb = next;
+      reverbSkin = skin;
+    } catch (error) {
+      console.warn('[sound] reverb no disponible', error);
+    } finally {
+      if (reverbPending === skin) reverbPending = null;
+    }
+  };
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(build, { timeout: 1500 });
+  else window.setTimeout(build, 200);
+}
+
 function bus(): Bus | null {
   const settings = getSettings();
   if (!settings.sound || settings.volume <= 0) return null;
@@ -140,14 +170,28 @@ function bus(): Bus | null {
   if (!ctx || !master) return null;
   master.gain.value = settings.volume * 0.5;
   if (!reverb || reverbSkin !== settings.skin) {
-    reverb?.disconnect();
-    reverb = buildReverb(ctx, settings.skin);
-    reverbSkin = settings.skin;
-    const level = ctx.createGain();
-    level.gain.value = REVERB[settings.skin].level;
-    reverb.connect(level).connect(master);
+    scheduleReverb(ctx, settings.skin);
+    // Envío mudo hasta que la reverb del tema esté lista.
+    if (!silentSend) {
+      silentSend = ctx.createGain();
+      silentSend.gain.value = 0;
+      silentSend.connect(master);
+    }
+    return { ctx, dry: master, wet: reverbSkin === settings.skin && reverb ? reverb : silentSend, now: ctx.currentTime + 0.005 };
   }
   return { ctx, dry: master, wet: reverb, now: ctx.currentTime + 0.005 };
+}
+
+/** Prepara el audio del tema en segundo plano (ruidos y reverb) para que el primer sonido no trabe. */
+export function prewarmSound(): void {
+  try {
+    const settings = getSettings();
+    if (!settings.sound || !context) return;
+    (['white', 'pink', 'brown'] as const).forEach((color) => noiseBuffer(context!, color));
+    if (reverbSkin !== settings.skin) scheduleReverb(context, settings.skin);
+  } catch (error) {
+    console.warn('[sound] precarga', error);
+  }
 }
 
 /** Variación aleatoria ±pct: dos golpes iguales nunca suenan idénticos (menos "robótico"). */

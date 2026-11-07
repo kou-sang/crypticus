@@ -7,7 +7,7 @@
 | `public/themes/crypt/wall.webp` | PC y tablets en horizontal | 2560 × 1440 (16:9) | < 450 KB |
 | `public/themes/crypt/wall-mobile.webp` | Celulares (vertical) | 1080 × 2340 (9:19.5) | < 300 KB |
 
-Mientras no existan, se ve `wall-fallback.svg`, un muro repetible del mismo estilo (piedras redondeadas, juntas negras, moho y enredaderas) ya incluido en el repo.
+Si faltan, el muro queda en un marrón casi negro (`#0b0907`). La textura del pergamino es `parchment.webp` (tile de 256 px).
 
 - **Estilo:** ilustración digital con volumen y textura realistas, como la referencia de piedras con moho. Paleta **oscura**, con pocos blancos, para que el texto se lea encima.
 - **Sin antorchas ni fuentes de luz en el muro.** Las antorchas son un recurso aparte (`torch.webp`) y la luz, la llama, el viento y las chispas se animan por código encima.
