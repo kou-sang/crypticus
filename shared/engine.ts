@@ -161,8 +161,14 @@ export function createLiveState(input: CreateInput): LiveState {
     if (sizes[0] !== TEAM_SIZE || sizes[1] !== TEAM_SIZE) throw new GameError('bad_teams', 'Los equipos deben ser de 2 contra 2.');
   }
   for (const p of input.participants) {
+    // Solo se copian campos de identidad: el doc de participante lo escribe el cliente, y cualquier
+    // otro campo (racha, saltos usados, desempate ganado…) sería una trampa al iniciar.
     participants[p.uid] = {
-      ...p,
+      uid: p.uid,
+      displayName: String(p.displayName ?? '').slice(0, 32) || 'Jugador',
+      joinedAt: Number(p.joinedAt) || 0,
+      ...(p.device === 'mobile' || p.device === 'desktop' ? { device: p.device } : {}),
+      ...(isTeamDuel(input.config) && (p.team === 0 || p.team === 1) ? { team: p.team } : {}),
       score: duel ? duel.hp : 0, // Duel: el puntaje es la vida restante.
       solvedIds: [],
       hintsByClue: {},
@@ -174,6 +180,8 @@ export function createLiveState(input: CreateInput): LiveState {
       ...(royale ? { bankMs: royale.baseSec * 1000, eliminatedAt: null } : {}),
       ...(isSequential(input.config) ? { cursor: 0, nextOpensAt: input.startedAt } : {}),
       surrenders: 0,
+      skipsUsed: 0,
+      streak: 0,
     };
   }
   // Solo se conservan cripticos con secreto disponible en el catálogo.

@@ -138,6 +138,9 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if isUser(uid)
           && request.auth.uid in getAfter(/databases/$(database)/documents/competitions/$(competitionId)).data.participantIds
+          && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'solvedIds', 'hintsByClue', 'hintsUsed',
+               'attempts', 'wrongAttempts', 'lastSolvedAt', 'lastAttemptAt', 'joinedAt', 'device'])
+          && request.resource.data.uid == uid
           && request.resource.data.score == 0
           && request.resource.data.solvedIds == []
           && request.resource.data.hintsUsed == 0

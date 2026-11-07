@@ -109,3 +109,16 @@ describe('assignTeams', () => {
     expect(assignTeams(['a', 'b', 'c', 'd'], { a: 1, b: 1, c: 1 })).toEqual({ a: 1, b: 1, c: 0, d: 0 });
   });
 });
+
+describe('Seguridad al iniciar', () => {
+  it('ignora campos de juego inyectados en el doc de participante', () => {
+    const tampered = { uid: 'a', streak: 99, skipsUsed: -50, tiebreakWon: true, score: 9999, team: 1 as const } as Parameters<typeof makeParticipant>[0];
+    const state = start('1v1', [tampered, { uid: 'b' }]);
+    const a = state.participants.a!;
+    expect(a.streak).toBe(0);
+    expect(a.skipsUsed).toBe(0);
+    expect(a.tiebreakWon).toBeUndefined();
+    expect(a.score).toBe(100);
+    expect(a.team).toBeUndefined(); // 1 vs 1: sin equipos
+  });
+});

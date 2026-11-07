@@ -70,7 +70,7 @@ export function AppShell() {
               >
                 <span className="hidden text-right leading-tight sm:block">
                   <span className="block font-semibold">{profile.displayName}</span>
-                  <span className="block font-mono text-xs text-muted">{profile.rating} pts</span>
+                  <span className="block font-mono text-xs text-muted">@{profile.handle}</span>
                 </span>
                 <Avatar name={profile.displayName} />
               </NavLink>
