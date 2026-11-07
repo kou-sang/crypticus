@@ -24,7 +24,8 @@ const TIER_TONE = { easy: 'ok', medium: 'neutral', hard: 'accent' } as const;
 export function ClueText({ cryptic, className }: { cryptic: Pick<CrypticPublic, 'clue' | 'enumeration'>; className?: string }) {
   const { text, enumeration } = splitClue(cryptic.clue);
   return (
-    <span className={className}>
+    // clue-text: el enunciado siempre en una fuente legible (en Cyber no usa la de rotulación ni pierde tildes).
+    <span className={className ? `clue-text ${className}` : 'clue-text'}>
       {text} <span className="whitespace-nowrap text-muted">{cryptic.enumeration || enumeration}</span>
     </span>
   );

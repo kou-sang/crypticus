@@ -129,7 +129,11 @@ export default function CompetitionsPage() {
           <button
             key={value}
             onClick={() => setTab(value)}
-            className={cx('px-4 py-2 text-sm font-semibold', tab === value ? 'bg-ink text-paper' : 'hover:bg-paper-2')}
+            aria-pressed={tab === value}
+            className={cx(
+              'seg-tab border px-4 py-2 text-sm font-semibold transition-colors',
+              tab === value ? 'border-ink bg-ink text-paper' : 'border-line bg-paper-2/50 hover:border-ink',
+            )}
           >
             {value === 'public' ? 'Públicas' : 'De amigos'}
           </button>
