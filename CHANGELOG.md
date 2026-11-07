@@ -16,6 +16,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ### Fixed
 
+- Relojes con sonido y animación: el reloj de partida late cada segundo en los últimos 30 s, avisa al quedar 1 minuto y 30 segundos y hace tic en los últimos 10; la cuenta 3-2-1 suena en cada número, entra con un anillo que se expande y cierra con un sonido de arranque propio de cada tema.
 - iPhone/iPad: el alta del perfil (nombre y @usuario) podía quedar colgada sin salir de la bienvenida. En iOS Firestore usa caché en memoria y long polling; el alta tiene un límite de 15 s con un mensaje claro y tolera reintentos.
 - Celular en partida: el teclado ya no se cierra al cambiar de criptico ni durante la pausa entre rondas (un único input de juego que nunca se desmonta), y tocar las celdas o los botones del juego no lo cierra. El criptico se centra encima del teclado.
 - Celular en partida: se oculta la barra inferior (un toque accidental en «Inicio» sacaba del juego); los enlaces de la barra superior piden confirmación y cerrar o recargar la pestaña avisa antes.

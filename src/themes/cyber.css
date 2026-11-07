@@ -247,3 +247,15 @@
   color: var(--neon);
   text-shadow: 0 0 10px rgba(245, 228, 0, 0.6), 0 0 30px rgba(245, 228, 0, 0.25);
 }
+
+/* Relojes: anillo holográfico y números con interferencia en los últimos segundos. */
+[data-skin='cyber'] .count-ring { border-color: var(--cyan); box-shadow: 0 0 24px rgba(0, 225, 255, 0.6), inset 0 0 24px rgba(0, 225, 255, 0.4); }
+[data-skin='cyber'] .count-pop { color: var(--neon); text-shadow: 3px 0 var(--accent), -3px 0 var(--cyan), 0 0 30px rgba(245, 228, 0, 0.5); }
+[data-skin='cyber'] .game-clock { text-shadow: 0 0 12px rgba(0, 225, 255, 0.45); }
+[data-skin='cyber'] .is-urgent .clock-beat { animation-name: clock-glitch; }
+@keyframes clock-glitch {
+  0% { transform: scale(1.25); text-shadow: 3px 0 var(--accent), -3px 0 var(--cyan); }
+  15% { transform: translateX(-3px) scale(1.05); clip-path: inset(0 0 45% 0); }
+  25% { transform: translateX(3px); clip-path: inset(40% 0 0 0); }
+  40% { transform: none; clip-path: none; text-shadow: 0 0 12px rgba(255, 46, 99, 0.6); }
+}

@@ -17,7 +17,8 @@ export type Cue =
   | 'eliminated'
   | 'lowHealth'
   | 'danger'
-  | 'combo';
+  | 'combo'
+  | 'go'; // Arranque de la partida (fin del 3-2-1).
 
 export type UiCue = 'click' | 'tab' | 'open' | 'close' | 'toggle' | 'type' | 'erase' | 'submit';
 
@@ -30,6 +31,7 @@ const CUE_GROUP: Record<Cue | UiCue, SoundGroup> = {
   heal: 'rivals',
   eliminated: 'rivals',
   tick: 'countdown',
+  go: 'countdown',
   victory: 'results',
   defeat: 'results',
   lowTime: 'lowTime',
@@ -363,6 +365,10 @@ const NORMAL: Pack = {
   },
   heal: (b) => [392, 494, 587].forEach((f, i) => marimba(b, f, i * 0.08, 0.16, 0.45)),
   tick: (b) => marimba(b, 1320, 0, 0.12, 0.12),
+  go: (b) => {
+    [C5, E5, G5].forEach((f) => marimba(b, f, 0, 0.22, 0.6));
+    marimba(b, C6, 0.06, 0.2, 0.7);
+  },
   lowTime: (b) => {
     marimba(b, 1568, 0, 0.18, 0.12);
     marimba(b, 1568, 0.13, 0.18, 0.12);
@@ -428,6 +434,12 @@ const CRYPT: Pack = {
   tick: (b) => {
     // Gota de agua en la cripta.
     tone(b, { f: vary(1200, 0.1), slide: 2400, dur: 0.06, gain: 0.18, wet: 0.7 });
+  },
+  go: (b) => {
+    // Golpe de portón y campana: se abre la cripta.
+    thud(b, 70, 0, 0.8, 0.35);
+    bell(b, 392, 0.05, 0.2, 2.4);
+    bell(b, 523.25, 0.12, 0.14, 2.4);
   },
   lowTime: (b) => {
     bell(b, 196, 0, 0.18, 1.6);
@@ -501,6 +513,10 @@ const CYBER: Pack = {
     tone(b, { f: 450, slide: 1800, dur: 0.45, type: 'sine', gain: 0.08, wet: 0.4 });
   },
   tick: (b) => blip(b, 1400, 0, 0.14, 0.07), // Sonar.
+  go: (b) => {
+    laser(b, 400, 3200, 0.25, 0, 0.16);
+    saber(b, 0.4, true, 0.05, 0.14);
+  },
   lowTime: (b) => {
     tone(b, { f: 880, slide: 1320, dur: 0.18, type: 'square', gain: 0.07, lowpass: 3000, wet: 0.2 });
     tone(b, { f: 880, slide: 1320, at: 0.22, dur: 0.18, type: 'square', gain: 0.07, lowpass: 3000, wet: 0.2 });

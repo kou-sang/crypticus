@@ -107,6 +107,41 @@ body {
 .settings-panel { animation: drawer-in 240ms cubic-bezier(.2,.8,.2,1) both; }
 @keyframes drawer-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 
+/* ---------- Relojes ---------- */
+
+/* Reloj de partida: late cada segundo en los últimos 30 s; más fuerte en los últimos 10. */
+.clock-beat { animation: clock-beat 1s ease-out; }
+.is-urgent .clock-beat { animation: clock-urgent 1s ease-out; }
+@keyframes clock-beat {
+  0% { transform: scale(1.12); }
+  35% { transform: scale(1); }
+}
+@keyframes clock-urgent {
+  0% { transform: scale(1.28); text-shadow: 0 0 18px var(--accent); }
+  20% { transform: translateX(-2px) scale(1.05); }
+  30% { transform: translateX(2px); }
+  45% { transform: none; text-shadow: none; }
+}
+
+/* Cuenta 3-2-1: el número entra grande y se asienta; un anillo se expande en cada segundo. */
+.count-pop { animation: count-pop 900ms cubic-bezier(.2,.9,.3,1.3) both; }
+.count-wait { animation: count-wait 1.4s ease-in-out infinite; }
+.count-ring { animation: count-ring 900ms ease-out both; }
+@keyframes count-pop {
+  0% { opacity: 0; transform: scale(1.9); filter: blur(6px); }
+  40% { opacity: 1; transform: scale(0.94); filter: none; }
+  65% { transform: scale(1.04); }
+  100% { transform: none; }
+}
+@keyframes count-wait {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+@keyframes count-ring {
+  0% { opacity: 0.7; transform: scale(0.4); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
 /* Respuesta incorrecta. */
 .answer-wrong { animation: shake 300ms; }
 
