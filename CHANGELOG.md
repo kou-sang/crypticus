@@ -19,6 +19,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 - El botón del historial es compacto y centrado («Historial (N)»), con el borde ajustado al texto.
 - Resumen de la partida: cada criptico muestra «✓ A, B, C» (lo resolvieron) y «✗ D, E» (no lo resolvieron).
 - El historial guarda el pool de Elo (`ratingPool`) y, en Royale, el control de tiempo.
+- Ranking más compacto: ancho acotado, controles (modo, tiempo de Royale y Global/Amigos) en una sola franja, tu posición junto al título, filas de una línea y el enlace al perfil del tamaño del nombre (la celda vacía ya no es clicable).
 
 ### Fixed
 

@@ -60,55 +60,54 @@ export default function RankingsPage() {
   );
   const rows = view.scope === 'global' ? top : friendsRows;
 
+  const seg = (active: boolean) =>
+    cx('seg-tab px-3 py-1.5 text-sm font-semibold transition-colors', active ? 'bg-ink text-paper' : 'hover:bg-paper-2');
+
   return (
-    <>
-      <PageHeader kicker="Ranking" title="Tabla de posiciones" />
-      <div role="tablist" className="mb-3 grid grid-cols-3 border border-ink">
-        {RANKED_MODES.map((mode) => (
-          <button
-            key={mode}
-            role="tab"
-            aria-selected={view.mode === mode}
-            onClick={() => setView((v) => ({ ...v, mode }))}
-            className={cx('seg-tab py-2 font-display text-lg uppercase', view.mode === mode ? 'bg-ink text-paper' : 'hover:bg-paper-2')}
-          >
-            {GAME_LABELS[mode].title}
-          </button>
-        ))}
-      </div>
-      {view.mode === 'royale' && (
-        <div role="tablist" aria-label="Tiempo de Royale" className="mb-3 grid grid-cols-3 border border-line">
-          {ROYALE_CATEGORIES.map((category) => (
-            <button
-              key={category}
-              role="tab"
-              aria-selected={view.royale === category}
-              onClick={() => setView((v) => ({ ...v, royale: category }))}
-              className={cx('seg-tab py-1.5 text-sm font-semibold', view.royale === category ? 'bg-ink text-paper' : 'hover:bg-paper-2')}
-            >
-              {ROYALE_CATEGORY_LABELS[category].title}
-              <span className="ml-1.5 font-mono text-xs font-normal opacity-70">{ROYALE_CATEGORY_LABELS[category].range}</span>
+    // Ancho acotado: la tabla tiene 6 columnas cortas; a todo el ancho quedaba un hueco grande en el centro.
+    <div className="mx-auto max-w-3xl">
+      <PageHeader
+        kicker="Ranking"
+        title="Tabla de posiciones"
+        action={
+          <p className="text-right text-sm">
+            <span className="block text-[11px] font-semibold uppercase tracking-widest text-muted">Tú · {poolTitle(pool)}</span>
+            <strong className="font-mono text-lg">{myStats.played > 0 ? `#${position ?? '…'} · ${myStats.rating}` : 'sin partidas'}</strong>
+          </p>
+        }
+      />
+      {/* Controles en una sola franja: modo, tiempo (solo Royale) y alcance. En móvil se apilan. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div role="tablist" aria-label="Modo" className="flex border border-ink">
+          {RANKED_MODES.map((mode) => (
+            <button key={mode} role="tab" aria-selected={view.mode === mode} onClick={() => setView((v) => ({ ...v, mode }))} className={seg(view.mode === mode)}>
+              {GAME_LABELS[mode].title}
             </button>
           ))}
         </div>
-      )}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        {(['global', 'friends'] as const).map((scope) => (
-          <button
-            key={scope}
-            onClick={() => setView((v) => ({ ...v, scope }))}
-            aria-pressed={view.scope === scope}
-            className={cx(
-              'seg-tab border px-3 py-1.5 text-sm font-semibold transition-colors',
-              view.scope === scope ? 'border-ink bg-ink text-paper' : 'border-line bg-paper-2/50 hover:border-ink',
-            )}
-          >
-            {scope === 'global' ? 'Global' : 'Amigos'}
-          </button>
-        ))}
-        <p className="ml-auto text-sm">
-          Tú: <strong className="font-mono">{myStats.played > 0 ? `#${position ?? '…'} · ${myStats.rating}` : 'sin partidas'}</strong>
-        </p>
+        {view.mode === 'royale' && (
+          <div role="tablist" aria-label="Tiempo de Royale" className="flex border border-line">
+            {ROYALE_CATEGORIES.map((category) => (
+              <button
+                key={category}
+                role="tab"
+                aria-selected={view.royale === category}
+                title={ROYALE_CATEGORY_LABELS[category].range}
+                onClick={() => setView((v) => ({ ...v, royale: category }))}
+                className={seg(view.royale === category)}
+              >
+                {ROYALE_CATEGORY_LABELS[category].title}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex border border-line sm:ml-auto">
+          {(['global', 'friends'] as const).map((scope) => (
+            <button key={scope} onClick={() => setView((v) => ({ ...v, scope }))} aria-pressed={view.scope === scope} className={seg(view.scope === scope)}>
+              {scope === 'global' ? 'Global' : 'Amigos'}
+            </button>
+          ))}
+        </div>
       </div>
       <ErrorBanner error={error} />
       {rows === null ? (
@@ -118,6 +117,6 @@ export default function RankingsPage() {
       ) : (
         <RankingTable rows={rows} meId={profile.uid} pool={pool} />
       )}
-    </>
+    </div>
   );
 }
