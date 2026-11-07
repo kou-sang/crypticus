@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import type { Competition } from '../../../shared/types';
-import { BOSS_LABELS, COMEBACK_LABELS, DUEL_DAMAGE_LABELS, FLOW_LABELS, SCORING_LABELS } from '../../../shared/scoring';
+import { COMEBACK_LABELS, DUEL_DAMAGE_LABELS } from '../../../shared/scoring';
 import { formatTimeControl } from '../../../shared/gameModes';
 import { Badge } from '../../components/ui';
 import { formatRelative } from '../../lib/utils';
@@ -9,18 +9,11 @@ const STATUS_LABEL = { lobby: 'En sala', live: 'En vivo', finished: 'Terminada' 
 
 type ModeFields = Pick<
   Competition,
-  | 'mode'
-  | 'durationSec'
   | 'targetCount'
-  | 'scoring'
   | 'flow'
   | 'winByTwo'
-  | 'bossLevel'
   | 'difficultyVote'
-  | 'extraTime'
   | 'comeback'
-  | 'hideScoreboard'
-  | 'wrongPenalty'
   | 'rivalCountdownSec'
   | 'game'
   | 'duel'
@@ -35,10 +28,7 @@ export function describeMode(c: ModeFields): string {
   if (c.game === 'royale' && c.royale) return `Royale ${formatTimeControl(c.royale.baseSec, c.royale.incrementSec)}`;
   if (c.game === 'duel' && c.duel) return `Duel ${c.duel.teams ? '2 vs 2' : '1 vs 1'} · ${c.duel.hp} de vida`;
   if (c.game === 'race') return `Race a ${c.targetCount}`;
-  const minutes = `${Math.round(c.durationSec / 60)} min`;
-  if (c.mode === 'boss') return `Jefe ${BOSS_LABELS[c.bossLevel] ?? ''} · ${minutes}`;
-  if (c.mode === 'count') return `${c.flow === 'rounds' ? 'Primero a' : 'Carrera a'} ${c.targetCount}`;
-  return minutes;
+  return 'Partida'; // Salas anteriores a los modos (v0.6).
 }
 
 /** Etiquetas cortas de los modificadores activos. */
@@ -61,16 +51,7 @@ export function describeModifiers(c: ModeFields): string[] {
     tags.push('10 min');
     return tags;
   }
-  const tags: string[] = [FLOW_LABELS[c.flow]?.title ?? 'Libre'];
-  if (c.mode !== 'boss') tags.push(SCORING_LABELS[c.scoring]?.title ?? 'Clásico');
-  if (c.winByTwo) tags.push('Diferencia de dos');
-  if (c.difficultyVote) tags.push('Vota dificultad');
-  if (c.rivalCountdownSec > 0) tags.push(`Cuenta atrás ${c.rivalCountdownSec}s`);
-  if (c.comeback && c.comeback !== 'off') tags.push(COMEBACK_LABELS[c.comeback]);
-  if (c.extraTime?.enabled) tags.push(`+${c.extraTime.seconds}s ×${c.extraTime.maxUses}`);
-  if (c.wrongPenalty > 0) tags.push(`−${c.wrongPenalty} por error`);
-  if (c.hideScoreboard) tags.push('Marcador oculto');
-  return tags;
+  return [];
 }
 
 export function CompetitionCard({ competition }: { competition: Competition }) {

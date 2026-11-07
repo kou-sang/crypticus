@@ -18,9 +18,8 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn();
       allow create: if isUser(uid)
-        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'handle', 'rating', 'stats', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'handle', 'stats', 'createdAt'])
         && request.resource.data.uid == uid
-        && request.resource.data.rating == 1200
         && request.resource.data.stats == { 'played': 0, 'wins': 0, 'solved': 0, 'hintsUsed': 0 }
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() >= 2

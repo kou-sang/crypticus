@@ -63,8 +63,6 @@ export function CluePanel({
   me,
   heading,
   maxHintsPerClue,
-  hintCost,
-  wrongPenalty,
   isBoss,
   actions,
   onNext,
@@ -77,8 +75,6 @@ export function CluePanel({
   me: Participant;
   heading: string;
   maxHintsPerClue: number;
-  hintCost: number; // Puntos que resta cada pista (0 si la regla no penaliza).
-  wrongPenalty: number;
   isBoss: boolean;
   actions: GameActions;
   onNext?: () => void; // Flujo libre: pasar al siguiente tras leer la explicación.
@@ -189,7 +185,7 @@ export function CluePanel({
         )}
         {solved && !solvedNow && <span className="font-semibold text-ok">✓ Resuelto</span>}
         {feedback?.kind === 'wrong' && (
-          <span className="font-semibold text-accent">No es correcto{wrongPenalty > 0 ? ` (−${wrongPenalty})` : ''}.</span>
+          <span className="font-semibold text-accent">No es correcto.</span>
         )}
         {feedback?.kind === 'incomplete' && <span className="text-muted">Completa todas las casillas.</span>}
         {feedback?.kind === 'stale' && <span className="font-semibold text-muted">Otro jugador se adelantó.</span>}
@@ -222,7 +218,7 @@ export function CluePanel({
             </Button>
             <CooldownHint until={blockedUntil} />
             <Button variant="secondary" onClick={handleHint} loading={busy === 'hint'} disabled={hintsAvailable <= 0}>
-              {hintsAvailable > 0 ? `Pista${hintCost > 0 ? ` (−${hintCost})` : ''}` : 'Sin pistas'}
+              {hintsAvailable > 0 ? 'Pista' : 'Sin pistas'}
               {hintsAvailable > 0 && <span className="font-mono text-xs opacity-70">· {hintsAvailable}</span>}
             </Button>
           </>

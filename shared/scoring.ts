@@ -5,20 +5,16 @@ import type {
   BossLevel,
   ComebackLevel,
   CompetitionConfig,
-  CompetitionMode,
   Difficulty,
   DuelDamage,
-  GameFlow,
   GameMode,
   Participant,
   RankedParticipant,
-  ScoringRule,
   TierMix,
 } from './types';
 
 export const DEFAULT_CONFIG: CompetitionConfig = {
   mode: 'timed',
-  scoring: 'standard',
   flow: 'free',
   durationSec: 600,
   targetCount: 5,
@@ -26,12 +22,9 @@ export const DEFAULT_CONFIG: CompetitionConfig = {
   difficultyVote: false,
   rivalCountdownSec: 0,
   comeback: 'off',
-  extraTime: { enabled: false, seconds: 60, maxUses: 2 },
   bossLevel: 'normal',
   maxHintsPerClue: 3,
-  wrongPenalty: 0,
   tierMix: 'balanced',
-  hideScoreboard: false,
 };
 
 export const LIMITS = {
@@ -45,10 +38,6 @@ export const LIMITS = {
   minPlayers: 1,
   maxPlayers: 50,
   maxCluesPerTier: 30,
-  minExtraSeconds: 10,
-  maxExtraSeconds: 300,
-  maxExtraUses: 5,
-  maxWrongPenalty: 100,
   maxRivalCountdownSec: 120,
   minAttemptIntervalMs: 800, // Anti fuerza bruta.
   overtimeRatio: 0.5, // Prórroga máxima de "diferencia de dos": 50 % de la duración.
@@ -86,23 +75,6 @@ export const DUEL_COMBO_INFO =
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil' };
 
-export const MODE_LABELS: Record<CompetitionMode, { title: string; description: string }> = {
-  timed: { title: 'Por tiempo', description: 'Más puntos al terminar el reloj.' },
-  count: { title: 'Por cantidad', description: 'El primero en resolver N gana.' },
-  boss: { title: 'Jefe', description: 'Cooperativo: bajen la vida del jefe antes de que acabe el tiempo.' },
-};
-
-export const SCORING_LABELS: Record<ScoringRule, { title: string; description: string }> = {
-  standard: { title: 'Clásico', description: 'Puntos según la dificultad.' },
-  fewestHints: { title: 'Menos pistas', description: 'Cada pista usada resta puntos.' },
-  speed: { title: 'Velocidad', description: 'Bonus por resolver antes.' },
-};
-
-export const FLOW_LABELS: Record<GameFlow, { title: string; description: string }> = {
-  free: { title: 'Libre', description: 'Cada uno a su ritmo por la misma lista.' },
-  rounds: { title: 'Rondas', description: 'Todos el mismo criptico; el primero en acertar se lo lleva.' },
-};
-
 export const COMEBACK_LABELS: Record<ComebackLevel, string> = { off: 'Sin remontada', low: 'Remontada suave', high: 'Remontada fuerte' };
 export const TIER_MIX_LABELS: Record<TierMix, string> = {
   balanced: 'Equilibrada',
@@ -115,9 +87,6 @@ export const BOSS_LABELS: Record<BossLevel, string> = { normal: 'Normal', hard: 
 // ---------- Puntaje ----------
 
 const BASE_POINTS = 100;
-export const HINT_PENALTY = 30;
-const MIN_POINTS = 10;
-const MAX_SPEED_BONUS = 100;
 const BOSS_BASE_DAMAGE = 100;
 const BOSS_MIN_RATIO = 0.1;
 
@@ -148,10 +117,7 @@ export function comebackFactor(level: ComebackLevel, score: number, leaderScore:
 }
 
 export interface SolveInput {
-  rule: ScoringRule;
   tier: Difficulty;
-  hintsUsed: number;
-  remainingRatio: number; // Tiempo restante / duración, en [0,1].
   comeback: ComebackLevel;
   score: number; // Puntaje actual del jugador.
   leaderScore: number; // Puntaje del líder (excluye a nadie).
@@ -160,15 +126,7 @@ export interface SolveInput {
 /** Puntos otorgados por resolver un criptico. */
 export function computeSolvePoints(input: SolveInput): number {
   const base = BASE_POINTS * TIER_MULTIPLIER[input.tier];
-  let raw: number;
-  if (input.rule === 'fewestHints') {
-    raw = Math.max(MIN_POINTS, base - HINT_PENALTY * Math.max(0, input.hintsUsed));
-  } else if (input.rule === 'speed') {
-    raw = base + MAX_SPEED_BONUS * clamp01(input.remainingRatio);
-  } else {
-    raw = base;
-  }
-  return Math.round(raw * comebackFactor(input.comeback, input.score, input.leaderScore));
+  return Math.round(base * comebackFactor(input.comeback, input.score, input.leaderScore));
 }
 
 /** Daño al jefe: proporcional al tiempo restante (con un mínimo del 10 %). */
@@ -242,20 +200,9 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
     errors.push(`La cuenta atrás debe estar entre 0 y ${LIMITS.maxRivalCountdownSec} segundos.`);
   }
   if (config.rivalCountdownSec > 0 && config.flow !== 'rounds') errors.push('La cuenta atrás tras acierto requiere el flujo por rondas.');
-  if (config.extraTime.enabled) {
-    if (config.extraTime.seconds < LIMITS.minExtraSeconds || config.extraTime.seconds > LIMITS.maxExtraSeconds) {
-      errors.push(`El tiempo extra debe estar entre ${LIMITS.minExtraSeconds} y ${LIMITS.maxExtraSeconds} segundos.`);
-    }
-    if (config.extraTime.maxUses < 1 || config.extraTime.maxUses > LIMITS.maxExtraUses) {
-      errors.push(`Los usos de tiempo extra deben estar entre 1 y ${LIMITS.maxExtraUses}.`);
-    }
-  }
   if (config.maxHintsPerClue < 0 || config.maxHintsPerClue > 10) errors.push('Las pistas por criptico deben estar entre 0 y 10.');
   if (config.hintsPerGame !== undefined && (config.hintsPerGame < 1 || config.hintsPerGame > 10)) {
     errors.push('Las pistas por partida deben estar entre 1 y 10.');
-  }
-  if (config.wrongPenalty < 0 || config.wrongPenalty > LIMITS.maxWrongPenalty) {
-    errors.push(`La penalización debe estar entre 0 y ${LIMITS.maxWrongPenalty}.`);
   }
   if (config.game === 'boss') errors.push('El modo Boss estará disponible próximamente.');
   if (config.game === 'duel') {

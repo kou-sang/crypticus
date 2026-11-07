@@ -93,7 +93,7 @@ export default function CompetitionRoom() {
       {/* Barra fija: el tiempo sigue a la vista al hacer scroll o con el teclado del móvil abierto. */}
       {isLive && !countdown && (
         <div className="sticky top-14 z-10 -mx-4 -mt-4 mb-6 flex items-center justify-end gap-3 border-b border-line bg-paper/95 px-4 py-2 backdrop-blur">
-          {live?.participants[profile.uid] && !live.boss && !live.config.hideScoreboard && !live.config.royale && (
+          {live?.participants[profile.uid] && !live.boss && !live.config.royale && (
             <span className="mr-auto font-mono text-sm">
               {live.config.game === 'race' ? (
                 <>
@@ -163,7 +163,6 @@ export default function CompetitionRoom() {
                 meId={profile.uid}
                 total={total}
                 metric={live ? rankMetric(live.config) : 'score'}
-                hideScores={live !== null && live.config.hideScoreboard && live.status === 'live'}
                 isBoss={comp.mode === 'boss'}
                 unit={comp.game === 'duel' ? 'vida' : undefined}
               />

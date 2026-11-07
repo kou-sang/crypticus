@@ -87,14 +87,6 @@ export class GameChannel {
     return this.request<AckReply>({ type: 'vote', reqId: this.nextId(), tier });
   }
 
-  extraTime(): Promise<AckReply> {
-    return this.request<AckReply>({ type: 'extraTime', reqId: this.nextId() });
-  }
-
-  skip(): Promise<AckReply> {
-    return this.request<AckReply>({ type: 'skip', reqId: this.nextId() });
-  }
-
   surrender(): Promise<AckReply> {
     return this.request<AckReply>({ type: 'surrender', reqId: this.nextId() });
   }

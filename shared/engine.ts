@@ -71,8 +71,6 @@ export const TIEBREAK_TIME_MS = 90_000;
 export type GameEventKind =
   | 'solve'
   | 'round'
-  | 'skip'
-  | 'extraTime'
   | 'overtime'
   | 'hint'
   | 'heal'
@@ -121,8 +119,6 @@ export interface LiveState {
   usedIds: string[]; // 'rounds': cripticos ya jugados
   round: RoundState | null;
   boss: { maxHp: number; hp: number } | null;
-  extraTime: { usesLeft: number; votes: string[] };
-  skipVotes: string[];
   endVotes?: string[]; // Opcional: estados guardados antes de v0.5 no lo tienen.
   tiebreakIds?: string[]; // Cripticos de desempate reservados (secretos hasta abrir). Opcional: estados previos a v0.8.
   tiebreak?: TiebreakState | null;
@@ -212,8 +208,6 @@ export function createLiveState(input: CreateInput): LiveState {
     usedIds: [],
     round: null,
     boss: input.config.mode === 'boss' ? { maxHp: 0, hp: 0 } : null,
-    extraTime: { usesLeft: input.config.extraTime.enabled ? input.config.extraTime.maxUses : 0, votes: [] },
-    skipVotes: [],
     endVotes: [],
     tiebreakIds: (input.tiebreakIds ?? []).filter(known),
     tiebreak: null,
@@ -490,8 +484,6 @@ export function applyAnswer(
         state.boss.hp += heal;
         pushEvent(state, { at: now, kind: 'heal', uid, points: heal });
       }
-    } else if (state.config.wrongPenalty > 0) {
-      participant.score = Math.max(0, participant.score - state.config.wrongPenalty);
     }
     return { correct: false, points: 0, finished: evaluate(state, now).finished, stale: false };
   }
@@ -550,10 +542,7 @@ export function applyAnswer(
   } else {
     const leaderScore = Math.max(0, ...Object.values(state.participants).map((p) => p.score));
     points = computeSolvePoints({
-      rule: state.config.scoring,
       tier,
-      hintsUsed: participant.hintsByClue[crypticId] ?? 0,
-      remainingRatio: ratio,
       comeback: state.config.comeback,
       score: participant.score,
       leaderScore,
@@ -618,47 +607,6 @@ function toggle(list: string[], uid: string): string[] {
   return list.includes(uid) ? list.filter((id) => id !== uid) : [...list, uid];
 }
 
-function everyone(state: LiveState, votes: string[]): boolean {
-  return Object.keys(state.participants).every((uid) => votes.includes(uid));
-}
-
-/** Alterna la solicitud de tiempo extra; se aplica cuando TODOS la piden. */
-export function toggleExtraTime(state: LiveState, input: { uid: string; now: number }): { applied: boolean } {
-  requireLive(state, input.now);
-  requireNoTiebreak(state);
-  requireParticipant(state, input.uid);
-  if (!state.config.extraTime.enabled) throw new GameError('extra_disabled', 'El tiempo extra no está habilitado.');
-  if (state.extraTime.usesLeft <= 0) throw new GameError('extra_exhausted', 'No quedan usos de tiempo extra.');
-
-  state.extraTime.votes = toggle(state.extraTime.votes, input.uid);
-  if (!everyone(state, state.extraTime.votes)) return { applied: false };
-
-  const ms = state.config.extraTime.seconds * 1000;
-  if (state.overtimeEndsAt !== null) state.overtimeEndsAt += ms;
-  else state.endsAt += ms;
-  state.extraTime = { usesLeft: state.extraTime.usesLeft - 1, votes: [] };
-  pushEvent(state, { at: input.now, kind: 'extraTime', seconds: state.config.extraTime.seconds });
-  return { applied: true };
-}
-
-/** Rondas: alterna el voto para pasar el criptico actual; se pasa cuando TODOS votan. */
-export function toggleSkip(state: LiveState, input: { uid: string; now: number; random?: () => number }): { skipped: boolean } {
-  requireLive(state, input.now);
-  requireNoTiebreak(state);
-  requireParticipant(state, input.uid);
-  if (state.config.flow !== 'rounds' || !state.round) throw new GameError('skip_disabled', 'Solo disponible en rondas.');
-  if (state.config.game === 'race' || state.config.game === 'duel') {
-    throw new GameError('skip_disabled', 'En este modo no se saltea: usa rendirse.');
-  }
-
-  state.skipVotes = toggle(state.skipVotes, input.uid);
-  if (!everyone(state, state.skipVotes)) return { skipped: false };
-
-  pushEvent(state, { at: input.now, kind: 'skip', crypticId: state.round.crypticId, tier: state.round.tier });
-  advanceRound(state, input.now, input.random ?? Math.random);
-  evaluate(state, input.now);
-  return { skipped: true };
-}
 
 /** Avanza al siguiente criptico de la lista; se abre tras el intervalo del modo. */
 function advanceCursor(state: LiveState, participant: Participant, now: number): void {
@@ -797,7 +745,6 @@ function drawFromPool(state: LiveState, preferred: Difficulty, random: () => num
 
 function openRound(state: LiveState, preferred: Difficulty, now: number, random: () => number): void {
   const drawn = drawFromPool(state, preferred, random);
-  state.skipVotes = [];
   if (!drawn) {
     state.round = null;
     return;

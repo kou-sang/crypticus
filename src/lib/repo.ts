@@ -46,7 +46,6 @@ export async function createProfile(uid: string, displayName: string, handle: st
     uid,
     displayName: displayName.trim(),
     handle,
-    rating: 1200,
     stats: { played: 0, wins: 0, solved: 0, hintsUsed: 0 },
     createdAt: Date.now(),
   } satisfies UserProfile);
@@ -76,24 +75,6 @@ export async function getHistory(uid: string, max = 50): Promise<HistoryEntry[]>
 
 const TOP_LIMIT = 50;
 const TOP_TTL_MS = 60_000;
-let topCache: { at: number; promise: Promise<UserProfile[]> } | null = null;
-
-/**
- * Top global compartido por Inicio (top 5) y Ranking (top 50): una sola consulta por minuto.
- * Si falla, se descarta la caché para reintentar en la próxima llamada.
- */
-export function getTopPlayers(max = TOP_LIMIT): Promise<UserProfile[]> {
-  if (!topCache || Date.now() - topCache.at > TOP_TTL_MS) {
-    const promise = getDocs(query(collection(db, 'users'), orderBy('rating', 'desc'), limit(TOP_LIMIT))).then((snap) =>
-      snap.docs.map((d) => d.data() as UserProfile),
-    );
-    promise.catch(() => {
-      topCache = null;
-    });
-    topCache = { at: Date.now(), promise };
-  }
-  return topCache.promise.then((rows) => rows.slice(0, max));
-}
 
 const modeTopCache = new Map<RankedMode, { at: number; promise: Promise<UserProfile[]> }>();
 
@@ -115,11 +96,6 @@ export async function getModePosition(mode: RankedMode, rating: number): Promise
   return snap.data().count + 1;
 }
 
-/** Posición global: 1 lectura de agregación (cuenta cuántos tienen más rating). */
-export async function getGlobalPosition(rating: number): Promise<number> {
-  const snap = await getCountFromServer(query(collection(db, 'users'), where('rating', '>', rating)));
-  return snap.data().count + 1;
-}
 
 export async function updateDisplayName(uid: string, displayName: string): Promise<void> {
   const trimmed = displayName.trim();

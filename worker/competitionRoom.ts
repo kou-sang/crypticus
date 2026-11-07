@@ -14,12 +14,10 @@ import {
   reserveAttempt,
   revealableIds,
   tick,
-  toggleExtraTime,
   toggleEndVote,
   passCryptic,
   surrender,
   isSequential,
-  toggleSkip,
   type LiveState,
   isOnWinningSide,
 } from '../shared/engine';
@@ -285,11 +283,6 @@ export class CompetitionRoom extends DurableObject<Env> {
         applyDifficultyVote(state, { uid, tier: message.tier, now });
         this.markDirty();
         return { ok: true };
-      case 'extraTime': {
-        const { applied } = toggleExtraTime(state, { uid, now });
-        this.markDirty();
-        return { ok: true, applied };
-      }
       case 'endVote': {
         const { ended } = toggleEndVote(state, { uid, now });
         this.markDirty(ended);
@@ -304,11 +297,6 @@ export class CompetitionRoom extends DurableObject<Env> {
         passCryptic(state, { uid, now });
         this.markDirty(state.status === 'finished');
         return { ok: true, applied: true };
-      }
-      case 'skip': {
-        const { skipped } = toggleSkip(state, { uid, now });
-        this.markDirty(state.status === 'finished');
-        return { ok: true, applied: skipped };
       }
       default:
         throw new AppError(400, 'unknown_action', 'Acción desconocida.');
@@ -450,13 +438,9 @@ export class CompetitionRoom extends DurableObject<Env> {
     try {
       const firestore = new FirestoreRest(this.env.FIREBASE_SERVICE_ACCOUNT);
       const ranked = rankState(state);
-      const users = await firestore.batchGet<{ rating?: number; modeStats?: Record<string, { rating?: number }> }>(
-        ranked.map((p) => `users/${p.uid}`),
-      );
-      const ratings: Record<string, number> = {};
-      users.forEach((user, uid) => {
-        ratings[uid] = user.rating ?? 1200;
-      });
+      const users = await firestore.batchGet<{ modeStats?: Record<string, { rating?: number }> }>(ranked.map((p) => `users/${p.uid}`));
+      // Solo se escribe a usuarios que existen (los borrados se omiten).
+      const existing = new Set(users.keys());
       // Elo propio de cada modo (Race, Royale, Duel).
       const game = state.config.game;
       const rankedMode = game === 'race' || game === 'royale' || game === 'duel' ? game : null;
@@ -468,9 +452,8 @@ export class CompetitionRoom extends DurableObject<Env> {
       // En 2 vs 2 gana el equipo: el compañero de quien figura como ganador también gana.
       const outcomeOf = (p: { uid: string; rank: number }): 'win' | 'loss' | 'draw' =>
         state.winnerId ? (isOnWinningSide(state, p.uid) ? 'win' : 'loss') : p.rank === 1 ? 'draw' : 'loss';
-      // El modo jefe es cooperativo: no altera el rating.
-      const competitive = state.config.mode !== 'boss' && ranked.length >= 2;
-      const deltas = competitive ? computeRatingDeltas(ranked, ratings) : {};
+      // El Elo es por modo: el jefe (cooperativo) y las partidas en solitario no lo cambian.
+      const deltas = modeDeltas;
       const bossDefeated = state.endReason === 'bossDefeated';
       const isWinner = (playerId: string) => (state.boss ? bossDefeated : isOnWinningSide(state, playerId));
 
@@ -499,7 +482,7 @@ export class CompetitionRoom extends DurableObject<Env> {
         },
         // Historial por jugador (partidas + evolución del rating).
         ...ranked
-          .filter((p) => p.uid in ratings)
+          .filter((p) => existing.has(p.uid))
           .map<Write>((p) => ({
             kind: 'set',
             path: `users/${p.uid}/history/${state.competitionId}`,
@@ -519,19 +502,17 @@ export class CompetitionRoom extends DurableObject<Env> {
               won: isWinner(p.uid),
               endReason: state.endReason,
               ratingDelta: deltas[p.uid] ?? 0,
-              ratingAfter: (ratings[p.uid] ?? 1200) + (deltas[p.uid] ?? 0),
               ...(rankedMode && ranked.length >= 2
                 ? { modeRatingAfter: (modeRatings[p.uid] ?? 1200) + (modeDeltas[p.uid] ?? 0), modeRatingDelta: modeDeltas[p.uid] ?? 0 }
                 : {}),
             },
           })),
         ...ranked
-          .filter((p) => p.uid in ratings) // Usuarios borrados se omiten.
+          .filter((p) => existing.has(p.uid)) // Usuarios borrados se omiten.
           .map<Write>((p) => ({
             kind: 'increment',
             path: `users/${p.uid}`,
             increments: {
-              rating: deltas[p.uid] ?? 0,
               'stats.played': 1,
               'stats.wins': isWinner(p.uid) ? 1 : 0,
               'stats.solved': p.solvedIds.length,
@@ -541,7 +522,7 @@ export class CompetitionRoom extends DurableObject<Env> {
         // Estadísticas y Elo por modo (solo partidas de 2 o más).
         ...(rankedMode && ranked.length >= 2
           ? ranked
-              .filter((p) => p.uid in ratings)
+              .filter((p) => existing.has(p.uid))
               .flatMap<Write>((p) => {
                 const outcome = outcomeOf(p);
                 const prefix = `modeStats.${rankedMode}`;

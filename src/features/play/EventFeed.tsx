@@ -15,7 +15,6 @@ function describe(event: GameEvent, state: LiveState): string | null {
         return `${name} acertó · ${solved}/${state.config.targetCount}`;
       }
       if (state.config.royale) return `${name} acertó (+${event.seconds ?? 0}s)`;
-      if (state.config.hideScoreboard) return `${name} resolvió uno ${tier}`;
       return state.boss ? `${name} golpeó al jefe (−${event.points})` : `${name} resolvió uno ${tier} (+${event.points})`;
     case 'damage':
       return `${name} quitó ${event.points} de vida${(event.combo ?? 1) >= 2 ? ` (combo ×${event.combo})` : ''}`;
@@ -23,10 +22,6 @@ function describe(event: GameEvent, state: LiveState): string | null {
       return `${name} quedó eliminado`;
     case 'round':
       return `Nueva ronda: ${tier}`;
-    case 'skip':
-      return 'Ronda pasada por acuerdo';
-    case 'extraTime':
-      return `+${event.seconds}s añadidos`;
     case 'overtime':
       return '¡Prórroga! Hace falta ventaja de dos';
     default:

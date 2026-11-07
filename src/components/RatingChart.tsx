@@ -1,9 +1,9 @@
-// Evolución del Elo: tiempo en el eje X, Elo en el eje Y. Una serie por modo (y la general). SVG sin librerías.
+// Evolución del Elo: tiempo en el eje X, Elo en el eje Y. Una serie por modo. SVG sin librerías.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HistoryEntry, RankedMode } from '../../shared/types';
 import { niceTicks, timeLabel, timeTicks } from '../lib/chartScale';
 
-export type Series = RankedMode | 'general';
+export type Series = RankedMode;
 
 const HEIGHT = 240;
 const MARGIN = { top: 12, right: 14, bottom: 34, left: 52 };
@@ -22,10 +22,9 @@ function seriesPoints(history: HistoryEntry[], series: Series): Point[] {
   const points: Point[] = [];
   let previous: number | null = null;
   for (const entry of sorted) {
-    const elo = series === 'general' ? entry.ratingAfter : entry.game === series ? entry.modeRatingAfter : undefined;
+    const elo = entry.game === series ? entry.modeRatingAfter : undefined;
     if (typeof elo !== 'number') continue;
-    // En la serie por modo el delta se deduce del punto anterior; en la general se guarda en la partida.
-    const delta = series === 'general' ? entry.ratingDelta : previous === null ? 0 : elo - previous;
+    const delta = entry.modeRatingDelta ?? (previous === null ? 0 : elo - previous);
     points.push({ at: entry.finishedAt, elo, delta, won: entry.won, title: entry.title });
     previous = elo;
   }
@@ -116,7 +115,7 @@ function Plot({ points, width }: { points: Point[]; width: number }) {
   );
 }
 
-/** Evolución del Elo de un modo (o el general). */
+/** Evolución del Elo de un modo. */
 export function RatingChart({ history, series }: { history: HistoryEntry[]; series: Series }) {
   const points = useMemo(() => seriesPoints(history, series), [history, series]);
   const [ref, width] = useWidth();
