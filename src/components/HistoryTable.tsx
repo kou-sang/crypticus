@@ -6,7 +6,8 @@ import { GAME_LABELS, MODE_LABELS } from '../../shared/scoring';
 import type { HistoryEntry } from '../../shared/types';
 import { Badge } from './ui';
 
-export const HistoryTable = memo(function HistoryTable({ entries }: { entries: HistoryEntry[] }) {
+/** `modeDeltas`: muestra el cambio del Elo del modo (si la partida lo tiene) en lugar del general. */
+export const HistoryTable = memo(function HistoryTable({ entries, modeDeltas = false }: { entries: HistoryEntry[]; modeDeltas?: boolean }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -20,7 +21,9 @@ export const HistoryTable = memo(function HistoryTable({ entries }: { entries: H
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry) => (
+          {entries.map((entry) => {
+            const delta = modeDeltas ? (entry.modeRatingDelta ?? entry.ratingDelta) : entry.ratingDelta;
+            return (
             <tr key={entry.competitionId} className="border-b border-line">
               <td className="max-w-0 py-2.5 pr-2">
                 <Link to={`/c/${entry.competitionId}`} className="block truncate font-semibold hover:underline">
@@ -37,11 +40,12 @@ export const HistoryTable = memo(function HistoryTable({ entries }: { entries: H
                 {entry.rank}/{entry.players}
               </td>
               <td className="hidden py-2.5 text-right font-mono sm:table-cell">{entry.solved}</td>
-              <td className={`py-2.5 text-right font-mono ${entry.ratingDelta > 0 ? 'text-ok' : entry.ratingDelta < 0 ? 'text-accent' : ''}`}>
-                {entry.ratingDelta > 0 ? `+${entry.ratingDelta}` : entry.ratingDelta}
+              <td className={`py-2.5 text-right font-mono ${delta > 0 ? 'text-ok' : delta < 0 ? 'text-accent' : ''}`}>
+                {delta > 0 ? `+${delta}` : delta}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

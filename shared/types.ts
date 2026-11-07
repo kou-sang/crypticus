@@ -213,4 +213,5 @@ export interface HistoryEntry {
   ratingAfter: number;
   /** Elo del modo (Race, Royale o Duel) tras la partida. Solo en partidas puntuables de 2 o más. */
   modeRatingAfter?: number;
+  modeRatingDelta?: number; // Cambio del Elo del modo en esta partida.
 }
