@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { niceTicks, timeTicks } from './chartScale';
+import { dayIndex, dayTicks, dayToDate, niceTicks } from './chartScale';
 
 describe('niceTicks', () => {
   it('cubre el rango con pasos redondos', () => {
@@ -18,19 +18,39 @@ describe('niceTicks', () => {
   });
 });
 
-describe('timeTicks', () => {
-  it('usa horas dentro del mismo día y fechas en rangos largos', () => {
-    const start = new Date(2026, 10, 6, 10, 0).getTime();
-    const sameDay = timeTicks(start, start + 3 * 3_600_000);
-    expect(sameDay[0]!.label).toMatch(/\d{1,2}:\d{2}/);
-    const weeks = timeTicks(start, start + 20 * 86_400_000);
-    expect(weeks[0]!.label).not.toMatch(/:/);
-    expect(weeks.length).toBeGreaterThanOrEqual(2);
+describe('dayIndex', () => {
+  it('agrupa por día local, sin importar la hora', () => {
+    const morning = new Date(2026, 10, 6, 0, 5).getTime();
+    const night = new Date(2026, 10, 6, 23, 55).getTime();
+    expect(dayIndex(morning)).toBe(dayIndex(night));
+    expect(dayIndex(new Date(2026, 10, 7, 0, 1).getTime())).toBe(dayIndex(night) + 1);
   });
 
-  it('no repite etiquetas', () => {
-    const start = new Date(2026, 10, 1).getTime();
-    const labels = timeTicks(start, start + 2.5 * 86_400_000, 6).map((t) => t.label);
-    expect(new Set(labels).size).toBe(labels.length);
+  it('ida y vuelta con dayToDate', () => {
+    const day = dayIndex(new Date(2026, 2, 29, 15).getTime());
+    const date = dayToDate(day);
+    expect([date.getFullYear(), date.getMonth(), date.getDate()]).toEqual([2026, 2, 29]);
+  });
+});
+
+describe('dayTicks', () => {
+  it('marca días enteros sin repetir y respeta los extremos', () => {
+    const first = dayIndex(new Date(2026, 9, 1).getTime());
+    const ticks = dayTicks(first, first + 30, 5);
+    expect(ticks[0]!.day).toBe(first);
+    expect(ticks.at(-1)!.day).toBe(first + 30);
+    expect(ticks.length).toBe(5);
+    expect(ticks[0]!.label).not.toMatch(/:/);
+  });
+
+  it('no inventa marcas cuando hay pocos días', () => {
+    const first = dayIndex(new Date(2026, 10, 6).getTime());
+    expect(dayTicks(first, first + 2, 5).map((t) => t.day)).toEqual([first, first + 1, first + 2]);
+    expect(dayTicks(first, first, 5)).toHaveLength(1);
+  });
+
+  it('agrega el año si el rango lo cruza', () => {
+    const first = dayIndex(new Date(2025, 11, 20).getTime());
+    expect(dayTicks(first, first + 20, 3)[0]!.label).toMatch(/25/);
   });
 });

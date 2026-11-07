@@ -186,10 +186,11 @@
   --paper: #c3ab7d;
   --paper-2: #b29766;
   --ink: #2a1c0e;
-  --muted: #5d4930;
+  /* Contraste AA (≥ 4,5:1) sobre el papel y sobre las pestañas: muted, accent y ok más oscuros que antes. */
+  --muted: #3f2f1b;
   --line: #957a50;
-  --accent: #8e2914;
-  --ok: #3d5a1b;
+  --accent: #651a0b;
+  --ok: #253c18;
   --color-paper: var(--paper);
   --color-paper-2: var(--paper-2);
   --color-ink: var(--ink);
@@ -301,6 +302,23 @@
   color: #f1e4c6;
 }
 [data-skin='crypt'] .btn[data-variant='ghost'] { box-shadow: none; }
+[data-skin='crypt'] .btn[data-variant='danger'] {
+  background: linear-gradient(#7a2412, #521608); /* Cuero teñido de sangre: texto claro, nunca rojo sobre rojo. */
+  border-color: #2a0f06;
+  color: #f6e2cc;
+}
+/*
+ * Deshabilitado: sin opacidad (la piedra semitransparente sobre el pergamino quedaba marrón sobre marrón).
+ * Hueco punteado en el papel con texto de tinta tenue, legible pero claramente inactivo.
+ */
+[data-skin='crypt'] .btn:disabled {
+  opacity: 1;
+  background: rgba(110, 75, 35, 0.18);
+  border-color: #957a50;
+  border-style: dashed;
+  color: #3f2f1b;
+  box-shadow: none;
+}
 @keyframes stone-press {
   0% { transform: translateY(0); }
   35% { transform: translate(-1px, 2px); }
@@ -319,7 +337,7 @@
 [data-skin='crypt'] :is(button, [role='tab'], [role='radio'], [role='switch'], [role='checkbox'], summary, select, input[type='text'], a[href][class~='border']):not(:disabled):not(.backdrop):active {
   animation: stone-press 200ms ease-out, torch-near 1.7s ease-in-out infinite;
 }
-[data-skin='crypt'] .btn:is([data-variant='primary'], [data-variant='secondary']):not(:disabled):hover { color: #fff3da; }
+[data-skin='crypt'] .btn:is([data-variant='primary'], [data-variant='secondary'], [data-variant='danger']):not(:disabled):hover { color: #fff3da; }
 [data-skin='crypt'] a[href]:hover {
   text-shadow: 0 0 10px rgba(242, 160, 58, 0.65), 0 0 2px rgba(255, 210, 140, 0.5);
 }
@@ -385,3 +403,8 @@
   color: #f3e6c8;
   box-shadow: inset 0 1px 0 rgba(255, 230, 190, 0.15), 0 1px 2px rgba(40, 20, 5, 0.5);
 }
+/* Dentro de un relleno de cuero (elegido), los textos secundarios heredan la letra clara en vez de la tinta del papel. */
+[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) .bg-ink :is(.text-ink, .text-muted, .text-accent, .text-ok) {
+  color: inherit;
+}
+[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) .bg-ink .text-muted { opacity: 0.75; }

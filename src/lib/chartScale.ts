@@ -23,28 +23,45 @@ export function niceTicks(min: number, max: number, target = 5): number[] {
   return ticks.length >= 2 ? ticks : [start, start + step];
 }
 
-export interface TimeTick {
-  at: number;
+export interface DayTick {
+  day: number; // Índice de día (ver `dayIndex`).
   label: string;
 }
 
 const DAY_FORMAT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
-const HOUR_FORMAT = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' });
+const DAY_YEAR_FORMAT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: '2-digit' });
 
-/** Formato según el rango: horas si todo ocurrió en menos de dos días, fechas si no. */
-export function timeLabel(at: number, spanMs: number): string {
-  return spanMs < 2 * DAY_MS ? HOUR_FORMAT.format(at) : DAY_FORMAT.format(at);
+/**
+ * Índice del día local de un instante: días enteros desde la época, en la zona horaria del navegador.
+ * Se calcula con la fecha local (no dividiendo ms) para que los cambios de horario no partan un día.
+ */
+export function dayIndex(at: number): number {
+  const date = new Date(at);
+  return Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS);
 }
 
-/** Hasta `count` marcas repartidas entre el primer y el último instante, sin etiquetas repetidas. */
-export function timeTicks(start: number, end: number, count = 4): TimeTick[] {
-  const span = Math.max(0, end - start);
-  if (span === 0) return [{ at: start, label: timeLabel(start, 0) }];
-  const ticks: TimeTick[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const at = start + (span * i) / (count - 1);
-    const label = timeLabel(at, span);
-    if (ticks.at(-1)?.label !== label) ticks.push({ at, label });
+/** Mediodía local del día `day`: sirve para formatear la fecha sin depender de la hora. */
+export function dayToDate(day: number): Date {
+  const utc = new Date(day * DAY_MS);
+  return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate(), 12);
+}
+
+/** «7 nov»; si el rango cruza de año, «7 nov 26». */
+export function dayLabel(day: number, withYear = false): string {
+  return (withYear ? DAY_YEAR_FORMAT : DAY_FORMAT).format(dayToDate(day));
+}
+
+/** Hasta `count` marcas en días enteros entre `first` y `last` (inclusive), sin repetir. */
+export function dayTicks(first: number, last: number, count = 5): DayTick[] {
+  const lo = Math.min(first, last);
+  const hi = Math.max(first, last);
+  const withYear = dayToDate(lo).getFullYear() !== dayToDate(hi).getFullYear();
+  const span = hi - lo;
+  const steps = Math.max(1, Math.min(count - 1, span));
+  const ticks: DayTick[] = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const day = lo + Math.round((span * i) / steps);
+    if (ticks.at(-1)?.day !== day) ticks.push({ day, label: dayLabel(day, withYear) });
   }
   return ticks;
 }

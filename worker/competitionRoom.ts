@@ -22,6 +22,7 @@ import {
   isOnWinningSide,
 } from '../shared/engine';
 import { computeRatingDeltas } from '../shared/scoring';
+import { isRoyalePool, ratingPoolOf } from '../shared/ratingPools';
 import type { CompetitionConfig, Difficulty, Participant } from '../shared/types';
 import {
   MAX_CLIENT_MESSAGE_BYTES,
@@ -448,10 +449,13 @@ export class CompetitionRoom extends DurableObject<Env> {
       const existing = new Set(users.keys());
       // Elo propio de cada modo (Race, Royale, Duel).
       const game = state.config.game;
-      const rankedMode = game === 'race' || game === 'royale' || game === 'duel' ? game : null;
+      // Pool de Elo: Race, Duel o Royale según su categoría de tiempo (v1.2).
+      const rankedMode = ratingPoolOf(game, state.config.royale);
       const modeRatings: Record<string, number> = {};
       users.forEach((user, uid) => {
-        modeRatings[uid] = (rankedMode ? user.modeStats?.[rankedMode]?.rating : undefined) ?? 1200;
+        // Un pool de Royale sin partidas arranca desde el Elo único de Royale anterior a v1.2.
+        const legacy = rankedMode && isRoyalePool(rankedMode) ? user.modeStats?.royale?.rating : undefined;
+        modeRatings[uid] = (rankedMode ? user.modeStats?.[rankedMode]?.rating : undefined) ?? legacy ?? 1200;
       });
       const modeDeltas = rankedMode && ranked.length >= 2 ? computeRatingDeltas(ranked, modeRatings) : {};
       // En 2 vs 2 gana el equipo: el compañero de quien figura como ganador también gana.
@@ -508,7 +512,14 @@ export class CompetitionRoom extends DurableObject<Env> {
               endReason: state.endReason,
               ratingDelta: deltas[p.uid] ?? 0,
               ...(rankedMode && ranked.length >= 2
-                ? { modeRatingAfter: (modeRatings[p.uid] ?? 1200) + (modeDeltas[p.uid] ?? 0), modeRatingDelta: modeDeltas[p.uid] ?? 0 }
+                ? {
+                    modeRatingAfter: (modeRatings[p.uid] ?? 1200) + (modeDeltas[p.uid] ?? 0),
+                    modeRatingDelta: modeDeltas[p.uid] ?? 0,
+                    ratingPool: rankedMode,
+                  }
+                : {}),
+              ...(game === 'royale' && state.config.royale
+                ? { royale: { baseSec: state.config.royale.baseSec, incrementSec: state.config.royale.incrementSec } }
                 : {}),
             },
           })),

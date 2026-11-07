@@ -67,21 +67,41 @@ function SolutionsList({ competitionId, meId, names }: { competitionId: string; 
       {solutions.map((solution, index) => {
         const cryptic = cryptics.get(solution.crypticId);
         const mine = solution.solvedBy.includes(meId);
-        const others = solution.solvedBy.filter((id) => id !== meId).map((id) => names.get(id) ?? '?');
+        const solvers = new Set(solution.solvedBy);
+        // Jugadores en el orden de la tabla final; el propio se muestra como «Tú».
+        const label = (id: string) => (id === meId ? 'Tú' : (names.get(id) ?? '?'));
+        const players = [...names.keys()];
+        const solved = players.filter((id) => solvers.has(id)).map(label);
+        const unsolved = players.filter((id) => !solvers.has(id)).map(label);
         return (
           <li key={solution.crypticId} className="grid gap-1 py-4 sm:grid-cols-[2rem_1fr]">
             <span className="font-mono text-sm text-muted">{index + 1}.</span>
             <div className="min-w-0">
               {cryptic && <ClueText cryptic={cryptic} className="font-display text-lg" />}
-              <p className="mt-1 flex flex-wrap items-baseline gap-x-3">
-                <span className={cx('font-mono font-semibold uppercase tracking-widest', mine ? 'text-ok' : 'text-ink')}>
-                  {solution.answer ?? '—'}
-                </span>
-                <span className="text-xs text-muted">
-                  {mine ? '✓ Lo resolviste' : 'No lo resolviste'}
-                  {others.length > 0 && ` · también ${others.join(', ')}`}
-                </span>
+              <p className={cx('mt-1 font-mono font-semibold uppercase tracking-widest', mine ? 'text-ok' : 'text-ink')}>
+                {solution.answer ?? '—'}
               </p>
+              {/* ✓ quienes lo resolvieron, ✗ quienes no (se omite la línea vacía). */}
+              <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-xs text-muted">
+                {solved.length > 0 && (
+                  <>
+                    <dt className="font-semibold text-ok">
+                      <span aria-hidden>✓</span>
+                      <span className="sr-only">Lo resolvieron:</span>
+                    </dt>
+                    <dd>{solved.join(', ')}</dd>
+                  </>
+                )}
+                {unsolved.length > 0 && (
+                  <>
+                    <dt className="font-semibold text-accent">
+                      <span aria-hidden>✗</span>
+                      <span className="sr-only">No lo resolvieron:</span>
+                    </dt>
+                    <dd>{unsolved.join(', ')}</dd>
+                  </>
+                )}
+              </dl>
               {solution.explanation && <p className="mt-1 text-sm">{solution.explanation}</p>}
             </div>
           </li>

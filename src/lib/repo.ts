@@ -28,11 +28,11 @@ import {
   type CompetitionVisibility,
   type CrypticPublic,
   type HistoryEntry,
-  type RankedMode,
   type Participant,
   type UserProfile,
 } from '../../shared/types';
 import { validateConfig } from '../../shared/scoring';
+import type { RatingPool } from '../../shared/ratingPools';
 import { normalizeConfig } from '../../shared/config';
 import { api } from './api';
 
@@ -97,10 +97,10 @@ export async function getHistory(uid: string, max = 50): Promise<HistoryEntry[]>
 const TOP_LIMIT = 50;
 const TOP_TTL_MS = 60_000;
 
-const modeTopCache = new Map<RankedMode, { at: number; promise: Promise<UserProfile[]> }>();
+const modeTopCache = new Map<RatingPool, { at: number; promise: Promise<UserProfile[]> }>();
 
-/** Top 50 de un modo por Elo (solo aparecen quienes jugaron ese modo). Caché de 60 s por modo. */
-export function getTopByMode(mode: RankedMode): Promise<UserProfile[]> {
+/** Top 50 de un pool por Elo (solo aparecen quienes lo jugaron). Caché de 60 s por pool. */
+export function getTopByMode(mode: RatingPool): Promise<UserProfile[]> {
   const cached = modeTopCache.get(mode);
   if (cached && Date.now() - cached.at <= TOP_TTL_MS) return cached.promise;
   const promise = getDocs(
@@ -111,8 +111,8 @@ export function getTopByMode(mode: RankedMode): Promise<UserProfile[]> {
   return promise;
 }
 
-/** Posición en el ranking de un modo (1 lectura de agregación). */
-export async function getModePosition(mode: RankedMode, rating: number): Promise<number> {
+/** Posición en el ranking de un pool (1 lectura de agregación). */
+export async function getModePosition(mode: RatingPool, rating: number): Promise<number> {
   const snap = await getCountFromServer(query(collection(db, 'users'), where(`modeStats.${mode}.rating`, '>', rating)));
   return snap.data().count + 1;
 }

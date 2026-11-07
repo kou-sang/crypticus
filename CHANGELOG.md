@@ -4,6 +4,33 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-07
+
+### Added
+
+- **Perfil al estilo Lichess:** el modo se elige en una columna a la izquierda (en el celular, una fila deslizable arriba) y a la derecha se ve su panel. El modo queda en la URL (`?modo=royale_bullet`) para compartir el enlace.
+- **Royale con un Elo por tiempo:** Hyperbullet (≤ 1 min), Bullet (≤ 2 min) y Rapid (> 2 min), según los minutos iniciales. También en el Ranking, con una fila de categorías bajo Royale. Cada categoría arranca desde el Elo de Royale anterior.
+- **Novedades en Inicio:** cuadro con los cambios importantes, a la derecha en PC y debajo del criptico de ejemplo en el celular (`src/features/dashboard/updates.ts`).
+- `scripts/backfill-royale-pools.ts`: migración única que clasifica las partidas de Royale anteriores y rehace las estadísticas de cada categoría.
+
+### Changed
+
+- La evolución del Elo es diaria: un punto por día con el Elo al cierre, y el detalle de partidas y resultados de ese día al pasar el puntero.
+- El botón del historial es compacto y centrado («Historial (N)»), con el borde ajustado al texto.
+- Resumen de la partida: cada criptico muestra «✓ A, B, C» (lo resolvieron) y «✗ D, E» (no lo resolvieron).
+- El historial guarda el pool de Elo (`ratingPool`) y, en Royale, el control de tiempo.
+- Ranking más compacto: ancho acotado, controles (modo, tiempo de Royale y Global/Amigos) en una sola franja, tu posición junto al título, filas de una línea y el enlace al perfil del tamaño del nombre (la celda vacía ya no es clicable).
+
+### Fixed
+
+- Contraste en Cripta y Cyber:
+  - Cripta: textos secundarios, enlaces y aciertos sobre el pergamino (muted, accent y ok) más oscuros, con contraste AA (≥ 4,5:1).
+  - Botones de peligro (Cerrar sesión, Abandonar, Terminar…): en Cripta, cuero rojo con letra clara; en Cyber, al pasar el puntero ya no quedan con letra casi negra sobre fondo negro.
+  - Botones deshabilitados legibles: sin opacidad que los funda con el fondo (hueco punteado en Cripta, gris apagado en Cyber).
+  - Textos secundarios dentro de una opción elegida heredan la letra clara (Cripta) u oscura (Cyber), en lugar del color pensado para el fondo.
+  - Cyber: los rótulos con fuente de título dentro de un botón toman el color del botón.
+- Repaso de la partida: cada criptico muestra «Lo resolvieron: …» y «No lo resolvieron: …» con todos los jugadores (tú como «Tú»), en lugar de «Lo resolviste · también …».
+
 ## [1.1.4] - 2026-11-07
 
 ### Fixed

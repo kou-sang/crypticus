@@ -1,30 +1,22 @@
-// Tabla de posiciones de un modo: victorias, derrotas, empates, % de victorias y Elo.
+// Tabla de posiciones de un pool de Elo (Race, Royale por tiempo o Duel): victorias, derrotas, empates, % de victorias y Elo.
 import { memo } from 'react';
 import { Link } from 'react-router';
 import { cx } from '../lib/utils';
-import type { ModeStats, RankedMode, UserProfile } from '../../shared/types';
+import { statsOf, winRate } from '../lib/pools';
+import type { RatingPool } from '../../shared/ratingPools';
+import type { UserProfile } from '../../shared/types';
 
 const TH = 'whitespace-nowrap py-2 text-[11px] font-semibold uppercase tracking-wider text-muted';
-const TD = 'whitespace-nowrap py-2.5 text-right font-mono tabular-nums';
-
-export const EMPTY_STATS: ModeStats = { rating: 1200, played: 0, wins: 0, losses: 0, draws: 0 };
-
-export function statsOf(user: UserProfile, mode: RankedMode): ModeStats {
-  return { ...EMPTY_STATS, ...(user.modeStats?.[mode] ?? {}) };
-}
-
-export function winRate(stats: ModeStats): string {
-  return stats.played > 0 ? `${Math.round((stats.wins / stats.played) * 100)}%` : '—';
-}
+const TD = 'whitespace-nowrap py-1.5 text-right font-mono tabular-nums';
 
 export const RankingTable = memo(function RankingTable({
   rows,
   meId,
-  mode,
+  pool,
 }: {
   rows: UserProfile[];
   meId: string;
-  mode: RankedMode;
+  pool: RatingPool;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -42,15 +34,20 @@ export const RankingTable = memo(function RankingTable({
         </thead>
         <tbody>
           {rows.map((user, index) => {
-            const stats = statsOf(user, mode);
+            const stats = statsOf(user, pool);
             return (
               <tr key={user.uid} className={cx('border-b border-line', user.uid === meId && 'bg-accent/10')}>
-                <td className={cx('py-2.5 font-mono', index < 3 && 'font-bold text-accent')}>{index + 1}</td>
-                <td className="min-w-0 py-2.5 pr-2">
-                  <Link to={`/u/${user.uid}`} className="block truncate font-semibold hover:underline" title={user.displayName}>
-                    {user.displayName}
+                <td className={cx('py-1.5 font-mono', index < 3 && 'font-bold text-accent')}>{index + 1}</td>
+                <td className="min-w-0 py-1.5 pr-2">
+                  {/* El enlace mide lo que el nombre: el resto de la celda no es clicable. */}
+                  <Link
+                    to={`/u/${user.uid}`}
+                    className="inline-flex max-w-full items-baseline gap-2 align-middle hover:underline"
+                    title={`${user.displayName} · @${user.handle}`}
+                  >
+                    <span className="min-w-0 truncate font-semibold">{user.displayName}</span>
+                    <span className="hidden min-w-0 shrink truncate font-mono text-xs text-muted sm:inline">@{user.handle}</span>
                   </Link>
-                  <span className="block truncate font-mono text-xs text-muted">@{user.handle}</span>
                 </td>
                 <td className={TD}>{stats.wins}</td>
                 <td className={TD}>{stats.losses}</td>
