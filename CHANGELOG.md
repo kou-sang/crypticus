@@ -4,6 +4,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-07
+
+### Changed
+
+- Medieval: el muro de respaldo es una ilustración oscura de piedras redondeadas con moho y enredaderas, en línea con la referencia visual. Prompts de Gemini actualizados.
+- Cyber: el texto usa Chakra Petch y los títulos admiten una fuente de exhibición propia (`public/fonts/cyber-display.woff2`).
+
 ## [1.0.0] - 2026-11-07
 
 Primera versión estable.
