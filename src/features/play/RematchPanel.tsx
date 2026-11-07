@@ -11,20 +11,35 @@ import { configOf, declineRematch, joinCompetition, proposeRematch, rematchInvit
 import { errorMessage } from '../../lib/utils';
 import { Button, ErrorBanner } from '../../components/ui';
 
-/** Estado que recibe el formulario de creación para proponer una revancha con otros parámetros. */
-export interface RematchDraft {
-  fromId: string;
+/** Reglas y datos de una sala para precargar el formulario. */
+export interface RoomDraft {
+  id: string; // Al editar: la sala. En una revancha nueva: la partida de origen.
   title: string;
   settings: ReturnType<typeof settingsFromConfig>;
   visibility: Competition['visibility'];
+}
+
+/** Estado que recibe el formulario de creación para proponer una revancha con otros parámetros. */
+export interface RematchDraft extends RoomDraft {
+  fromId: string;
   invitedIds: string[];
   invitedNames: Record<string, string>;
-  replaceId?: string; // Sala de revancha anterior que se reemplaza (la cancela quien la propuso).
+}
+
+/** Editar la sala en espera (anfitrión): mismas reglas como punto de partida. */
+export function editDraft(competition: Competition): RoomDraft {
+  return {
+    id: competition.id,
+    title: competition.title,
+    settings: settingsFromConfig(configOf(competition)),
+    visibility: competition.visibility,
+  };
 }
 
 export function rematchDraft(target: RematchTarget, hostUid: string): RematchDraft {
   const { invitedIds, invitedNames } = rematchInvitesFor(target, hostUid);
   return {
+    id: target.competition.id,
     fromId: target.competition.id,
     title: rematchTitle(target.competition.title),
     settings: settingsFromConfig(configOf(target.competition)),
@@ -57,7 +72,7 @@ export function RematchPanel({ target, profile }: { target: RematchTarget; profi
 
   const propose = () =>
     run('propose', async () => {
-      const id = await proposeRematch(profile, target);
+      const id = await proposeRematch(target, profile.uid);
       navigate(`/c/${id}`);
     });
   const customize = () => navigate('/jugar/nueva', { state: { rematch: rematchDraft(target, profile.uid) } });

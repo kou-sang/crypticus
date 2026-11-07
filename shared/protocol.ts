@@ -8,8 +8,6 @@ export type ClientMessage =
   | { type: 'answer'; reqId: string; crypticId: string; guess: string }
   | { type: 'hint'; reqId: string; crypticId: string; reveal: boolean }
   | { type: 'vote'; reqId: string; tier: Difficulty }
-  | { type: 'extraTime'; reqId: string }
-  | { type: 'skip'; reqId: string }
   | { type: 'endVote'; reqId: string }
   | { type: 'pass'; reqId: string } // Royale: pasar al siguiente criptico
   | { type: 'surrender'; reqId: string } // Race: rendirse ante el criptico actual

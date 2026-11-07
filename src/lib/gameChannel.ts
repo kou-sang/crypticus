@@ -21,7 +21,8 @@ interface PendingRequest {
 }
 
 const REQUEST_TIMEOUT_MS = 8_000;
-const PING_INTERVAL_MS = 10_000;
+// Cada ping despierta al Durable Object (hibernación): cada 25 s basta para RTT y desfase.
+const PING_INTERVAL_MS = 25_000;
 const INITIAL_PINGS = 3; // Ráfaga inicial: el RTT mínimo da el desfase de reloj más preciso.
 const MAX_BACKOFF_MS = 8_000;
 
@@ -84,14 +85,6 @@ export class GameChannel {
 
   vote(tier: Difficulty): Promise<AckReply> {
     return this.request<AckReply>({ type: 'vote', reqId: this.nextId(), tier });
-  }
-
-  extraTime(): Promise<AckReply> {
-    return this.request<AckReply>({ type: 'extraTime', reqId: this.nextId() });
-  }
-
-  skip(): Promise<AckReply> {
-    return this.request<AckReply>({ type: 'skip', reqId: this.nextId() });
   }
 
   surrender(): Promise<AckReply> {

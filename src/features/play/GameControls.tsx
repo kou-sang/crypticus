@@ -1,11 +1,11 @@
-// Controles colectivos: votación de dificultad, tiempo extra y pasar ronda.
+// Votación de la dificultad del próximo criptico (Race Hardcore).
 import { useState } from 'react';
 import type { LiveState } from '../../../shared/engine';
 import { DIFFICULTY_LABELS } from '../../../shared/scoring';
 import { DIFFICULTIES, type Difficulty } from '../../../shared/types';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { cx, errorMessage } from '../../lib/utils';
-import { Button, ErrorBanner } from '../../components/ui';
+import { ErrorBanner } from '../../components/ui';
 
 export function DifficultyVote({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
   const [error, setError] = useState<string | null>(null);
@@ -44,56 +44,6 @@ export function DifficultyVote({ state, uid, actions }: { state: LiveState; uid:
         })}
       </div>
       <p className="mt-1 text-[11px] text-muted">En empate decide quien va perdiendo.</p>
-      <ErrorBanner error={error} />
-    </section>
-  );
-}
-
-export function SharedRequests({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
-  const [busy, setBusy] = useState<'extra' | 'skip' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const total = Object.keys(state.participants).length;
-  const { config } = state;
-
-  const run = async (key: 'extra' | 'skip', action: () => Promise<unknown>) => {
-    setBusy(key);
-    setError(null);
-    try {
-      await action();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const showExtra = config.extraTime.enabled;
-  // En Race no se saltea: siempre se resuelve el actual (o se usa "rendirse").
-  const showSkip = config.flow === 'rounds' && state.round !== null && config.game !== 'race' && config.game !== 'duel';
-  if (!showExtra && !showSkip) return null;
-
-  const extraAsked = state.extraTime.votes.includes(uid);
-  const skipAsked = state.skipVotes.includes(uid);
-
-  return (
-    <section className="flex flex-wrap gap-2">
-      {showExtra && (
-        <Button
-          variant={extraAsked ? 'primary' : 'secondary'}
-          loading={busy === 'extra'}
-          disabled={state.extraTime.usesLeft <= 0}
-          onClick={() => run('extra', actions.extraTime)}
-          title="Se aplica cuando todos lo piden"
-        >
-          +{config.extraTime.seconds}s · {state.extraTime.votes.length}/{total}
-          <span className="font-mono text-xs opacity-70">({state.extraTime.usesLeft} usos)</span>
-        </Button>
-      )}
-      {showSkip && (
-        <Button variant={skipAsked ? 'primary' : 'ghost'} loading={busy === 'skip'} onClick={() => run('skip', actions.skip)}>
-          {skipAsked ? 'Pediste pasar' : 'Votar pasar'} · {state.skipVotes.length}/{total}
-        </Button>
-      )}
       <ErrorBanner error={error} />
     </section>
   );

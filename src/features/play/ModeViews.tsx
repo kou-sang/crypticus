@@ -1,11 +1,11 @@
 // Vistas específicas de cada modo: relojes de Royale, barras de vida de Duel y pausa entre cripticos.
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { cooldownMs, duelOneHitFromDeath, royaleCurrent, royaleRemaining, type LiveState } from '../../../shared/engine';
+import { cooldownMs, duelOneHitFromDeath, royaleCurrent, royaleRemaining, royaleSkipPenaltyMs, type LiveState, rivalsOf, sideOf } from '../../../shared/engine';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { useNow } from '../../hooks/useNow';
 import { playCue } from '../../lib/sound';
-import { cx, formatClock } from '../../lib/utils';
-import { Button, Spinner } from '../../components/ui';
+import { cx, errorMessage, formatClock } from '../../lib/utils';
+import { Button, ErrorBanner, Spinner } from '../../components/ui';
 import { CluePanel } from './CluePanel';
 import { useCryptics } from './useCryptics';
 
@@ -106,16 +106,43 @@ export function RoyaleFlow({ state, uid, actions, offsetMs }: { state: LiveState
             successLabel={(seconds) => `+${seconds}s a tu reloj`}
             cooldownMs={cooldownMs(state.config)}
             maxHintsPerClue={0}
-            hintCost={0}
-            wrongPenalty={0}
             isBoss={false}
             actions={actions}
           />
-          <Button variant="ghost" onClick={() => void actions.pass().catch(() => undefined)}>
-            Pasar al siguiente →
-          </Button>
+          <RoyaleSkip state={state} uid={uid} actions={actions} />
         </>
       )}
+    </div>
+  );
+}
+
+/** Saltar en Royale: usos limitados y cuesta tiempo del reloj. */
+function RoyaleSkip({ state, uid, actions }: { state: LiveState; uid: string; actions: GameActions }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const royale = state.config.royale;
+  const allowed = royale?.skips ?? 0;
+  if (!royale || allowed <= 0) return null;
+  const left = allowed - (state.participants[uid]?.skipsUsed ?? 0);
+  const cost = royaleSkipPenaltyMs(royale) / 1000;
+  if (left <= 0) return <p className="text-xs text-muted">Sin saltos.</p>;
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await actions.pass();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      <Button variant="ghost" loading={busy} onClick={() => void run()}>
+        Saltear{cost > 0 ? ` (−${cost} s)` : ''} · quedan {left}
+      </Button>
+      <ErrorBanner error={error} />
     </div>
   );
 }
@@ -127,10 +154,16 @@ const LOW_HEALTH_RATIO = 0.3;
 
 export const DuelBars = memo(function DuelBars({ state, uid }: { state: LiveState; uid: string }) {
   const maxHp = state.config.duel?.hp ?? 100;
-  const players = Object.values(state.participants).sort((a, b) => Number(b.uid === uid) - Number(a.uid === uid));
+  // Un bando por barra: el jugador (1 vs 1) o el equipo con vida compartida (2 vs 2). El propio va primero.
+  const mine = sideOf(state, uid);
+  const theirs = rivalsOf(state, uid);
+  const sides = [mine, theirs].filter((side) => side.length > 0);
+  const label = (side: typeof mine) =>
+    side.map((p) => (p.uid === uid ? 'Tú' : p.displayName)).join(' y ');
   return (
     <div className="grid grid-cols-2 gap-3" aria-label="Vida">
-      {players.map((p, index) => {
+      {sides.map((side, index) => {
+        const p = side[0]!;
         const hp = Math.max(0, p.score);
         const ratio = hp / maxHp;
         const low = hp > 0 && ratio <= LOW_HEALTH_RATIO;
@@ -140,7 +173,7 @@ export const DuelBars = memo(function DuelBars({ state, uid }: { state: LiveStat
         return (
           <div key={p.uid} className={cx(index === 1 && 'text-right')}>
             <p className={cx('flex items-center gap-1.5 text-xs font-semibold', index === 1 && 'justify-end')}>
-              <span className="truncate">{p.uid === uid ? 'Tú' : p.displayName}</span>
+              <span className="truncate">{label(side)}</span>
               <span className={cx('font-mono', low && 'text-accent')}>{hp}</span>
               {streak >= 2 && (
                 <span key={streak} className="cell-pop bg-ink px-1.5 font-mono text-[10px] text-paper" title="Aciertos seguidos">

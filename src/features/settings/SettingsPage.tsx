@@ -1,4 +1,4 @@
-// Configuración: cuenta, sonido, animaciones y tema.
+// Configuración: cuenta, sonido, animaciones y tema. Se usa como ventana superpuesta (engranaje) y como página (/ajustes).
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
@@ -40,7 +40,8 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T; o
   );
 }
 
-export default function SettingsPage() {
+/** Contenido de la configuración, sin encabezado de página. */
+export function SettingsPanel() {
   const { profile } = useSession();
   const settings = useSettings();
   const [name, setName] = useState(profile.displayName);
@@ -73,8 +74,6 @@ export default function SettingsPage() {
 
   return (
     <>
-      <BackLink />
-      <PageHeader kicker="Configuración" title="Ajustes" />
       <div className="grid max-w-2xl gap-10">
         <section>
           <h2 className="mb-2 font-display text-2xl">Cuenta</h2>
@@ -170,6 +169,17 @@ export default function SettingsPage() {
           <p className="mt-6 font-mono text-xs text-muted">Crypticus v{__APP_VERSION__}</p>
         </section>
       </div>
+    </>
+  );
+}
+
+/** Página /ajustes (enlace directo). Desde la app se abre como ventana con el engranaje. */
+export default function SettingsPage() {
+  return (
+    <>
+      <BackLink />
+      <PageHeader kicker="Configuración" title="Ajustes" />
+      <SettingsPanel />
     </>
   );
 }
