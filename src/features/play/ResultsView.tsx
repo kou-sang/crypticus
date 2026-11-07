@@ -81,12 +81,23 @@ function SolutionsList({ competitionId, meId, names }: { competitionId: string; 
               <p className={cx('mt-1 font-mono font-semibold uppercase tracking-widest', mine ? 'text-ok' : 'text-ink')}>
                 {solution.answer ?? '—'}
               </p>
+              {/* ✓ quienes lo resolvieron, ✗ quienes no (se omite la línea vacía). */}
               <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-xs text-muted">
-                <dt className="font-semibold text-ok">Lo resolvieron:</dt>
-                <dd>{solved.length > 0 ? solved.join(', ') : 'nadie'}</dd>
+                {solved.length > 0 && (
+                  <>
+                    <dt className="font-semibold text-ok">
+                      <span aria-hidden>✓</span>
+                      <span className="sr-only">Lo resolvieron:</span>
+                    </dt>
+                    <dd>{solved.join(', ')}</dd>
+                  </>
+                )}
                 {unsolved.length > 0 && (
                   <>
-                    <dt className="font-semibold">No lo resolvieron:</dt>
+                    <dt className="font-semibold text-accent">
+                      <span aria-hidden>✗</span>
+                      <span className="sr-only">No lo resolvieron:</span>
+                    </dt>
                     <dd>{unsolved.join(', ')}</dd>
                   </>
                 )}

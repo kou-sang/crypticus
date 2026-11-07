@@ -17,6 +17,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 - La evolución del Elo es diaria: un punto por día con el Elo al cierre, y el detalle de partidas y resultados de ese día al pasar el puntero.
 - El botón del historial es compacto y centrado («Historial (N)»), con el borde ajustado al texto.
+- Resumen de la partida: cada criptico muestra «✓ A, B, C» (lo resolvieron) y «✗ D, E» (no lo resolvieron).
 - El historial guarda el pool de Elo (`ratingPool`) y, en Royale, el control de tiempo.
 - Repaso de la partida: cada criptico muestra «Lo resolvieron: …» y «No lo resolvieron: …» con todos los jugadores (tú como «Tú»), en lugar de «Lo resolviste · también …».
 
