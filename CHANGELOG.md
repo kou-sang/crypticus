@@ -19,6 +19,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 - El botón del historial es compacto y centrado («Historial (N)»), con el borde ajustado al texto.
 - Resumen de la partida: cada criptico muestra «✓ A, B, C» (lo resolvieron) y «✗ D, E» (no lo resolvieron).
 - El historial guarda el pool de Elo (`ratingPool`) y, en Royale, el control de tiempo.
+
+### Fixed
+
+- Contraste en Cripta y Cyber:
+  - Cripta: textos secundarios, enlaces y aciertos sobre el pergamino (muted, accent y ok) más oscuros, con contraste AA (≥ 4,5:1).
+  - Botones de peligro (Cerrar sesión, Abandonar, Terminar…): en Cripta, cuero rojo con letra clara; en Cyber, al pasar el puntero ya no quedan con letra casi negra sobre fondo negro.
+  - Botones deshabilitados legibles: sin opacidad que los funda con el fondo (hueco punteado en Cripta, gris apagado en Cyber).
+  - Textos secundarios dentro de una opción elegida heredan la letra clara (Cripta) u oscura (Cyber), en lugar del color pensado para el fondo.
+  - Cyber: los rótulos con fuente de título dentro de un botón toman el color del botón.
 - Repaso de la partida: cada criptico muestra «Lo resolvieron: …» y «No lo resolvieron: …» con todos los jugadores (tú como «Tú»), en lugar de «Lo resolviste · también …».
 
 ## [1.1.4] - 2026-11-07

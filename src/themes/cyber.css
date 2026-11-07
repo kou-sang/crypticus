@@ -55,10 +55,17 @@
   text-shadow: none;
 }
 
-/* Sobre un relleno cian (pestaña elegida) el rótulo va en tinta oscura, sin eco. */
-[data-skin='cyber'] :is(.bg-ink, .btn) .font-display,
-[data-skin='cyber'] .bg-ink.font-display {
+/* Sobre un relleno cian (pestaña elegida) el rótulo y los textos secundarios van en tinta oscura, sin eco. */
+[data-skin='cyber'] .bg-ink .font-display,
+[data-skin='cyber'] .bg-ink.font-display,
+[data-skin='cyber'] .bg-ink :is(.text-ink, .text-muted, .text-accent, .text-ok) {
   color: #05060d;
+  text-shadow: none;
+}
+[data-skin='cyber'] .bg-ink .text-muted { opacity: 0.75; }
+/* Los botones son cristal translúcido sobre fondo oscuro: el rótulo toma el color del botón (antes, tinta oscura invisible). */
+[data-skin='cyber'] .btn .font-display {
+  color: inherit;
   text-shadow: none;
 }
 
@@ -226,6 +233,21 @@
 [data-skin='cyber'] .btn[data-variant='danger'] {
   background: rgba(255, 46, 99, 0.07);
   border-color: rgba(255, 46, 99, 0.6);
+}
+/* Peligro al pasar el puntero: rojo translúcido con letra clara (antes heredaba text-paper: casi negro sobre negro). */
+[data-skin='cyber'] .btn[data-variant='danger']:hover:not(:disabled) {
+  background: rgba(255, 46, 99, 0.18);
+  color: #ffd6e0;
+  text-shadow: 0 0 8px rgba(255, 46, 99, 0.6);
+}
+/* Deshabilitado: gris apagado pero legible, sin opacidad que lo funda con el fondo. */
+[data-skin='cyber'] .btn:disabled {
+  opacity: 1;
+  background: rgba(125, 149, 174, 0.06);
+  border-color: var(--line);
+  color: var(--muted);
+  box-shadow: none;
+  text-shadow: none;
 }
 [data-skin='cyber'] .btn:active:not(:disabled) { animation: holo-press 220ms ease-out; }
 @keyframes holo-press {
