@@ -4,6 +4,7 @@ import '@fontsource-variable/fraunces';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 import './index.css';
+import './themes/themes.css'; // Después de index.css: los temas pisan las variables del modo claro/oscuro.
 import { App } from './App';
 import { applyDocumentSettings } from './lib/settings';
 import { installUiSounds } from './lib/uiSounds';

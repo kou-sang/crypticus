@@ -78,6 +78,45 @@ body {
   to { opacity: 1; transform: none; }
 }
 
+/* ---------- Transiciones de interfaz (tema Normal; Medieval y Cyber las redefinen en themes.css) ---------- */
+
+/* Cada pantalla entra suave: nunca un corte seco entre secciones. */
+.page-enter { animation: page-in 220ms cubic-bezier(.2,.7,.2,1) both; }
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Ventanas: aparecen desde abajo en móvil (hoja) y con un leve zoom en PC; salen al revés. */
+.modal-backdrop { animation: backdrop-in 180ms ease-out both; }
+[data-closing] .modal-backdrop { animation: backdrop-out 160ms ease-in both; }
+.modal-panel { animation: sheet-in 260ms cubic-bezier(.2,.8,.2,1) both; }
+[data-closing] .modal-panel { animation: sheet-out 160ms ease-in both; }
+@media (min-width: 768px) {
+  .modal-panel { animation-name: modal-in; }
+  [data-closing] .modal-panel { animation-name: modal-out; }
+}
+@keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheet-out { from { transform: none; } to { transform: translateY(100%); } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes modal-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(.98); } }
+
+/* Panel de ajustes: entra desde la derecha. */
+.settings-panel { animation: drawer-in 240ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes drawer-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Respuesta incorrecta. */
+.answer-wrong { animation: shake 300ms; }
+
+/* Race: destello en la pista de un rival cuando suma un criptico. */
+.lane-gain { animation: lane-gain 900ms ease-out forwards; background: var(--accent); }
+@keyframes lane-gain {
+  0% { opacity: .55; }
+  100% { opacity: 0; }
+}
+
 @keyframes shake {
   0%, 100% { transform: none; }
   25% { transform: translateX(-6px); }

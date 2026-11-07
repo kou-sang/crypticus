@@ -86,8 +86,9 @@ export function AnswerGrid({
 
   let position = 0;
   return (
-    <form onSubmit={handleSubmit} className={cx('relative', wrong && 'animate-[shake_0.3s]')}>
-      <div className="flex flex-wrap gap-3" onClick={() => !locked && inputRef.current?.focus({ preventScroll: true })}>
+    <form onSubmit={handleSubmit} data-wrong={wrong || undefined} className={cx('answer-grid relative', wrong && 'answer-wrong')}>
+      {/* Las casillas son botones: sin sonido de clic (el tipeo ya suena). */}
+      <div data-sound="off" className="flex flex-wrap gap-3" onClick={() => !locked && inputRef.current?.focus({ preventScroll: true })}>
         {enumerationGroups(enumeration).map((size, groupIndex) => (
           <div key={groupIndex} className="flex gap-px bg-ink p-px">
             {Array.from({ length: size }, () => {

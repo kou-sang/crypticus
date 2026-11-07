@@ -8,6 +8,7 @@ import { PageLoader } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UpdateBanner } from './components/UpdateBanner';
 import { loaders } from './routes';
+import { SkinBackdrop } from './themes/SkinBackdrop';
 
 const AuthPage = lazy(loaders.auth);
 const OnboardingPage = lazy(loaders.onboarding);
@@ -25,6 +26,7 @@ export function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <SkinBackdrop />
         <UpdateBanner />
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
