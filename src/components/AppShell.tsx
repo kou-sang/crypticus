@@ -1,5 +1,5 @@
 // Estructura de la app autenticada: barra superior (desktop) y barra inferior (móvil).
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, Link, useLocation } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
 import { cx } from '../lib/utils';
@@ -26,6 +26,14 @@ function GearIcon() {
   );
 }
 
+/** Posición de cada sección en la barra: el tema Cyber gira la "pantalla VR" hacia ese lado al navegar. */
+function navIndex(pathname: string): number {
+  const index = NAV_ITEMS.findIndex((item) => pathname.startsWith(item.to));
+  if (index >= 0) return index;
+  if (pathname.startsWith('/c/') || pathname.startsWith('/s/')) return 1; // Salas: dentro de Jugar.
+  return NAV_ITEMS.length; // Perfil y ajustes: a la derecha del todo.
+}
+
 export function AppShell() {
   const { profile } = useAuth();
   useEffect(() => prefetchAppRoutes(), []);
@@ -36,9 +44,21 @@ export function AppShell() {
   const { pathname } = useLocation();
   useEffect(() => setSettingsOpen(false), [pathname]);
 
+  // Dirección de la transición entre pantallas (-1 izquierda, 1 derecha, 0 misma sección).
+  // Se calcula una vez por ruta (idempotente en StrictMode): los re-render dentro de la misma pantalla no la cambian.
+  const index = navIndex(pathname);
+  const transition = useRef({ path: pathname, index, direction: 0 });
+  if (transition.current.path !== pathname) {
+    transition.current = { path: pathname, index, direction: Math.sign(index - transition.current.index) };
+  }
+  const { direction } = transition.current;
+  useEffect(() => {
+    document.documentElement.style.setProperty('--vr-index', String(index));
+  }, [index]);
+
   return (
     <div className="min-h-dvh pb-20 md:pb-0">
-      <header className="sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
+      <header className="app-header sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
           <Link to="/inicio" aria-label="Inicio">
             <Logo />
@@ -92,13 +112,16 @@ export function AppShell() {
 
       <SettingsDialog open={settingsOpen} onClose={closeSettings} />
 
-      <main className="mx-auto max-w-6xl px-4 py-8 fade-in">
-        <Suspense fallback={<PageLoader />}>
-          <Outlet />
-        </Suspense>
+      <main className="vr-stage mx-auto max-w-6xl px-4 py-8">
+        {/* key = ruta: cada pantalla entra con la animación del tema (sin cortes). */}
+        <div key={pathname} className="page page-enter" style={{ '--vr-dir': direction } as CSSProperties}>
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
+        </div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="app-tabbar fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

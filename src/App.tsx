@@ -8,6 +8,7 @@ import { PageLoader } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UpdateBanner } from './components/UpdateBanner';
 import { loaders } from './routes';
+import { SkinBackdrop } from './themes/SkinBackdrop';
 
 const AuthPage = lazy(loaders.auth);
 const OnboardingPage = lazy(loaders.onboarding);
@@ -15,6 +16,7 @@ const DashboardPage = lazy(loaders.dashboard);
 const CompetitionsPage = lazy(loaders.competitions);
 const CreateCompetitionPage = lazy(loaders.createCompetition);
 const CompetitionRoom = lazy(loaders.room);
+const JoinByCodePage = lazy(loaders.joinByCode);
 const FriendsPage = lazy(loaders.friends);
 const RankingsPage = lazy(loaders.rankings);
 const ProfilePage = lazy(loaders.profile);
@@ -24,6 +26,7 @@ export function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <SkinBackdrop />
         <UpdateBanner />
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
@@ -40,6 +43,7 @@ export function App() {
                   <Route path="/jugar/nueva" element={<CreateCompetitionPage />} />
                   <Route path="/competencias/*" element={<Navigate to="/jugar" replace />} />
                   <Route path="/c/:competitionId" element={<CompetitionRoom />} />
+                  <Route path="/s/:code" element={<JoinByCodePage />} />
                   <Route path="/amigos" element={<FriendsPage />} />
                   <Route path="/chat/*" element={<Navigate to="/amigos" replace />} />
                   <Route path="/rankings" element={<RankingsPage />} />

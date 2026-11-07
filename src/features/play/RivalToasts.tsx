@@ -80,7 +80,7 @@ export const RivalToasts = memo(function RivalToasts({ state, uid }: { state: Li
         <div
           key={toast.id}
           className={cx(
-            'toast-in border-l-4 bg-paper px-4 py-3 shadow-[4px_4px_0_var(--ink)] ring-1 ring-ink',
+            'toast-in rival-toast surface border-l-4 bg-paper px-4 py-3 shadow-[4px_4px_0_var(--ink)] ring-1 ring-ink',
             toast.tone === 'rival' && 'border-accent',
             toast.tone === 'warn' && 'border-ink',
             toast.tone === 'heal' && 'border-ok',

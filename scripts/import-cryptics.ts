@@ -105,6 +105,8 @@ async function main(): Promise<void> {
       answer: item.secretData.answer,
       ...(item.secretData.explanation ? { explanation: item.secretData.explanation } : {}),
       ...(item.tiebreak ? { tiebreak: true } : {}),
+      // Tipo principal: la selección evita dos seguidos del mismo (v1.0).
+      ...(item.publicData.tags?.[0] ? { kind: String(item.publicData.tags[0]).trim().toLowerCase() } : {}),
     };
   }
   await mkdir('worker/generated', { recursive: true });

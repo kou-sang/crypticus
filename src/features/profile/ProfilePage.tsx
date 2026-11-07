@@ -69,7 +69,7 @@ export default function ProfilePage() {
     }
   };
 
-  const challengeLink = `/jugar/nueva?rival=${encodeURIComponent(profile.uid)}&name=${encodeURIComponent(profile.displayName)}`;
+  const challengeLink = `/jugar?crear=1&rival=${encodeURIComponent(profile.uid)}&name=${encodeURIComponent(profile.displayName)}`;
 
   return (
     <>

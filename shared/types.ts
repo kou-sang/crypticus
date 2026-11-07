@@ -106,6 +106,7 @@ export interface CrypticImportItem {
 export interface Competition extends CompetitionConfig {
   id: string;
   title: string;
+  code?: string; // 4 letras (v1.0+): entrar con /s/CODE o desde Jugar. Salas anteriores no lo tienen.
   hostId: string;
   hostName: string;
   status: CompetitionStatus;

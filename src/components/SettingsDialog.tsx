@@ -25,7 +25,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
         role="dialog"
         aria-labelledby="ajustes-titulo"
         tabIndex={-1}
-        className="relative h-full w-full max-w-xl overflow-y-auto border-l-2 border-ink bg-paper pb-24 shadow-xl outline-none fade-in md:pb-6"
+        className="surface settings-panel relative h-full w-full max-w-3xl overflow-y-auto border-l-2 border-ink bg-paper pb-24 shadow-xl outline-none md:pb-6"
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b-2 border-ink bg-paper px-5 py-3">
           <h2 id="ajustes-titulo" className="font-display text-2xl">

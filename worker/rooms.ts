@@ -5,6 +5,7 @@ import { bearerToken, verifyFirebaseToken } from './auth';
 import { FirestoreRest, type Write } from './firestore';
 import type { Env } from './env';
 import { CONFIG_KEYS, normalizeConfig, normalizeRoom, validateRoom } from '../shared/config';
+import { generateRoomCode, roomTitle } from '../shared/roomCode';
 import type { Competition, CompetitionConfig } from '../shared/types';
 
 const ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -33,12 +34,36 @@ export async function profileName(firestore: FirestoreRest, uid: string): Promis
   return user.displayName;
 }
 
-function configAndRoom(body: Record<string, unknown>) {
+/** El título no lo elige el cliente: es «CÓDIGO · anfitrión». */
+function configAndRoom(body: Record<string, unknown>, title: string) {
   const config = normalizeConfig(body);
-  const room = normalizeRoom(body);
+  const room = { ...normalizeRoom(body), title };
   const errors = validateRoom(config, room);
   if (errors.length > 0) throw new AppError(400, 'invalid_config', errors.join(' '));
   return { config, room };
+}
+
+const CODE_ATTEMPTS = 8;
+const OPEN_STATUSES = ['lobby', 'live'];
+
+/**
+ * Código de 4 letras sin repetir entre las salas abiertas (en espera o en vivo).
+ * 26⁴ ≈ 457 000 combinaciones: con pocas salas abiertas casi siempre basta un intento.
+ */
+async function uniqueRoomCode(firestore: FirestoreRest): Promise<string> {
+  for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {
+    const code = generateRoomCode();
+    const taken = await firestore.queryEquals<{ code: string }>(
+      'competitions',
+      [
+        { field: 'code', op: 'EQUAL', value: code },
+        { field: 'status', op: 'IN', value: OPEN_STATUSES },
+      ],
+      1,
+    );
+    if (taken.length === 0) return code;
+  }
+  throw new AppError(503, 'no_room_code', 'No se pudo generar un código de sala. Intenta de nuevo.');
 }
 
 /** Invitados: ids válidos, sin repetir y sin el anfitrión. */
@@ -57,8 +82,8 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
   const user = await verifyFirebaseToken(bearerToken(request), env.FIREBASE_PROJECT_ID);
   const body = await readBody(request);
   const firestore = new FirestoreRest(env.FIREBASE_SERVICE_ACCOUNT);
-  const { config, room } = configAndRoom(body);
-  const hostName = await profileName(firestore, user.uid);
+  const [hostName, code] = await Promise.all([profileName(firestore, user.uid), uniqueRoomCode(firestore)]);
+  const { config, room } = configAndRoom(body, roomTitle(code, hostName));
   const { invitedIds, invitedNames } = invitesFrom(body, user.uid);
 
   // Revancha: solo un jugador de la partida terminada puede proponerla.
@@ -79,6 +104,7 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
       data: {
         ...config,
         ...room,
+        code,
         hostId: user.uid,
         hostName,
         status: 'lobby',
@@ -128,7 +154,8 @@ export async function handleUpdate(request: Request, env: Env, competitionId: st
   if (competition.hostId !== user.uid) throw new AppError(403, 'not_host', 'Solo el anfitrión puede editar la sala.');
   if (competition.status !== 'lobby') throw new AppError(409, 'not_lobby', 'La partida ya empezó.');
 
-  const { config, room } = configAndRoom(body);
+  // Se conserva el título (código + anfitrión); salas anteriores a v1.0 mantienen el suyo.
+  const { config, room } = configAndRoom(body, competition.title || 'Sala');
   const joined = competition.participantIds?.length ?? 0;
   if (joined > room.maxPlayers) {
     throw new AppError(409, 'too_many_players', `Ya hay ${joined} jugadores en la sala: el nuevo cupo es ${room.maxPlayers}.`);

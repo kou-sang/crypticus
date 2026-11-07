@@ -5,7 +5,7 @@ import type { Competition, Participant, UserProfile } from '../../../shared/type
 import { api } from '../../lib/api';
 import { chooseTeam, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
 import { assignTeams, isTeamDuel, startBlocker, TEAM_LABELS, TEAM_SIZE, type Team } from '../../../shared/teams';
-import { editDraft } from './RematchPanel';
+import { RoomSettingsDialog } from './RoomSettingsDialog';
 import { errorMessage } from '../../lib/utils';
 import { Avatar, Badge, Button, ErrorBanner } from '../../components/ui';
 import { describeMode, describeModifiers } from '../competitions/CompetitionCard';
@@ -24,7 +24,8 @@ export function LobbyView({
   const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'link' | 'code' | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const isHost = competition.hostId === profile.uid;
   const joined = competition.participantIds.includes(profile.uid);
@@ -46,8 +47,11 @@ export function LobbyView({
     api.start(competition.id).catch((err: unknown) => setError(errorMessage(err)));
   }, [isHost, allAccepted, competition.id]);
 
-  // Editar la sala actual: los que ya entraron siguen dentro y ven las reglas nuevas.
-  const changeParameters = () => navigate('/jugar/nueva', { state: { edit: editDraft(competition) } });
+  // Editar la sala actual en una ventana: los que ya entraron siguen dentro y ven las reglas nuevas.
+  const changeParameters = () => setEditing(true);
+  const code = competition.code ?? null;
+  // Enlace corto con el código (v1.0); salas anteriores usan la URL de la sala.
+  const shareLink = code ? `${window.location.origin}/s/${code}` : window.location.href;
 
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
@@ -61,18 +65,42 @@ export function LobbyView({
     }
   };
 
-  const copyLink = async () => {
+  const copy = async (what: 'link' | 'code') => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(what === 'code' && code ? code : shareLink);
+      setCopied(what);
+      window.setTimeout(() => setCopied(null), 1500);
     } catch {
-      setError('No se pudo copiar el enlace.');
+      setError(what === 'code' ? 'No se pudo copiar el código.' : 'No se pudo copiar el enlace.');
     }
   };
 
   return (
     <div className="space-y-6">
+      {isHost && <RoomSettingsDialog competition={competition} open={editing} onClose={() => setEditing(false)} />}
+      {code && (
+        <section aria-label="Código de sala" className="surface flex flex-wrap items-center gap-4 border-2 border-ink px-4 py-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Código de sala</p>
+            <p className="room-code font-mono text-4xl font-bold tracking-[0.35em]">{code}</p>
+          </div>
+          <p className="min-w-40 flex-1 text-xs text-muted">
+            {competition.visibility === 'private'
+              ? 'Sala privada: solo se entra con este código o el enlace.'
+              : competition.visibility === 'friends'
+                ? 'Sala de amigos: la ven tus amigos; con el código o el enlace también se puede abrir.'
+                : 'Sala pública: aparece en Jugar y también se entra con el código.'}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => void copy('code')}>
+              {copied === 'code' ? '✓ Copiado' : 'Copiar código'}
+            </Button>
+            <Button variant="ghost" onClick={() => void copy('link')}>
+              {copied === 'link' ? '✓ Copiado' : 'Copiar enlace'}
+            </Button>
+          </div>
+        </section>
+      )}
       <div className="flex flex-wrap gap-2">
         <Badge tone="ok">En sala</Badge>
         <Badge>{describeMode(competition)}</Badge>
@@ -168,7 +196,7 @@ export function LobbyView({
               Iniciar competencia
             </Button>
             <Button variant="secondary" onClick={changeParameters}>
-              Editar parámetros
+              Parámetros
             </Button>
             <Button
               variant="danger"
@@ -196,9 +224,11 @@ export function LobbyView({
             {full ? 'Sala llena' : canJoin ? 'Unirme' : 'Solo amigos del anfitrión'}
           </Button>
         )}
-        <Button variant="ghost" onClick={copyLink}>
-          {copied ? '✓ Copiado' : 'Copiar enlace'}
-        </Button>
+        {!code && (
+          <Button variant="ghost" onClick={() => void copy('link')}>
+            {copied === 'link' ? '✓ Copiado' : 'Copiar enlace'}
+          </Button>
+        )}
       </div>
 
       {!isHost && joined && <p className="text-sm text-muted">Esperando a que {competition.hostName} inicie…</p>}

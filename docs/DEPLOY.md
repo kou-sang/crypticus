@@ -240,6 +240,30 @@ Ejecuta los comandos **de a uno** (no en una sola línea). `npm run deploy` term
 | Quitar cripticos | Borrarlos del archivo → importar con `--replace` → `npm run deploy` |
 | Reglas o índices | Paso 2 |
 
+### 6.1 Pasar a v1.0 (una vez)
+
+Además de los pasos de arriba:
+
+1. **Fuentes de los temas.** En la carpeta del repo:
+
+   ```powershell
+   npm i @fontsource-variable/cinzel @fontsource/rajdhani
+   git add package.json package-lock.json
+   git commit -m "chore: fuentes de los temas Medieval y Cyber"
+   git push
+   ```
+
+   Sin ellas los temas usan fuentes de respaldo y todo funciona igual.
+2. **Tipos de criptico en el Worker** (para que no salgan dos seguidos del mismo tipo):
+
+   ```powershell
+   npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json --secrets-only
+   ```
+
+   No toca Firestore: solo regenera `worker\generated\cryptic-secrets.json` con el campo `kind` (el primer `tag` de cada criptico).
+3. **Fondo del tema Medieval (opcional).** Genera las imágenes con los prompts de `docs/THEME_ASSETS.md` y guárdalas como `public\themes\medieval\wall.webp` y `wall-mobile.webp`. Mientras no estén, se ve el muro procedural.
+4. `npm run deploy`.
+
 > **Despliega siempre desde tu PC** (`npm run deploy`). Los hashes de las respuestas no están en git, así que la integración Git de Cloudflare compilaría el Worker sin cripticos.
 
 ---
@@ -274,6 +298,9 @@ npm run dev:worker    # http://localhost:8787
 | `'winget' no se reconoce…` | Falta el Instalador de aplicación | Paso 0, opción A u opción B |
 | `la ejecución de scripts está deshabilitada` | Política de ejecución de PowerShell | `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` |
 | `Unknown command: "install-scripts"` en CI | Ese comando es solo para tu PC (npm ≥ 11.16) | No editar `ci.yml`; `allowScripts` ya está en `package.json` |
+| Siguen saliendo varios del mismo tipo seguidos | Secretos importados antes de v1.0 (sin `kind`) | Paso 6.1.2 → `npm run deploy` |
+| `No hay ninguna sala abierta con el código…` | La sala terminó, se canceló o el código está mal escrito | Pedir el código otra vez o el enlace `/s/CÓDIGO` |
+| Medieval sin muro pintado | Faltan `wall.webp` / `wall-mobile.webp` | Paso 6.1.3 |
 | `'node' / 'git' no se reconoce` tras instalar | PowerShell abierto antes de instalar | Cerrar y abrir PowerShell |
 
 ## Límites del plan gratuito

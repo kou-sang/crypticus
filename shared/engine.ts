@@ -33,6 +33,7 @@ export class GameError extends Error {
 export interface CatalogEntry {
   tier: Difficulty;
   hintCount: number;
+  kind?: string; // Tipo (anagrama, contenedor…). Solo en el servidor: se quita del estado que ven los clientes.
 }
 
 export interface RoundState {
@@ -733,10 +734,15 @@ export function resolveVote(votes: Record<string, Difficulty>, ranked: RankedPar
 function drawFromPool(state: LiveState, preferred: Difficulty, random: () => number): { id: string; tier: Difficulty } | null {
   const order: Difficulty[] =
     preferred === 'easy' ? ['easy', 'medium', 'hard'] : preferred === 'hard' ? ['hard', 'medium', 'easy'] : ['medium', 'easy', 'hard'];
+  // Evita repetir el tipo del criptico anterior (si quedan otros de esa dificultad).
+  const lastId = state.usedIds[state.usedIds.length - 1];
+  const lastKind = lastId ? state.catalog[lastId]?.kind : undefined;
   for (const tier of order) {
     const available = state.pool[tier].filter((id) => !state.usedIds.includes(id));
     if (available.length > 0) {
-      const id = available[Math.floor(random() * available.length)] ?? available[0]!;
+      const varied = lastKind ? available.filter((id) => state.catalog[id]?.kind !== lastKind) : available;
+      const options = varied.length > 0 ? varied : available;
+      const id = options[Math.floor(random() * options.length)] ?? options[0]!;
       return { id, tier };
     }
   }
