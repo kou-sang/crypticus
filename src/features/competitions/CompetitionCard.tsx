@@ -43,7 +43,7 @@ export function describeMode(c: ModeFields): string {
 
 /** Etiquetas cortas de los modificadores activos. */
 export function describeModifiers(c: ModeFields): string[] {
-  if (c.game === 'royale') return ['Progresiva', 'Último en pie'];
+  if (c.game === 'royale') return ['Progresiva', 'Último en pie', c.royale?.skips ? `Saltear ×${c.royale.skips}` : 'Sin saltear'];
   if (c.game === 'duel') {
     const tags = [`Daño por ${DUEL_DAMAGE_LABELS[c.duel?.damage ?? 'difficulty'].title.toLowerCase()}`];
     if (c.duel?.combo !== false) tags.push('Combo');

@@ -130,7 +130,13 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
         }
       : {}),
     ...(competition.royale
-      ? { royale: { baseSec: Number(competition.royale.baseSec), incrementSec: Number(competition.royale.incrementSec) } }
+      ? {
+          royale: {
+            baseSec: Number(competition.royale.baseSec),
+            incrementSec: Number(competition.royale.incrementSec),
+            skips: Number(competition.royale.skips ?? 0),
+          },
+        }
       : {}),
     ...(typeof competition.cooldownSec === 'number' ? { cooldownSec: competition.cooldownSec } : {}),
     ...(competition.surrender

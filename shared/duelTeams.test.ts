@@ -80,8 +80,8 @@ describe('Duel 2 vs 2', () => {
   it('el combo es del equipo: aciertos seguidos de compañeros distintos lo suman', () => {
     const state = start('2v2', team2v2);
     hit(state, 'a'); // 40
-    hit(state, 'b'); // 50 (×1.25)
-    expect(state.participants.c!.score).toBe(10);
+    hit(state, 'b'); // 46 (×2 = +15 %)
+    expect(state.participants.c!.score).toBe(14);
     expect(state.participants.a!.streak).toBe(2);
     hit(state, 'd'); // corta el combo de A-B
     expect(state.participants.a!.streak).toBe(0);
@@ -107,5 +107,18 @@ describe('assignTeams', () => {
     expect(assignTeams(['a', 'b', 'c', 'd'], { c: 0, d: 0 })).toEqual({ c: 0, d: 0, a: 1, b: 1 });
     // Un tercero que eligió un equipo lleno pasa al otro.
     expect(assignTeams(['a', 'b', 'c', 'd'], { a: 1, b: 1, c: 1 })).toEqual({ a: 1, b: 1, c: 0, d: 0 });
+  });
+});
+
+describe('Seguridad al iniciar', () => {
+  it('ignora campos de juego inyectados en el doc de participante', () => {
+    const tampered = { uid: 'a', streak: 99, skipsUsed: -50, tiebreakWon: true, score: 9999, team: 1 as const } as Parameters<typeof makeParticipant>[0];
+    const state = start('1v1', [tampered, { uid: 'b' }]);
+    const a = state.participants.a!;
+    expect(a.streak).toBe(0);
+    expect(a.skipsUsed).toBe(0);
+    expect(a.tiebreakWon).toBeUndefined();
+    expect(a.score).toBe(100);
+    expect(a.team).toBeUndefined(); // 1 vs 1: sin equipos
   });
 });
