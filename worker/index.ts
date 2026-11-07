@@ -9,6 +9,8 @@ import { assignTeams, isTeamDuel, startBlocker } from '../shared/teams';
 import { ROYALE_TIER_COUNTS } from '../shared/gameModes';
 import { catalogByTier, catalogTiebreak } from './secrets';
 import { validateConfig } from '../shared/scoring';
+import { normalizeConfig } from '../shared/config';
+import { handleCreate, handleUpdate } from './rooms';
 
 export { CompetitionRoom } from './competitionRoom';
 
@@ -100,54 +102,16 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
       )
     : null;
 
-  const config: CompetitionConfig = {
-    mode: competition.mode,
-    scoring: competition.scoring,
-    flow: competition.flow,
-    durationSec: competition.durationSec,
-    targetCount: competition.targetCount,
-    winByTwo: competition.winByTwo === true,
-    difficultyVote: competition.difficultyVote === true,
-    rivalCountdownSec: Number(competition.rivalCountdownSec ?? 0),
-    comeback: competition.comeback,
-    extraTime: competition.extraTime,
-    bossLevel: competition.bossLevel,
-    maxHintsPerClue: competition.maxHintsPerClue,
-    ...(typeof competition.hintsPerGame === 'number' ? { hintsPerGame: competition.hintsPerGame } : {}),
-    wrongPenalty: competition.wrongPenalty,
-    tierMix: competition.tierMix,
-    hideScoreboard: competition.hideScoreboard === true,
-    ...(competition.game ? { game: competition.game } : {}),
-    ...(typeof competition.intervalSec === 'number' ? { intervalSec: competition.intervalSec } : {}),
-    ...(competition.duel
-      ? {
-          duel: {
-            hp: Number(competition.duel.hp),
-            damage: competition.duel.damage,
-            combo: competition.duel.combo !== false,
-            ...(competition.duel.teams === true ? { teams: true } : {}),
-          },
-        }
-      : {}),
-    ...(competition.royale
-      ? {
-          royale: {
-            baseSec: Number(competition.royale.baseSec),
-            incrementSec: Number(competition.royale.incrementSec),
-            skips: Number(competition.royale.skips ?? 0),
-          },
-        }
-      : {}),
-    ...(typeof competition.cooldownSec === 'number' ? { cooldownSec: competition.cooldownSec } : {}),
-    ...(competition.surrender
-      ? { surrender: { enabled: competition.surrender.enabled === true, maxUses: Number(competition.surrender.maxUses) } }
-      : {}),
-  };
+  // Las reglas guardadas se vuelven a normalizar y validar: el documento podría ser de una versión anterior.
+  const config: CompetitionConfig = normalizeConfig(competition as unknown as Record<string, unknown>);
   const configErrors = validateConfig(config, competition.maxPlayers);
   if (configErrors.length > 0) throw new AppError(400, 'bad_config', configErrors.join(' '));
 
   // Selección sin repetir: se descartan (o se dejan para el final) los cripticos que ya vio algún jugador.
-  const { crypticIds, pool, tiebreakIds } = await selectUnseen(firestore, competition, participants.map((p) => p.id));
+  const [{ crypticIds, pool, tiebreakIds }, profiles] = await Promise.all([
+    selectUnseen(firestore, competition, participants.map((p) => p.id)),
+    firestore.batchGet<{ displayName?: string }>(participants.map((p) => `users/${p.id}`)),
+  ]);
 
   // El DO es idempotente: si ya inició (reintento), devuelve los tiempos originales.
   let times: { startedAt: number; endsAt: number };
@@ -156,7 +120,13 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
       competitionId,
       title: competition.title ?? '',
       config,
-      participants: participants.map((p) => ({ ...p, uid: p.id, ...(teams ? { team: teams[p.id] } : {}) })),
+      // Nombre real: el del perfil al iniciar (el doc de participante lo escribe el cliente).
+      participants: participants.map((p) => ({
+        ...p,
+        uid: p.id,
+        displayName: profiles.get(p.id)?.displayName ?? p.displayName,
+        ...(teams ? { team: teams[p.id] } : {}),
+      })),
       crypticIds,
       pool,
       tiebreakIds,
@@ -211,6 +181,16 @@ export default {
         return await proxyFirebaseAuth(request, url, env);
       }
 
+      if (url.pathname === '/api/competitions') {
+        if (request.method !== 'POST') throw new AppError(405, 'method_not_allowed', 'Solo POST.');
+        return await handleCreate(request, env);
+      }
+      const roomMatch = url.pathname.match(/^\/api\/competitions\/([^/]+)$/);
+      if (roomMatch && roomMatch[1] !== 'start' && request.method === 'PATCH') {
+        const id = decodeURIComponent(roomMatch[1]!);
+        if (!COMPETITION_ID.test(id)) throw new AppError(400, 'bad_id', 'Id inválido.');
+        return await handleUpdate(request, env, id);
+      }
       if (url.pathname === '/api/competitions/start') {
         if (request.method !== 'POST') throw new AppError(405, 'method_not_allowed', 'Solo POST.');
         return await handleStart(request, env);

@@ -32,6 +32,8 @@ import {
   type UserProfile,
 } from '../../shared/types';
 import { validateConfig } from '../../shared/scoring';
+import { normalizeConfig } from '../../shared/config';
+import { api } from './api';
 
 // ---------- Perfil ----------
 
@@ -126,66 +128,22 @@ export interface CreateCompetitionInput extends CompetitionConfig {
   invitedNames?: Record<string, string>;
 }
 
-export async function createCompetition(host: UserProfile, input: CreateCompetitionInput): Promise<string> {
+/**
+ * Crea la sala en el servidor: valida reglas, toma el nombre del perfil y, si es revancha, la enlaza.
+ * (Firestore no deja crear salas desde el cliente.)
+ */
+export async function createCompetition(input: CreateCompetitionInput): Promise<string> {
   const errors = validateConfig(input, input.maxPlayers);
   if (errors.length > 0) throw new Error(errors.join(' '));
+  const { id } = await api.create({ ...input, device: detectDevice() });
+  return id;
+}
 
-  // El servidor elige los cripticos al iniciar (sin repetir y en secreto); aquí solo se guarda cuántos.
-  // Las reglas de Firestore exigen una lista no vacía: se guarda un marcador que el Worker reemplaza.
-  const crypticIds = ['pending'];
-  const pool = { easy: [], medium: [], hard: [] };
-
-  const config: CompetitionConfig = {
-    mode: input.mode,
-    scoring: input.scoring,
-    flow: input.flow,
-    durationSec: input.durationSec,
-    targetCount: input.targetCount,
-    winByTwo: input.winByTwo,
-    difficultyVote: input.difficultyVote,
-    rivalCountdownSec: input.rivalCountdownSec,
-    comeback: input.comeback,
-    extraTime: input.extraTime,
-    bossLevel: input.bossLevel,
-    maxHintsPerClue: input.maxHintsPerClue,
-    ...(input.hintsPerGame !== undefined ? { hintsPerGame: input.hintsPerGame } : {}),
-    wrongPenalty: input.wrongPenalty,
-    tierMix: input.tierMix,
-    hideScoreboard: input.hideScoreboard,
-    // Firestore no acepta `undefined`: los campos de modo solo se escriben si existen.
-    ...(input.game ? { game: input.game } : {}),
-    ...(input.intervalSec !== undefined ? { intervalSec: input.intervalSec } : {}),
-    ...(input.duel ? { duel: input.duel } : {}),
-    ...(input.royale ? { royale: input.royale } : {}),
-    ...(input.cooldownSec !== undefined ? { cooldownSec: input.cooldownSec } : {}),
-    ...(input.surrender ? { surrender: input.surrender } : {}),
-  };
-  const competitionRef = doc(collection(db, 'competitions'));
-  const batch = writeBatch(db);
-  batch.set(competitionRef, {
-    ...config,
-    title: input.title.trim(),
-    visibility: input.visibility,
-    maxPlayers: input.maxPlayers,
-    hostId: host.uid,
-    hostName: host.displayName,
-    status: 'lobby',
-    crypticIds,
-    pool,
-    participantIds: [host.uid],
-    createdAt: Date.now(),
-    startedAt: null,
-    endsAt: null,
-    finishedAt: null,
-    winnerId: null,
-    clueCount: input.clueCount,
-    ...(input.invitedIds?.length ? { invitedIds: input.invitedIds.slice(0, 7) } : {}),
-    ...(input.rematchOf ? { rematchOf: input.rematchOf, declinedIds: [] } : {}),
-    ...(input.invitedNames ? { invitedNames: input.invitedNames } : {}),
-  } satisfies Omit<Competition, 'id'>);
-  batch.set(doc(competitionRef, 'participants', host.uid), newParticipant(host));
-  await batch.commit();
-  return competitionRef.id;
+/** El anfitrión cambia reglas y datos de la sala mientras está en espera. */
+export async function updateCompetition(competitionId: string, input: CreateCompetitionInput): Promise<void> {
+  const errors = validateConfig(input, input.maxPlayers);
+  if (errors.length > 0) throw new Error(errors.join(' '));
+  await api.update(competitionId, input);
 }
 
 const REMATCH_PREFIX = 'Revancha · ';
@@ -197,30 +155,7 @@ export function rematchTitle(title: string): string {
 
 /** Reglas de juego guardadas en la partida (sin estado de sala). */
 export function configOf(comp: Competition): CompetitionConfig {
-  return {
-    mode: comp.mode,
-    scoring: comp.scoring,
-    flow: comp.flow,
-    durationSec: comp.durationSec,
-    targetCount: comp.targetCount,
-    winByTwo: comp.winByTwo === true,
-    difficultyVote: comp.difficultyVote === true,
-    rivalCountdownSec: Number(comp.rivalCountdownSec ?? 0),
-    comeback: comp.comeback,
-    extraTime: comp.extraTime,
-    bossLevel: comp.bossLevel,
-    maxHintsPerClue: comp.maxHintsPerClue,
-    ...(comp.hintsPerGame !== undefined ? { hintsPerGame: comp.hintsPerGame } : {}),
-    wrongPenalty: comp.wrongPenalty,
-    tierMix: comp.tierMix,
-    hideScoreboard: comp.hideScoreboard === true,
-    ...(comp.game ? { game: comp.game } : {}),
-    ...(comp.intervalSec !== undefined ? { intervalSec: comp.intervalSec } : {}),
-    ...(comp.duel ? { duel: { ...comp.duel } } : {}),
-    ...(comp.royale ? { royale: { ...comp.royale } } : {}),
-    ...(comp.cooldownSec !== undefined ? { cooldownSec: comp.cooldownSec } : {}),
-    ...(comp.surrender ? { surrender: { ...comp.surrender } } : {}),
-  };
+  return normalizeConfig(comp as unknown as Record<string, unknown>);
 }
 
 export interface RematchTarget {
@@ -251,28 +186,9 @@ export function rematchInput(target: RematchTarget, hostUid: string): CreateComp
   };
 }
 
-/** Enlaza la propuesta desde la partida terminada para que los demás jugadores la vean. */
-async function linkRematch(fromId: string, rematchId: string): Promise<void> {
-  try {
-    await updateDoc(doc(db, 'competitions', fromId), { rematchId });
-  } catch (error) {
-    // Sin el enlace la sala igual existe; solo no aparece como propuesta en la partida anterior.
-    console.warn('[revancha] no se pudo enlazar', error);
-  }
-}
-
-/** Propone la revancha con las mismas reglas: crea la sala, invita a todos y la enlaza. */
-export async function proposeRematch(host: UserProfile, target: RematchTarget): Promise<string> {
-  const id = await createCompetition(host, rematchInput(target, host.uid));
-  await linkRematch(target.competition.id, id);
-  return id;
-}
-
-/** Revancha con otros parámetros: la sala se crea desde el formulario y luego se enlaza igual. */
-export async function proposeCustomRematch(host: UserProfile, fromId: string, input: CreateCompetitionInput): Promise<string> {
-  const id = await createCompetition(host, input);
-  await linkRematch(fromId, id);
-  return id;
+/** Propone la revancha con las mismas reglas: el servidor crea la sala, invita a todos y la enlaza. */
+export async function proposeRematch(target: RematchTarget, hostUid: string): Promise<string> {
+  return createCompetition(rematchInput(target, hostUid));
 }
 
 export function rematchInvitesFor(target: RematchTarget, hostUid: string) {

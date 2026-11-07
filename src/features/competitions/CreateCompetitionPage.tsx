@@ -1,11 +1,11 @@
 // Crear partida: un modo, su parámetro principal y opciones compactas con botón de información.
 // La configuración de cada modo se recuerda entre visitas. Con ?rival=uid&name=... crea un desafío privado.
 // Con state.rematch (desde resultados) propone una revancha con otros parámetros a los mismos jugadores.
+// Con state.edit (anfitrión, sala en espera) edita las reglas de esa sala.
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
-import { useSession } from '../../hooks/useAuth';
-import { createCompetition, deleteCompetition, proposeCustomRematch } from '../../lib/repo';
-import type { RematchDraft } from '../play/RematchPanel';
+import { createCompetition, updateCompetition } from '../../lib/repo';
+import type { RematchDraft, RoomDraft } from '../play/RematchPanel';
 import { cx, errorMessage } from '../../lib/utils';
 import { loadJson, saveJson } from '../../lib/storage';
 import {
@@ -37,7 +37,7 @@ interface Stored {
 
 const DEFAULT_STORED: Stored = { settings: DEFAULT_MODE_SETTINGS, visibility: 'public' };
 
-function loadStored(draft?: RematchDraft | null): Stored {
+function loadStored(draft?: RoomDraft | null): Stored {
   const stored: Stored = draft ? { settings: draft.settings, visibility: draft.visibility } : loadJson<Stored>(STORAGE_KEY, DEFAULT_STORED);
   // Mezcla profunda: versiones guardadas antes de agregar un campo no lo pierden.
   const settings = stored.settings ?? DEFAULT_MODE_SETTINGS;
@@ -487,19 +487,24 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
 // ---------- Página ----------
 
 export default function CreateCompetitionPage() {
-  const { profile } = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const rivalId = params.get('rival');
   const rivalName = params.get('name') ?? 'tu amigo';
 
   const location = useLocation();
-  const rematch = (location.state as { rematch?: RematchDraft } | null)?.rematch ?? null;
-  const [stored, setStored] = useState<Stored>(() => loadStored(rematch));
-  const [title, setTitle] = useState(rematch?.title ?? '');
+  const navState = location.state as { rematch?: RematchDraft; edit?: RoomDraft } | null;
+  const rematch = navState?.rematch ?? null;
+  const edit = navState?.edit ?? null;
+  const draft = edit ?? rematch;
+  const [stored, setStored] = useState<Stored>(() => loadStored(draft));
+  const [title, setTitle] = useState(draft?.title ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => saveJson(STORAGE_KEY, stored), [stored]);
+  // Editar una sala no cambia la configuración recordada para la próxima partida nueva.
+  useEffect(() => {
+    if (!edit) saveJson(STORAGE_KEY, stored);
+  }, [stored, edit]);
 
   const { settings } = stored;
   const visibility: CompetitionVisibility = rivalId ? 'private' : stored.visibility;
@@ -528,17 +533,18 @@ export default function CreateCompetitionPage() {
         ...(rivalId ? { invitedIds: [rivalId] } : {}),
       };
       let id: string;
-      if (rematch) {
-        id = await proposeCustomRematch(profile, rematch.fromId, {
+      if (edit) {
+        await updateCompetition(edit.id, input);
+        id = edit.id;
+      } else if (rematch) {
+        id = await createCompetition({
           ...input,
           invitedIds: rematch.invitedIds,
           invitedNames: rematch.invitedNames,
           rematchOf: rematch.fromId,
         });
-        // La propuesta anterior (rechazada) se reemplaza por esta.
-        if (rematch.replaceId) await deleteCompetition(rematch.replaceId, profile.uid).catch(() => undefined);
       } else {
-        id = await createCompetition(profile, input);
+        id = await createCompetition(input);
       }
       navigate(`/c/${id}`, { replace: true });
     } catch (err) {
@@ -550,7 +556,11 @@ export default function CreateCompetitionPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <BackLink fallback="/jugar" />
-      <PageHeader kicker="Jugar" title={rematch ? 'Revancha con otros parámetros' : rivalId ? `Desafiar a ${rivalName}` : 'Nueva partida'} />
+      <PageHeader
+        kicker="Jugar"
+        title={edit ? 'Editar sala' : rematch ? 'Revancha con otros parámetros' : rivalId ? `Desafiar a ${rivalName}` : 'Nueva partida'}
+      />
+      {edit && <p className="-mt-4 mb-6 text-sm text-muted">Los jugadores que ya están en la sala siguen dentro y ven las reglas nuevas.</p>}
       {rematch && (
         <p className="-mt-4 mb-6 text-sm text-muted">
           Se enviará a {Object.values(rematch.invitedNames).join(', ') || 'los mismos jugadores'}. Empieza cuando acepten todos.
@@ -619,7 +629,7 @@ export default function CreateCompetitionPage() {
 
         <ErrorBanner error={error ?? (validation.length > 0 ? validation.join(' ') : null)} />
         <Button type="submit" loading={busy} disabled={validation.length > 0} className="h-12 w-full text-base">
-          {rivalId ? 'Crear desafío' : 'Crear sala'}
+          {edit ? 'Guardar cambios' : rivalId ? 'Crear desafío' : 'Crear sala'}
         </Button>
       </form>
     </div>

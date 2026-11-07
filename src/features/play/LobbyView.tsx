@@ -3,10 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Competition, Participant, UserProfile } from '../../../shared/types';
 import { api } from '../../lib/api';
-import { chooseTeam, configOf, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
+import { chooseTeam, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
 import { assignTeams, isTeamDuel, startBlocker, TEAM_LABELS, TEAM_SIZE, type Team } from '../../../shared/teams';
-import { settingsFromConfig } from '../../../shared/gameModes';
-import type { RematchDraft } from './RematchPanel';
+import { editDraft } from './RematchPanel';
 import { errorMessage } from '../../lib/utils';
 import { Avatar, Badge, Button, ErrorBanner } from '../../components/ui';
 import { describeMode, describeModifiers } from '../competitions/CompetitionCard';
@@ -47,18 +46,8 @@ export function LobbyView({
     api.start(competition.id).catch((err: unknown) => setError(errorMessage(err)));
   }, [isHost, allAccepted, competition.id]);
 
-  const changeParameters = () => {
-    const draft: RematchDraft = {
-      fromId: competition.rematchOf!,
-      title: competition.title,
-      settings: settingsFromConfig(configOf(competition)),
-      visibility: competition.visibility,
-      invitedIds: invited,
-      invitedNames: competition.invitedNames ?? {},
-      replaceId: competition.id,
-    };
-    navigate('/jugar/nueva', { state: { rematch: draft } });
-  };
+  // Editar la sala actual: los que ya entraron siguen dentro y ven las reglas nuevas.
+  const changeParameters = () => navigate('/jugar/nueva', { state: { edit: editDraft(competition) } });
 
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
@@ -177,6 +166,9 @@ export function LobbyView({
           <>
             <Button loading={busy === 'start'} disabled={blocker !== null} onClick={() => run('start', () => api.start(competition.id))}>
               Iniciar competencia
+            </Button>
+            <Button variant="secondary" onClick={changeParameters}>
+              Editar parámetros
             </Button>
             <Button
               variant="danger"

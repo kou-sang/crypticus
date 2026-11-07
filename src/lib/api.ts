@@ -1,4 +1,4 @@
-// Cliente HTTP del Worker (`start` y `solutions`; respuestas y pistas van por WebSocket, ver gameChannel.ts).
+// Cliente HTTP del Worker (crear/editar sala, iniciar y soluciones; respuestas y pistas van por WebSocket, ver gameChannel.ts).
 import { auth } from './firebase';
 import type { Solution } from '../../shared/protocol';
 
@@ -14,7 +14,7 @@ export class ApiError extends Error {
 
 type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } };
 
-async function request<T>(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<T> {
+async function request<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: object): Promise<T> {
   const user = auth.currentUser;
   if (!user) throw new ApiError('unauthenticated', 'Inicia sesión primero.', 401);
 
@@ -38,6 +38,9 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: Record<st
 }
 
 export const api = {
+  create: (input: object) => request<{ id: string }>('POST', 'competitions', input),
+  update: (competitionId: string, input: object) =>
+    request<{ id: string }>('PATCH', `competitions/${encodeURIComponent(competitionId)}`, input),
   start: (competitionId: string) =>
     request<{ startedAt: number; endsAt: number }>('POST', 'competitions/start', { competitionId }),
   solutions: (competitionId: string) =>
