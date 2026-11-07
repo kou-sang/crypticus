@@ -117,6 +117,14 @@ service cloud.firestore {
         && next().rematchId is string
         && exists(/databases/$(database)/documents/competitions/$(next().rematchId));
 
+      // Duel 2 vs 2: cada jugador elige su equipo en la sala (solo su propia entrada, 0 o 1).
+      allow update: if signedIn()
+        && comp().status == 'lobby'
+        && request.auth.uid in comp().participantIds
+        && onlyChanged(['teams'])
+        && next().teams.diff(comp().get('teams', {})).affectedKeys().hasOnly([request.auth.uid])
+        && next().teams[request.auth.uid] in [0, 1];
+
       // Revancha: un invitado la rechaza agregándose a declinedIds.
       allow update: if signedIn()
         && comp().status == 'lobby'

@@ -33,7 +33,7 @@ type ModeFields = Pick<
 
 export function describeMode(c: ModeFields): string {
   if (c.game === 'royale' && c.royale) return `Royale ${formatTimeControl(c.royale.baseSec, c.royale.incrementSec)}`;
-  if (c.game === 'duel' && c.duel) return `Duel · ${c.duel.hp} de vida`;
+  if (c.game === 'duel' && c.duel) return `Duel ${c.duel.teams ? '2 vs 2' : '1 vs 1'} · ${c.duel.hp} de vida`;
   if (c.game === 'race') return `Race a ${c.targetCount}`;
   const minutes = `${Math.round(c.durationSec / 60)} min`;
   if (c.mode === 'boss') return `Jefe ${BOSS_LABELS[c.bossLevel] ?? ''} · ${minutes}`;

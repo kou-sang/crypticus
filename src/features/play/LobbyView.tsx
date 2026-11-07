@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Competition, Participant, UserProfile } from '../../../shared/types';
 import { api } from '../../lib/api';
-import { configOf, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
+import { chooseTeam, configOf, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
+import { assignTeams, isTeamDuel, startBlocker, TEAM_LABELS, TEAM_SIZE, type Team } from '../../../shared/teams';
 import { settingsFromConfig } from '../../../shared/gameModes';
 import type { RematchDraft } from './RematchPanel';
 import { errorMessage } from '../../lib/utils';
@@ -29,6 +30,11 @@ export function LobbyView({
   const isHost = competition.hostId === profile.uid;
   const joined = competition.participantIds.includes(profile.uid);
   const full = competition.participantIds.length >= competition.maxPlayers;
+  // Lo mismo que valida el servidor al iniciar (p. ej. Duel sin rival).
+  const blocker = startBlocker(competition, competition.participantIds);
+  const teamDuel = isTeamDuel(competition);
+  const ordered = [...participants].sort((a, b) => a.joinedAt - b.joinedAt);
+  const teams = teamDuel ? assignTeams(ordered.map((p) => p.uid), competition.teams ?? {}) : {};
 
   // Revancha: empieza sola cuando aceptan todos los invitados.
   const invited = competition.rematchOf ? (competition.invitedIds ?? []) : [];
@@ -87,6 +93,40 @@ export function LobbyView({
         {!competition.game && <Badge>{competition.maxHintsPerClue} pistas c/u</Badge>}
       </div>
 
+      {teamDuel ? (
+        <section aria-label="Equipos">
+          <h2 className="mb-3 font-display text-xl">
+            Equipos {competition.participantIds.length}/{competition.maxPlayers}
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([0, 1] as Team[]).map((team) => {
+              const members = ordered.filter((p) => teams[p.uid] === team);
+              const canMove = joined && teams[profile.uid] !== team && members.length < TEAM_SIZE;
+              return (
+                <div key={team} className="border border-ink p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">{TEAM_LABELS[team]} · vida compartida</p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {members.map((p) => (
+                      <li key={p.uid} className="flex items-center gap-2">
+                        <Avatar name={p.displayName} size="sm" />
+                        {p.uid === profile.uid ? 'Tú' : p.displayName}
+                      </li>
+                    ))}
+                    {Array.from({ length: TEAM_SIZE - members.length }, (_, i) => (
+                      <li key={`free${i}`} className="text-muted">Lugar libre</li>
+                    ))}
+                  </ul>
+                  {canMove && (
+                    <Button variant="ghost" className="mt-2" loading={busy === `team${team}`} onClick={() => run(`team${team}`, () => chooseTeam(competition.id, profile.uid, team))}>
+                      Pasarme a {TEAM_LABELS[team]}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : (
       <section>
         <h2 className="mb-3 font-display text-xl">
           Jugadores {competition.participantIds.length}/{competition.maxPlayers}
@@ -101,6 +141,9 @@ export function LobbyView({
           ))}
         </ul>
       </section>
+      )}
+
+      {blocker && <p className="border-l-4 border-line pl-3 text-sm text-muted">{blocker}</p>}
 
       {invited.length > 0 && (
         <section aria-label="Revancha" className="border-l-4 border-ink bg-paper-2/60 px-4 py-3 text-sm">
@@ -121,7 +164,7 @@ export function LobbyView({
               <Button variant="secondary" onClick={changeParameters}>
                 Cambiar parámetros
               </Button>
-              <span className="text-xs text-muted">o inicia igual con quienes aceptaron.</span>
+              {!blocker && <span className="text-xs text-muted">o inicia igual con quienes aceptaron.</span>}
             </div>
           )}
         </section>
@@ -132,7 +175,7 @@ export function LobbyView({
       <div className="flex flex-wrap gap-3">
         {isHost ? (
           <>
-            <Button loading={busy === 'start'} onClick={() => run('start', () => api.start(competition.id))}>
+            <Button loading={busy === 'start'} disabled={blocker !== null} onClick={() => run('start', () => api.start(competition.id))}>
               Iniciar competencia
             </Button>
             <Button

@@ -71,8 +71,8 @@ export const GAME_LABELS: Record<GameMode, { title: string; tagline: string; des
   },
   duel: {
     title: 'Duel',
-    tagline: 'Uno contra uno',
-    description: 'El mismo criptico para los dos. Quien lo resuelve primero golpea; con combo, los aciertos seguidos golpean más fuerte.',
+    tagline: 'Cara a cara',
+    description: 'El mismo criptico para todos, 1 contra 1 o 2 contra 2 con vida compartida. Quien lo resuelve primero golpea; con combo, los aciertos seguidos golpean más fuerte.',
   },
   boss: { title: 'Boss', tagline: 'Próximamente', description: 'Hasta cuatro jugadores contra un mismo adversario. En preparación.' },
 };
@@ -258,7 +258,8 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
   }
   if (config.game === 'boss') errors.push('El modo Boss estará disponible próximamente.');
   if (config.game === 'duel') {
-    if (maxPlayers !== 2) errors.push('Duel es solo para 2 jugadores.');
+    const needed = config.duel?.teams ? 4 : 2;
+    if (maxPlayers !== needed) errors.push(config.duel?.teams ? 'Duel 2 vs 2 es para 4 jugadores.' : 'Duel 1 vs 1 es para 2 jugadores.');
     const hp = config.duel?.hp ?? 0;
     if (hp < LIMITS.duelMinHp || hp > LIMITS.duelMaxHp || hp % LIMITS.duelHpStep !== 0) {
       errors.push(`La vida del duelo debe estar entre ${LIMITS.duelMinHp} y ${LIMITS.duelMaxHp}, de a ${LIMITS.duelHpStep}.`);
@@ -328,7 +329,8 @@ export function rankParticipants(participants: Participant[], metric: RankMetric
 
 /**
  * Elo multijugador: cada par de jugadores cuenta como un enfrentamiento.
- * K se divide entre (n-1) para que el delta total no escale con el tamaño de la sala.
+ * K se divide entre la cantidad de rivales para que el delta total no escale con el tamaño de la sala.
+ * En equipos (Duel 2 vs 2) los compañeros no se enfrentan entre sí: solo cuentan los rivales.
  */
 export function computeRatingDeltas(
   ranked: RankedParticipant[],
@@ -336,17 +338,17 @@ export function computeRatingDeltas(
   kFactor = 32,
 ): Record<string, number> {
   const deltas: Record<string, number> = {};
-  const n = ranked.length;
-  if (n < 2) {
+  const teammates = (a: RankedParticipant, b: RankedParticipant) => a.uid === b.uid || (a.team !== undefined && a.team === b.team);
+  if (ranked.length < 2) {
     for (const p of ranked) deltas[p.uid] = 0;
     return deltas;
   }
-  const k = kFactor / (n - 1);
   for (const player of ranked) {
     const playerRating = ratings[player.uid] ?? 1200;
+    const opponents = ranked.filter((o) => !teammates(player, o));
+    const k = opponents.length > 0 ? kFactor / opponents.length : 0;
     let delta = 0;
-    for (const opponent of ranked) {
-      if (opponent.uid === player.uid) continue;
+    for (const opponent of opponents) {
       const opponentRating = ratings[opponent.uid] ?? 1200;
       const expected = 1 / (1 + 10 ** ((opponentRating - playerRating) / 400));
       const actual = player.rank < opponent.rank ? 1 : player.rank === opponent.rank ? 0.5 : 0;
