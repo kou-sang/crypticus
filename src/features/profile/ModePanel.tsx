@@ -1,12 +1,10 @@
-// Panel de un modo en el perfil: estadísticas, evolución del Elo e historial desplegable.
+// Panel de un pool de Elo en el perfil: estadísticas, evolución diaria del Elo e historial desplegable.
 import { memo, useMemo } from 'react';
-import { GAME_LABELS } from '../../../shared/scoring';
-import type { HistoryEntry, RankedMode, UserProfile } from '../../../shared/types';
+import type { HistoryEntry, UserProfile } from '../../../shared/types';
+import { isRoyalePool, type RatingPool } from '../../../shared/ratingPools';
 import { HistoryTable } from '../../components/HistoryTable';
 import { RatingChart } from '../../components/RatingChart';
-import { statsOf, winRate } from '../../components/RankingTable';
-
-const GLYPH: Record<RankedMode, string> = { race: '➶', royale: '◷', duel: '⚔' };
+import { MODE_GLYPH, entryPool, modeOfPool, poolTitle, statsOf, winRate } from '../../lib/pools';
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
@@ -18,26 +16,31 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 }
 
 export const ModePanel = memo(function ModePanel({
-  mode,
+  pool,
   user,
   history,
 }: {
-  mode: RankedMode;
+  pool: RatingPool;
   user: UserProfile;
   history: HistoryEntry[];
 }) {
-  const stats = statsOf(user, mode);
-  const entries = useMemo(() => history.filter((h) => h.game === mode), [history, mode]);
+  const stats = statsOf(user, pool);
+  const entries = useMemo(() => history.filter((h) => entryPool(h) === pool), [history, pool]);
+  // Royale anterior a v1.2 sin control de tiempo: no se puede ubicar en ninguna categoría.
+  const unclassified = useMemo(
+    () => (isRoyalePool(pool) ? history.filter((h) => h.game === 'royale' && entryPool(h) === null).length : 0),
+    [history, pool],
+  );
   const solved = entries.reduce((sum, h) => sum + h.solved, 0);
 
   return (
-    <section aria-labelledby={`modo-${mode}`} className="border-2 border-ink">
+    <section aria-labelledby={`pool-${pool}`} className="border-2 border-ink">
       <header className="flex items-baseline justify-between gap-3 border-b-2 border-ink px-4 py-3">
-        <h2 id={`modo-${mode}`} className="font-display text-2xl">
+        <h2 id={`pool-${pool}`} className="font-display text-2xl">
           <span aria-hidden className="mr-2">
-            {GLYPH[mode]}
+            {MODE_GLYPH[modeOfPool(pool)]}
           </span>
-          {GAME_LABELS[mode].title}
+          {poolTitle(pool)}
         </h2>
         <p className="font-mono text-2xl font-semibold">{stats.played > 0 ? stats.rating : '—'}</p>
       </header>
@@ -50,21 +53,30 @@ export const ModePanel = memo(function ModePanel({
           <Stat label="% victorias" value={winRate(stats)} />
         </dl>
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Evolución del Elo</h3>
-          <RatingChart history={entries} series={mode} />
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Evolución del Elo · por día</h3>
+          <RatingChart history={history} pool={pool} />
+          {unclassified > 0 && (
+            <p className="mt-2 text-xs text-muted">
+              {unclassified} {unclassified === 1 ? 'partida' : 'partidas'} de Royale anteriores a la v1.2 sin categoría de tiempo.
+            </p>
+          )}
         </div>
         <details className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between border-t border-line pt-3 text-sm font-semibold">
-            <span>
-              Historial · {entries.length} {entries.length === 1 ? 'partida' : 'partidas'}
-              {entries.length > 0 && <span className="font-normal text-muted"> · {solved} resueltos</span>}
-            </span>
-            <span aria-hidden className="transition-transform group-open:rotate-180">
+          <summary className="mx-auto flex w-fit cursor-pointer list-none items-center gap-2 border border-line px-4 py-1.5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+            <span>Historial ({entries.length})</span>
+            <span aria-hidden className="text-xs transition-transform group-open:rotate-180">
               ▾
             </span>
           </summary>
           <div className="mt-3">
-            {entries.length === 0 ? <p className="text-sm text-muted">Sin partidas en este modo.</p> : <HistoryTable entries={entries} modeDeltas />}
+            {entries.length === 0 ? (
+              <p className="text-center text-sm text-muted">Sin partidas en este modo.</p>
+            ) : (
+              <>
+                <p className="mb-2 text-right font-mono text-xs text-muted">{solved} resueltos</p>
+                <HistoryTable entries={entries} modeDeltas />
+              </>
+            )}
           </div>
         </details>
       </div>

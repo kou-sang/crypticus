@@ -1,5 +1,6 @@
 // Tipos de dominio compartidos entre el cliente (src/), el servidor y el motor (shared/engine.ts).
 // No importar nada de Firebase aquí: este módulo debe ser puro y testeable.
+import type { RatingPool } from './ratingPools';
 
 /** Clasificación de cripticos. */
 export type Difficulty = 'easy' | 'medium' | 'hard';
@@ -174,7 +175,11 @@ export interface UserProfile {
   handle: string;
   rating?: number; // Rating general: obsoleto desde v0.12 (el Elo es por modo). Cuentas antiguas lo conservan.
   stats: { played: number; wins: number; solved: number; hintsUsed: number };
-  modeStats?: Partial<Record<RankedMode, ModeStats>>;
+  /**
+   * Estadísticas por pool de Elo (ver `shared/ratingPools.ts`). Desde v1.2 Royale se separa por tiempo
+   * (`royale_hyperbullet`, `royale_bullet`, `royale_rapid`); `royale` queda congelado y solo siembra esos pools.
+   */
+  modeStats?: Partial<Record<RankedMode | RatingPool, ModeStats>>;
   createdAt: number;
 }
 
@@ -203,4 +208,8 @@ export interface HistoryEntry {
   /** Elo del modo (Race, Royale o Duel) tras la partida. Solo en partidas puntuables de 2 o más. */
   modeRatingAfter?: number;
   modeRatingDelta?: number; // Cambio del Elo del modo en esta partida.
+  /** Pool de Elo de la partida (desde v1.2). En Royale indica la categoría de tiempo. */
+  ratingPool?: RatingPool;
+  /** Royale: control de tiempo jugado (desde v1.2). */
+  royale?: { baseSec: number; incrementSec: number };
 }

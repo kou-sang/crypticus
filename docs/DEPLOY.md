@@ -265,6 +265,28 @@ npm run deploy
 
 ---
 
+### 6.2 Pasar a v1.2 (una vez): Royale por tiempo
+
+Después del merge, **de a un comando**:
+
+```powershell
+cd D:\EH\EH\Personal\crypticus-app
+git switch main
+git pull
+npm ci
+npm run deploy
+npx tsx --env-file=.env.local scripts/backfill-royale-pools.ts --dry-run
+npx tsx --env-file=.env.local scripts/backfill-royale-pools.ts
+```
+
+- El script clasifica las partidas de Royale anteriores en Hyperbullet, Bullet o Rapid (lee el tiempo de cada sala) y rehace las estadísticas de cada categoría. Se puede repetir sin problema.
+- Consumo: una lectura por usuario, por partida de Royale y por sala de Royale. Con la base actual queda muy por debajo de la cuota gratuita.
+- Sin el script, las partidas de Royale anteriores no aparecen en ninguna categoría, y el primer Elo de cada una arranca desde el Royale anterior.
+
+### Novedades en Inicio
+
+Cuando un deploy trae algo importante para los jugadores (no bug fixes ni cambios menores), agrega una entrada **al principio** de `src/features/dashboard/updates.ts` con la misma versión de `package.json`.
+
 ## 7. Desarrollo local (opcional)
 
 ```powershell

@@ -4,6 +4,21 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-07
+
+### Added
+
+- **Perfil al estilo Lichess:** el modo se elige en una columna a la izquierda (en el celular, una fila deslizable arriba) y a la derecha se ve su panel. El modo queda en la URL (`?modo=royale_bullet`) para compartir el enlace.
+- **Royale con un Elo por tiempo:** Hyperbullet (≤ 1 min), Bullet (≤ 2 min) y Rapid (> 2 min), según los minutos iniciales. También en el Ranking, con una fila de categorías bajo Royale. Cada categoría arranca desde el Elo de Royale anterior.
+- **Novedades en Inicio:** cuadro con los cambios importantes, a la derecha en PC y debajo del criptico de ejemplo en el celular (`src/features/dashboard/updates.ts`).
+- `scripts/backfill-royale-pools.ts`: migración única que clasifica las partidas de Royale anteriores y rehace las estadísticas de cada categoría.
+
+### Changed
+
+- La evolución del Elo es diaria: un punto por día con el Elo al cierre, y el detalle de partidas y resultados de ese día al pasar el puntero.
+- El botón del historial es compacto y centrado («Historial (N)»), con el borde ajustado al texto.
+- El historial guarda el pool de Elo (`ratingPool`) y, en Royale, el control de tiempo.
+
 ## [1.1.4] - 2026-11-07
 
 ### Fixed

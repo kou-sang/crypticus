@@ -1,4 +1,4 @@
-// Ranking: una tabla por modo (Race, Royale, Duel), global o entre amigos. Consultas puntuales con caché.
+// Ranking: una tabla por pool de Elo (Race, Royale por tiempo, Duel), global o entre amigos. Consultas puntuales con caché.
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../../hooks/useAuth';
 import { useFriends } from '../../hooks/useFriends';
@@ -6,47 +6,57 @@ import { useUsers } from '../../hooks/useUsers';
 import { cx, errorMessage } from '../../lib/utils';
 import { getModePosition, getTopByMode } from '../../lib/repo';
 import { loadJson, saveJson } from '../../lib/storage';
-import { RankingTable, statsOf } from '../../components/RankingTable';
+import { RankingTable } from '../../components/RankingTable';
+import { poolTitle, royalePool, statsOf } from '../../lib/pools';
 import { EmptyState, ErrorBanner, PageHeader, Spinner } from '../../components/ui';
 import { GAME_LABELS } from '../../../shared/scoring';
 import { RANKED_MODES, type RankedMode, type UserProfile } from '../../../shared/types';
+import { ROYALE_CATEGORIES, ROYALE_CATEGORY_LABELS, type RatingPool, type RoyaleCategory } from '../../../shared/ratingPools';
 
-const VIEW_KEY = 'crypticus.rankingView.v1';
+const VIEW_KEY = 'crypticus.rankingView.v2';
+
+interface RankingView {
+  mode: RankedMode;
+  royale: RoyaleCategory;
+  scope: 'global' | 'friends';
+}
+const DEFAULT_VIEW: RankingView = { mode: 'race', royale: 'bullet', scope: 'global' };
 
 export default function RankingsPage() {
   const { profile } = useSession();
-  const [view, setView] = useState(() => loadJson(VIEW_KEY, { mode: 'race' as RankedMode, scope: 'global' as 'global' | 'friends' }));
+  const [view, setView] = useState<RankingView>(() => loadJson(VIEW_KEY, DEFAULT_VIEW));
+  const pool: RatingPool = view.mode === 'royale' ? royalePool(view.royale) : view.mode;
   const [top, setTop] = useState<UserProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [position, setPosition] = useState<number | null>(null);
   const { friendIds } = useFriends(profile.uid);
   const friendProfiles = useUsers(friendIds);
-  const myStats = statsOf(profile, view.mode);
+  const myStats = statsOf(profile, pool);
   useEffect(() => saveJson(VIEW_KEY, view), [view]);
 
   useEffect(() => {
     let cancelled = false;
     setTop(null);
     setError(null);
-    getTopByMode(view.mode)
+    getTopByMode(pool)
       .then((rows) => !cancelled && setTop(rows))
       .catch((err: unknown) => !cancelled && setError(errorMessage(err)));
     if (myStats.played > 0) {
-      getModePosition(view.mode, myStats.rating)
+      getModePosition(pool, myStats.rating)
         .then((value) => !cancelled && setPosition(value))
         .catch((err: unknown) => console.error('[ranking] posición', err));
     } else setPosition(null);
     return () => {
       cancelled = true;
     };
-  }, [view.mode, myStats.rating, myStats.played]);
+  }, [pool, myStats.rating, myStats.played]);
 
   const friendsRows = useMemo(
     () =>
       [profile, ...friendProfiles.values()]
-        .filter((user) => statsOf(user, view.mode).played > 0 || user.uid === profile.uid)
-        .sort((a, b) => statsOf(b, view.mode).rating - statsOf(a, view.mode).rating),
-    [profile, friendProfiles, view.mode],
+        .filter((user) => statsOf(user, pool).played > 0 || user.uid === profile.uid)
+        .sort((a, b) => statsOf(b, pool).rating - statsOf(a, pool).rating),
+    [profile, friendProfiles, pool],
   );
   const rows = view.scope === 'global' ? top : friendsRows;
 
@@ -66,6 +76,22 @@ export default function RankingsPage() {
           </button>
         ))}
       </div>
+      {view.mode === 'royale' && (
+        <div role="tablist" aria-label="Tiempo de Royale" className="mb-3 grid grid-cols-3 border border-line">
+          {ROYALE_CATEGORIES.map((category) => (
+            <button
+              key={category}
+              role="tab"
+              aria-selected={view.royale === category}
+              onClick={() => setView((v) => ({ ...v, royale: category }))}
+              className={cx('seg-tab py-1.5 text-sm font-semibold', view.royale === category ? 'bg-ink text-paper' : 'hover:bg-paper-2')}
+            >
+              {ROYALE_CATEGORY_LABELS[category].title}
+              <span className="ml-1.5 font-mono text-xs font-normal opacity-70">{ROYALE_CATEGORY_LABELS[category].range}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         {(['global', 'friends'] as const).map((scope) => (
           <button
@@ -88,9 +114,9 @@ export default function RankingsPage() {
       {rows === null ? (
         <Spinner />
       ) : rows.length === 0 ? (
-        <EmptyState title={`Nadie jugó ${GAME_LABELS[view.mode].title} todavía`}>Las partidas de 2 o más jugadores suman al ranking.</EmptyState>
+        <EmptyState title={`Nadie jugó ${poolTitle(pool)} todavía`}>Las partidas de 2 o más jugadores suman al ranking.</EmptyState>
       ) : (
-        <RankingTable rows={rows} meId={profile.uid} mode={view.mode} />
+        <RankingTable rows={rows} meId={profile.uid} pool={pool} />
       )}
     </>
   );

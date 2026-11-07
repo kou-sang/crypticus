@@ -1,6 +1,6 @@
-// Perfil: resumen general y un panel por modo (estadísticas, evolución del Elo e historial desplegable).
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+// Perfil: resumen general, selector de modo a la izquierda (Royale por tiempo) y el panel del modo elegido.
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
@@ -9,15 +9,27 @@ import { useFriends } from '../../hooks/useFriends';
 import { getHistory, sendFriendRequest } from '../../lib/repo';
 import { errorMessage, pairId } from '../../lib/utils';
 import { Avatar, Button, EmptyState, ErrorBanner, PageLoader, Spinner } from '../../components/ui';
-import { RANKED_MODES, type HistoryEntry, type UserProfile } from '../../../shared/types';
+import type { HistoryEntry, UserProfile } from '../../../shared/types';
+import { RATING_POOLS, type RatingPool } from '../../../shared/ratingPools';
 import { BackLink } from '../../components/BackLink';
-import { GAME_LABELS } from '../../../shared/scoring';
 import { ModePanel } from './ModePanel';
+import { PoolNav } from './PoolNav';
+import { statsOf } from '../../lib/pools';
 
-// Las partidas se reparten entre los tres paneles: se piden suficientes para que cada modo tenga historia.
+// Las partidas se reparten entre los modos: se piden suficientes para que cada uno tenga historia.
 const OWN_HISTORY = 90;
 const OTHER_HISTORY = 45;
 const MEMBER_SINCE = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' });
+const POOL_PARAM = 'modo';
+
+function isPool(value: string | null): value is RatingPool {
+  return value !== null && (RATING_POOLS as readonly string[]).includes(value);
+}
+
+/** Modo inicial: el más jugado (Race si no hay partidas). */
+function defaultPool(user: UserProfile): RatingPool {
+  return RATING_POOLS.reduce<RatingPool>((best, pool) => (statsOf(user, pool).played > statsOf(user, best).played ? pool : best), 'race');
+}
 
 export default function ProfilePage() {
   const { uid = '' } = useParams();
@@ -25,6 +37,19 @@ export default function ProfilePage() {
   const { all } = useFriends(me.uid);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const selectPool = useCallback(
+    (pool: RatingPool) =>
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.set(POOL_PARAM, pool);
+          return next;
+        },
+        { replace: true },
+      ),
+    [setParams],
+  );
 
   const user = useLiveDoc<UserProfile>(uid ? doc(db, 'users', uid) : null, [uid]);
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
@@ -55,6 +80,8 @@ export default function ProfilePage() {
     );
 
   const profile = user.data;
+  const requested = params.get(POOL_PARAM);
+  const pool = isPool(requested) ? requested : defaultPool(profile);
   const relation = all.find((r) => r.id === pairId(me.uid, profile.uid));
 
   const handleAdd = async () => {
@@ -119,27 +146,10 @@ export default function ProfilePage() {
         ))}
       </dl>
 
-      {history === null ? (
-        <Spinner />
-      ) : (
-        <div className="space-y-6">
-          {RANKED_MODES.map((mode) => (
-            <ModePanel key={mode} mode={mode} user={profile} history={history} />
-          ))}
-          <section aria-label="Boss" className="border-2 border-dashed border-line px-4 py-5">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="font-display text-2xl text-muted">
-                <span aria-hidden className="mr-2">
-                  ♛
-                </span>
-                {GAME_LABELS.boss.title}
-              </h2>
-              <span className="text-xs font-semibold uppercase tracking-widest text-muted">Pronto</span>
-            </div>
-            <p className="mt-2 text-sm text-muted">{GAME_LABELS.boss.description}</p>
-          </section>
-        </div>
-      )}
+      <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-6">
+        <PoolNav user={profile} selected={pool} onSelect={selectPool} />
+        {history === null ? <Spinner /> : <ModePanel pool={pool} user={profile} history={history} />}
+      </div>
     </>
   );
 }

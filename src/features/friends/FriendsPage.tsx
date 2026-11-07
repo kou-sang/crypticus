@@ -39,7 +39,7 @@ function PersonRow({ profile, children }: { profile: UserProfile | undefined; ch
         {profile && (
           <>
             <span className="block font-mono text-xs text-muted">@{profile.handle}</span>
-            <ModeRatings user={profile} compact />
+            <ModeRatings user={profile} />
           </>
         )}
       </div>
