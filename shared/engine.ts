@@ -290,10 +290,9 @@ export function royaleDeadline(state: LiveState, participant: Participant): numb
 }
 
 /** Tiempo restante del reloj de un jugador (Royale). */
-/** Royale: tiempo que resta saltar un criptico. */
-export const ROYALE_SKIP_DEFAULT_PENALTY_SEC = 5;
+/** Royale: saltar cuesta lo mismo que suma un acierto (con incremento 0, no cuesta nada). */
 export function royaleSkipPenaltyMs(royale: { incrementSec: number }): number {
-  return (royale.incrementSec > 0 ? royale.incrementSec : ROYALE_SKIP_DEFAULT_PENALTY_SEC) * 1000;
+  return Math.max(0, royale.incrementSec) * 1000;
 }
 
 export function royaleRemaining(state: LiveState, participant: Participant, now: number): number {
@@ -726,7 +725,7 @@ export function passCryptic(state: LiveState, input: { uid: string; now: number 
   if (used >= (royale.skips ?? 0)) throw new GameError('skip_exhausted', royale.skips ? 'No te quedan saltos.' : 'En esta partida no se saltea.');
   const id = royaleCurrent(state, participant);
   if (!id || !isPlayable(state, participant, id, input.now)) throw new GameError('not_playable', 'No hay criptico para saltear.');
-  // Saltar cuesta tiempo: lo mismo que suma un acierto (o 5 s si no hay incremento).
+  // Saltar cuesta tiempo: lo mismo que suma un acierto.
   participant.skipsUsed = used + 1;
   participant.bankMs = (participant.bankMs ?? 0) - royaleSkipPenaltyMs(royale);
   pushEvent(state, { at: input.now, kind: 'surrender', uid: input.uid, crypticId: id, seconds: -royaleSkipPenaltyMs(royale) / 1000 });

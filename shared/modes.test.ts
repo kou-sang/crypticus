@@ -97,7 +97,7 @@ describe('Royale', () => {
     expect(() => passCryptic(state, { uid: 'a', now: 2000 })).toThrow();
     const noIncrement = start({ ...royale, royale: { ...royale.royale, incrementSec: 0, skips: 2 } });
     passCryptic(noIncrement, { uid: 'a', now: 0 });
-    expect(royaleRemaining(noIncrement, noIncrement.participants.a!, 0)).toBe(55_000); // 5 s por defecto
+    expect(royaleRemaining(noIncrement, noIncrement.participants.a!, 0)).toBe(60_000); // sin incremento no cuesta
   });
 
   it('el último en pie gana; el ranking sigue el orden de eliminación', () => {

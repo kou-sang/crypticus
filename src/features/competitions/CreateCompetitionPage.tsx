@@ -374,7 +374,7 @@ function RoyalePanel({ settings, update }: { settings: ModeSettings['royale']; u
       <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option
         title="Saltear"
-        info={`Cada jugador puede saltear el criptico actual 1 o 2 veces en toda la partida. Cada salto resta del reloj lo mismo que suma un acierto (${settings.incrementSec > 0 ? `${settings.incrementSec} s` : '5 s si no hay incremento'}).`}
+        info={`Cada jugador puede saltear el criptico actual 1 o 2 veces en toda la partida. Cada salto resta del reloj lo mismo que suma un acierto (${settings.incrementSec} s).`}
       >
         <Chips<number>
           label="Saltear"

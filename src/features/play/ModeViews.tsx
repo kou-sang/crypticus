@@ -142,7 +142,7 @@ function RoyaleSkip({ state, uid, actions }: { state: LiveState; uid: string; ac
   return (
     <div className="space-y-2">
       <Button variant="ghost" loading={busy} onClick={() => void run()}>
-        Saltear (−{cost} s) · quedan {left}
+        Saltear{cost > 0 ? ` (−${cost} s)` : ''} · quedan {left}
       </Button>
       <ErrorBanner error={error} />
     </div>
