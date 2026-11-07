@@ -297,7 +297,7 @@ npm run dev:worker    # http://localhost:8787
 | `Unknown command: "install-scripts"` en CI | Ese comando es solo para tu PC (npm ≥ 11.16) | No editar `ci.yml`; `allowScripts` ya está en `package.json` |
 | Siguen saliendo varios del mismo tipo seguidos | Secretos importados antes de v1.0 (sin `kind`) | `--secrets-only` (paso 6.1) → `npm run deploy` |
 | `No hay ninguna sala abierta con el código…` | La sala terminó, se canceló o el código está mal escrito | Pedir el código otra vez o el enlace `/s/CÓDIGO` |
-| Cripta con el muro de respaldo | Faltan `wall.webp` / `wall-mobile.webp` | Paso 6.1 (opcional) |
+| Cripta sin muro (fondo casi negro) | Faltan `wall.webp` / `wall-mobile.webp` | Paso 6.1 (opcional) |
 | Títulos de Cyber en Chakra Petch | Falta `public\fonts\cyber-display.woff2` | Paso 6.1 (opcional) |
 | `'node' / 'git' no se reconoce` tras instalar | PowerShell abierto antes de instalar | Cerrar y abrir PowerShell |
 

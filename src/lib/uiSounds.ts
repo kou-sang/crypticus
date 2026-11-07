@@ -1,7 +1,8 @@
 // Sonidos de interfaz por delegación: un listener en el documento cubre todos los botones, pestañas,
 // enlaces y campos de texto de la app (sin tocar cada componente). `data-sound="off"` en un elemento
 // o un ancestro lo silencia; `data-sound="tab|toggle|submit|click"` fuerza el tipo de sonido.
-import { playUi, type UiCue } from './sound';
+import { playUi, prewarmSound, type UiCue } from './sound';
+import { subscribeSettings } from './settings';
 
 const CLICKABLE = 'button, a[href], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"], summary, select';
 const TEXT_TYPES = new Set(['text', 'search', 'email', 'password', 'url', 'tel', 'number', '']);
@@ -23,6 +24,12 @@ let installed = false;
 export function installUiSounds(): void {
   if (installed || typeof document === 'undefined') return;
   installed = true;
+
+  // Al cambiar de tema, su reverb se prepara en segundo plano (no en el primer clic).
+  subscribeSettings(() => {
+    if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(prewarmSound, { timeout: 2000 });
+    else window.setTimeout(prewarmSound, 300);
+  });
 
   // pointerdown: el sonido sale al tocar, sin esperar al click (se siente inmediato).
   document.addEventListener(

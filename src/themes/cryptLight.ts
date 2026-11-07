@@ -1,10 +1,12 @@
 // Luz de las antorchas del tema Cripta: titileo orgánico, ráfagas de viento y paralaje con el puntero.
-// Un solo bucle (~30 fps) escribe variables CSS en la escena; el CSS hace el resto (opacidad y transform:
-// solo composición, sin layout). Se detiene con la pestaña oculta y no corre con movimiento reducido.
+// Rendimiento: un solo bucle a ~20 fps que escribe `transform` y `opacity` directamente en elementos con capa
+// propia (will-change). Sin variables CSS heredadas, filtros ni mezclas: solo composición, nada de layout ni repintado.
+// Se pausa con la pestaña oculta y queda fijo con movimiento reducido.
 import { prefersReducedMotion } from '../lib/settings';
 
-const FRAME_MS = 33;
+const FRAME_MS = 50; // 20 fps: suficiente para una llama y deja el hilo libre para el juego.
 const PARALLAX_PX = 14;
+const PARALLAX_EASE = 0.3; // Fracción del camino que recorre el paralaje en cada cuadro (suavizado).
 
 interface Gust {
   start: number; // ms
@@ -15,17 +17,17 @@ interface Gust {
   direction: 1 | -1;
 }
 
-/** Ruido suave sin dependencias: suma de senos de frecuencias no armónicas. */
-function smoothNoise(t: number, seed: number): number {
-  return (
-    Math.sin(t * 1.7 + seed) * 0.5 +
-    Math.sin(t * 2.9 + seed * 2.3) * 0.3 +
-    Math.sin(t * 5.3 + seed * 0.7) * 0.2
-  );
+interface TorchNodes {
+  light: HTMLElement | null;
+  flame: HTMLElement | null;
 }
 
-function gustValue(gust: Gust | null, now: number): number {
-  if (!gust) return 0;
+/** Ruido suave sin dependencias: suma de senos de frecuencias no armónicas. */
+function smoothNoise(t: number, seed: number): number {
+  return Math.sin(t * 1.7 + seed) * 0.5 + Math.sin(t * 2.9 + seed * 2.3) * 0.3 + Math.sin(t * 5.3 + seed * 0.7) * 0.2;
+}
+
+function gustValue(gust: Gust, now: number): number {
   const t = now - gust.start;
   if (t < 0) return 0;
   if (t < gust.rise) return (t / gust.rise) * gust.strength;
@@ -45,31 +47,45 @@ function nextGust(now: number): Gust {
   };
 }
 
+function paint(torch: TorchNodes, intensity: number, lean: number, shift: number): void {
+  if (torch.light) {
+    torch.light.style.opacity = (intensity * 0.92).toFixed(3);
+    torch.light.style.transform = `translate3d(${shift.toFixed(1)}px,0,0) scale(${(0.86 + intensity * 0.18).toFixed(3)})`;
+  }
+  if (torch.flame) {
+    torch.flame.style.transform = `skewX(${lean.toFixed(2)}deg) scale(${(1.08 - intensity * 0.12).toFixed(3)}, ${(0.72 + intensity * 0.4).toFixed(3)})`;
+  }
+}
+
 /**
- * Arranca la animación sobre `scene` (que contiene las antorchas). Devuelve la función para detenerla.
- * Con movimiento reducido deja valores fijos y no anima.
+ * Arranca la animación sobre `scene` (que contiene .crypt-parallax, .crypt-shade y las antorchas).
+ * Devuelve la función para detenerla. Con movimiento reducido deja valores fijos y no anima.
  */
 export function startCryptLight(scene: HTMLElement): () => void {
-  const torches = Array.from(scene.querySelectorAll<HTMLElement>('[data-torch]'));
-  const setStatic = () => {
-    torches.forEach((torch) => {
-      torch.style.setProperty('--f', '0.85');
-      torch.style.setProperty('--lean', '0deg');
-      torch.style.setProperty('--shift', '0px');
-    });
-    scene.style.setProperty('--ambient', '0.85');
+  const torches: TorchNodes[] = Array.from(scene.querySelectorAll<HTMLElement>('[data-torch]')).map((torch) => ({
+    light: torch.querySelector<HTMLElement>('.torch-light'),
+    flame: torch.querySelector<HTMLElement>('.torch-flame'),
+  }));
+  const shade = scene.querySelector<HTMLElement>('.crypt-shade');
+  const parallax = scene.querySelector<HTMLElement>('.crypt-parallax');
+  const setShade = (ambient: number) => {
+    if (shade) shade.style.opacity = Math.min(1, 0.78 + (1 - ambient) * 0.9).toFixed(3);
   };
+
   if (prefersReducedMotion()) {
-    setStatic();
+    torches.forEach((torch) => paint(torch, 0.85, 0, 0));
+    setShade(0.85);
     return () => undefined;
   }
 
-  // Estado por antorcha: un paseo aleatorio suavizado para que el titileo no sea periódico.
   const jitter = torches.map(() => 0);
-  let gust: Gust = nextGust(performance.now());
+  let gust = nextGust(performance.now());
   let frame = 0;
   let last = 0;
   let running = true;
+  // Paralaje: objetivo (puntero) y posición actual, suavizada en el mismo bucle.
+  const target = { x: 0, y: 0 };
+  const current = { x: 0, y: 0 };
 
   const tick = (now: number) => {
     if (!running) return;
@@ -79,46 +95,45 @@ export function startCryptLight(scene: HTMLElement): () => void {
     try {
       if (now > gust.start + gust.rise + gust.hold + gust.fall) gust = nextGust(now);
       const t = now / 1000;
-      // Viento: brisa constante y suave + la ráfaga actual (con dirección).
-      const breeze = smoothNoise(t * 0.35, 1.3) * 0.25;
-      const gustNow = gustValue(gust, now);
-      const wind = breeze + gustNow * gust.direction;
+      // Viento: brisa suave constante + la ráfaga actual (con dirección).
+      const wind = smoothNoise(t * 0.35, 1.3) * 0.25 + gustValue(gust, now) * gust.direction;
       let total = 0;
       torches.forEach((torch, index) => {
         // La ráfaga llega un poco después a la antorcha más lejana.
         const delayed = gustValue(gust, now - index * 180);
-        jitter[index] = jitter[index]! * 0.82 + (Math.random() - 0.5) * 0.22;
+        jitter[index] = jitter[index]! * 0.8 + (Math.random() - 0.5) * 0.24;
         const flicker = 0.86 + smoothNoise(t * 3.1, index * 4.1) * 0.07 + jitter[index]! * 0.35 - delayed * 0.32;
         const intensity = Math.min(1.15, Math.max(0.35, flicker));
         total += intensity;
-        const lean = wind * 14 + smoothNoise(t * 4.3, index * 2.7) * 3;
-        torch.style.setProperty('--f', intensity.toFixed(3));
-        torch.style.setProperty('--lean', `${lean.toFixed(2)}deg`);
-        torch.style.setProperty('--shift', `${(wind * 26).toFixed(1)}px`);
+        paint(torch, intensity, wind * 14 + smoothNoise(t * 4.3, index * 2.7) * 3, wind * 26);
       });
-      scene.style.setProperty('--ambient', (total / Math.max(1, torches.length)).toFixed(3));
+      setShade(total / Math.max(1, torches.length));
+
+      if (parallax) {
+        const dx = target.x - current.x;
+        const dy = target.y - current.y;
+        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+          current.x += dx * PARALLAX_EASE;
+          current.y += dy * PARALLAX_EASE;
+          parallax.style.transform = `translate3d(${current.x.toFixed(1)}px,${current.y.toFixed(1)}px,0)`;
+        }
+      }
     } catch (error) {
       console.warn('[crypt] animación de luz detenida', error);
       running = false;
-      setStatic();
     }
   };
 
-  // Paralaje: el muro se desplaza un poco hacia donde va el puntero (solo con mouse).
+  // Solo con mouse: guarda el objetivo; el movimiento real lo hace el bucle (una escritura por cuadro como máximo).
   const onPointer = (event: PointerEvent) => {
     if (event.pointerType !== 'mouse') return;
-    const x = (event.clientX / window.innerWidth - 0.5) * -2 * PARALLAX_PX;
-    const y = (event.clientY / window.innerHeight - 0.5) * -1 * PARALLAX_PX;
-    scene.style.setProperty('--px', `${x.toFixed(1)}px`);
-    scene.style.setProperty('--py', `${y.toFixed(1)}px`);
+    target.x = (event.clientX / window.innerWidth - 0.5) * -2 * PARALLAX_PX;
+    target.y = (event.clientY / window.innerHeight - 0.5) * -1 * PARALLAX_PX;
   };
 
   const onVisibility = () => {
-    if (document.hidden) {
-      cancelAnimationFrame(frame);
-    } else if (running) {
-      frame = requestAnimationFrame(tick);
-    }
+    cancelAnimationFrame(frame);
+    if (!document.hidden && running) frame = requestAnimationFrame(tick);
   };
 
   frame = requestAnimationFrame(tick);

@@ -14,8 +14,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 - Cripta: todos los elementos interactivos (botones, pestañas, opciones, campos y tarjetas) se iluminan al pasar el puntero, como si se les acercara una antorcha.
 - Cyber: fuente de títulos incluida (`public/fonts/cyber-display.ttf`).
 
+### Performance
+
+- Cripta: la luz de las antorchas anima solo `transform` y `opacity` en capas propias, a 20 fps, sin `mix-blend-mode`, filtros variables ni variables CSS heredadas; el paralaje se suaviza en el mismo bucle. El pergamino usa una textura WebP de 4 KB en lugar de ruido SVG generado al pintar; se quitó el muro SVG de respaldo que se dibujaba debajo de la imagen. El muro, la antorcha y el pergamino se precargan desde el HTML y la escena aparece con un fundido cuando el muro ya está decodificado. Medido en Chrome: 27 → 57 fps en escritorio y 46 → 60 fps en celular con CPU ×4 más lenta, sin tareas largas.
+- Cyber: el suelo de rejilla avanza con `transform` (antes repintaba toda la superficie en cada cuadro) y el cambio de pantalla ya no aplica desenfoque a toda la página.
+- Sonido: la reverb de cada tema se genera en segundo plano y no dentro del primer clic.
+
 ### Fixed
 
+- Cyber: la fuente de títulos tenía las letras muy separadas; se ajustó el archivo para que se toquen, como la rotulación de referencia. Los títulos van en amarillo neón con eco cian.
 - Relojes con sonido y animación: el reloj de partida late cada segundo en los últimos 30 s, avisa al quedar 1 minuto y 30 segundos y hace tic en los últimos 10; la cuenta 3-2-1 suena en cada número, entra con un anillo que se expande y cierra con un sonido de arranque propio de cada tema.
 - iPhone/iPad: el alta del perfil (nombre y @usuario) podía quedar colgada sin salir de la bienvenida. En iOS Firestore usa caché en memoria y long polling; el alta tiene un límite de 15 s con un mensaje claro y tolera reintentos.
 - Celular en partida: el teclado ya no se cierra al cambiar de criptico ni durante la pausa entre rondas (un único input de juego que nunca se desmonta), y tocar las celdas o los botones del juego no lo cierra. El criptico se centra encima del teclado.

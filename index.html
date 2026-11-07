@@ -15,6 +15,18 @@
         var r = document.documentElement;
         var skin = s.skin === 'medieval' ? 'crypt' : s.skin; // Cripta se llamó Medieval hasta v1.0.1.
         if (skin === 'crypt' || skin === 'cyber') r.setAttribute('data-skin', skin);
+        // Cripta: el muro y la antorcha empiezan a bajar ya, en paralelo con la app (no al montar el fondo).
+        if (skin === 'crypt') {
+          var wall = window.matchMedia('(orientation: portrait)').matches ? 'wall-mobile' : 'wall';
+          ['/themes/crypt/' + wall + '.webp', '/themes/crypt/torch-1.webp', '/themes/crypt/parchment.webp'].forEach(function (href) {
+            var l = document.createElement('link');
+            l.rel = 'preload';
+            l.as = 'image';
+            l.href = href;
+            l.setAttribute('fetchpriority', 'high');
+            document.head.appendChild(l);
+          });
+        }
         if (s.theme === 'light' || s.theme === 'dark') r.setAttribute('data-theme', s.theme);
       } catch (e) {}
     </script>
