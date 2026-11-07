@@ -119,7 +119,7 @@ export async function getCryptics(ids: string[]): Promise<Map<string, CrypticPub
 // ---------- Competencias ----------
 
 export interface CreateCompetitionInput extends CompetitionConfig {
-  title: string;
+  title?: string; // Ignorado desde v1.0: el servidor nombra la sala «CÓDIGO · anfitrión».
   visibility: CompetitionVisibility;
   maxPlayers: number;
   clueCount: number;
@@ -144,6 +144,17 @@ export async function updateCompetition(competitionId: string, input: CreateComp
   const errors = validateConfig(input, input.maxPlayers);
   if (errors.length > 0) throw new Error(errors.join(' '));
   await api.update(competitionId, input);
+}
+
+/** Sala abierta (en espera o en vivo) con ese código de 4 letras, o null. */
+export async function findOpenRoomByCode(code: string): Promise<Competition | null> {
+  const snap = await getDocs(
+    query(collection(db, 'competitions'), where('code', '==', code), where('status', 'in', ['lobby', 'live']), limit(2)),
+  );
+  // En el caso (muy raro) de dos salas con el mismo código, gana la más reciente.
+  const rooms = snap.docs.map((d) => ({ ...(d.data() as Competition), id: d.id }));
+  rooms.sort((a, b) => b.createdAt - a.createdAt);
+  return rooms[0] ?? null;
 }
 
 const REMATCH_PREFIX = 'Revancha · ';

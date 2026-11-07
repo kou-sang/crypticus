@@ -2,7 +2,7 @@
 // Autenticación: JWT de la cuenta de servicio -> access token OAuth2 (cacheado ~55 min por isolate).
 import { importPKCS8, SignJWT } from 'jose';
 import { AppError } from './errors';
-import { decodeFields, encodeFields, type Fields } from './firestoreCodec';
+import { decodeFields, encodeFields, encodeValue, type Fields } from './firestoreCodec';
 
 interface ServiceAccount {
   client_email: string;
@@ -126,6 +126,32 @@ export class FirestoreRest {
       if (row.found) result.set(row.found.name.split('/').pop() ?? '', decodeFields(row.found.fields ?? {}) as T);
     }
     return result;
+  }
+
+  /**
+   * Consulta simple por igualdad (`EQUAL` / `IN`) sobre una colección raíz.
+   * Firestore resuelve filtros de igualdad combinando índices de un campo: no hace falta índice compuesto.
+   */
+  async queryEquals<T>(
+    collectionId: string,
+    filters: Array<{ field: string; op: 'EQUAL' | 'IN'; value: unknown }>,
+    limit = 10,
+  ): Promise<Array<T & { id: string }>> {
+    const fieldFilters = filters.map((f) => ({
+      fieldFilter: { field: { fieldPath: f.field }, op: f.op, value: encodeValue(f.value) },
+    }));
+    const structuredQuery = {
+      from: [{ collectionId }],
+      where: fieldFilters.length === 1 ? fieldFilters[0] : { compositeFilter: { op: 'AND', filters: fieldFilters } },
+      limit,
+    };
+    const rows = await this.request<Array<{ document?: RawDocument }>>(this.url(':runQuery'), {
+      method: 'POST',
+      body: JSON.stringify({ structuredQuery }),
+    });
+    return rows
+      .filter((row): row is { document: RawDocument } => row.document !== undefined)
+      .map((row) => ({ id: row.document.name.split('/').pop() ?? '', ...(decodeFields(row.document.fields ?? {}) as T) }));
   }
 
   /** Commit atómico (máx. 500 escrituras). */
