@@ -259,7 +259,7 @@ npm run deploy
 
 - `npm i …` instala las fuentes de los temas (Cinzel y Chakra Petch). Sin ellas, los temas usan fuentes de respaldo.
 - `--secrets-only` no toca Firestore: regenera `worker\generated\cryptic-secrets.json` con el tipo de cada criptico (`kind`, el primer `tag`) para que no salgan dos seguidos del mismo tipo.
-- **Opcional, cuando los tengas:** el fondo Medieval (`public\themes\medieval\wall.webp` y `wall-mobile.webp`) y la fuente de títulos de Cyber (`public\fonts\cyber-display.woff2`). Ver `docs/THEME_ASSETS.md`. Después: `git add public`, `git commit`, `git push` y `npm run deploy`.
+- **Opcional, cuando los tengas:** el fondo del tema Cripta (`public\themes\crypt\wall.webp` y `wall-mobile.webp`) y la fuente de títulos de Cyber (`public\fonts\cyber-display.woff2`). Ver `docs/THEME_ASSETS.md`. Después: `git add public`, `git commit`, `git push` y `npm run deploy`.
 
 > **Despliega siempre desde tu PC** (`npm run deploy`). Los hashes de las respuestas no están en git, así que la integración Git de Cloudflare compilaría el Worker sin cripticos.
 
@@ -297,7 +297,7 @@ npm run dev:worker    # http://localhost:8787
 | `Unknown command: "install-scripts"` en CI | Ese comando es solo para tu PC (npm ≥ 11.16) | No editar `ci.yml`; `allowScripts` ya está en `package.json` |
 | Siguen saliendo varios del mismo tipo seguidos | Secretos importados antes de v1.0 (sin `kind`) | `--secrets-only` (paso 6.1) → `npm run deploy` |
 | `No hay ninguna sala abierta con el código…` | La sala terminó, se canceló o el código está mal escrito | Pedir el código otra vez o el enlace `/s/CÓDIGO` |
-| Medieval con el muro de respaldo | Faltan `wall.webp` / `wall-mobile.webp` | Paso 6.1 (opcional) |
+| Cripta con el muro de respaldo | Faltan `wall.webp` / `wall-mobile.webp` | Paso 6.1 (opcional) |
 | Títulos de Cyber en Chakra Petch | Falta `public\fonts\cyber-display.woff2` | Paso 6.1 (opcional) |
 | `'node' / 'git' no se reconoce` tras instalar | PowerShell abierto antes de instalar | Cerrar y abrir PowerShell |
 

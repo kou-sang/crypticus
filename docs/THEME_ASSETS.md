@@ -1,17 +1,21 @@
 # Recursos gráficos de los temas
 
-## Medieval: fondo
+## Cripta (antes Medieval): fondo y antorchas
 
 | Archivo | Uso | Tamaño | Peso objetivo |
 | --- | --- | --- | --- |
-| `public/themes/medieval/wall.webp` | PC y tablets en horizontal | 2560 × 1440 (16:9) | < 450 KB |
-| `public/themes/medieval/wall-mobile.webp` | Celulares (vertical) | 1080 × 2340 (9:19.5) | < 300 KB |
+| `public/themes/crypt/wall.webp` | PC y tablets en horizontal | 2560 × 1440 (16:9) | < 450 KB |
+| `public/themes/crypt/wall-mobile.webp` | Celulares (vertical) | 1080 × 2340 (9:19.5) | < 300 KB |
 
 Mientras no existan, se ve `wall-fallback.svg`, un muro repetible del mismo estilo (piedras redondeadas, juntas negras, moho y enredaderas) ya incluido en el repo.
 
 - **Estilo:** ilustración digital con volumen y textura realistas, como la referencia de piedras con moho. Paleta **oscura**, con pocos blancos, para que el texto se lea encima.
-- **Sin antorchas ni fuentes de luz.** El CSS dibuja las antorchas y su titileo encima; si la imagen trae las suyas, quedan desalineadas.
+- **Sin antorchas ni fuentes de luz en el muro.** Las antorchas son un recurso aparte (`torch.webp`) y la luz, la llama, el viento y las chispas se animan por código encima.
 - **Centro tranquilo.** La losa de contenido tapa el centro, así que el detalle (moho, enredaderas, piedras grandes) va hacia los costados.
+
+### Antorcha
+
+`public/themes/crypt/torch.webp` es la antorcha de la izquierda de la imagen de Gemini, recortada con fondo transparente (115 × 445). La de la derecha es la misma, espejada. Para cambiarla, pide a Gemini la antorcha sola sobre fondo verde puro (`#00FF00`) y recórtala; con fondo de muro el recorte automático pierde partes.
 
 ### Cómo pedírselo a Gemini (Nano Banana Pro)
 
@@ -47,7 +51,7 @@ Very dark, low-key palette: charcoal, umber and slate-grey stones, near-black mo
 ### Convertir a WebP
 
 1. Abre <https://squoosh.app>, arrastra la imagen y elige **WebP**, calidad 70–78, con el tamaño de la tabla.
-2. Guárdala con el nombre exacto en `public/themes/medieval/` y despliega.
+2. Guárdala con el nombre exacto en `public/themes/crypt/` y despliega.
 
 ## Cyber: fuente de títulos
 

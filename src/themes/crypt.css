@@ -1,0 +1,353 @@
+/*
+ * Tema Cripta (antes «Medieval»): muro de piedra con musgo, antorchas con viento y pergaminos que se desenrollan.
+ * - Fondo oscuro (variables en :root) y contenido sobre pergamino (variables re-declaradas en cada panel).
+ * - La escena (muro + luces + antorchas) se desplaza con la navegación y con el puntero; el titileo y el viento
+ *   los calcula src/themes/cryptLight.ts y llegan como variables CSS (--f0, --lean0, --shift0…).
+ */
+
+:root[data-skin='crypt'] {
+  --paper: #15110d;
+  --paper-2: #211a14;
+  --ink: #e2d4b4;
+  --muted: #9a8c70;
+  --line: #3e3328;
+  --accent: #cf5a2e;
+  --ok: #93ad5a;
+  --torch: #f2a03a;
+  --font-display: 'Cinzel Variable', 'Cinzel', 'Trajan Pro', 'Palatino Linotype', Georgia, serif;
+  --font-sans: 'Fraunces Variable', 'Palatino Linotype', Georgia, serif;
+  color-scheme: dark;
+  background: #0b0907;
+}
+:root[data-skin='crypt'] body {
+  background: transparent;
+}
+
+/* ---------- Escena ---------- */
+
+/*
+ * Más grande que la pantalla para poder desplazarse sin mostrar bordes:
+ * cada sección del menú mueve el muro (--vr-index) y el puntero suma un leve paralaje (--px, --py).
+ */
+.crypt-scene {
+  position: absolute;
+  inset: -5vh -12vw;
+  transform: translate3d(calc((1.5 - var(--vr-index, 1)) * 3vw + var(--px, 0px)), var(--py, 0px), 0);
+  transition: transform 900ms cubic-bezier(.2,.7,.2,1);
+  will-change: transform;
+}
+.crypt-wall {
+  position: absolute;
+  inset: 0;
+  background-color: #0b0907;
+  background-image: url('/themes/crypt/wall.webp'), url('/themes/crypt/wall-fallback.svg');
+  background-size: cover, 480px 360px;
+  background-position: center, center;
+  background-repeat: no-repeat, repeat;
+}
+@media (orientation: portrait) {
+  .crypt-wall {
+    background-image: url('/themes/crypt/wall-mobile.webp'), url('/themes/crypt/wall-fallback.svg');
+    background-size: cover, 360px 270px;
+  }
+}
+
+/* Penumbra: más densa cuando el viento apaga las llamas (--ambient la calcula cryptLight.ts). */
+.crypt-shade {
+  position: absolute;
+  inset: 0;
+  opacity: calc(0.78 + (1 - var(--ambient, 0.85)) * 0.9);
+  background:
+    radial-gradient(ellipse 70% 62% at 50% 44%, transparent 18%, rgba(5, 4, 3, 0.6) 70%, rgba(3, 2, 2, 0.92) 100%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent 24%, transparent 72%, rgba(0, 0, 0, 0.6));
+}
+
+/*
+ * Antorchas (sprite de Gemini, recortado) en los costados, justo fuera del contenido.
+ * La escena tiene 12vw de margen a cada lado: la posición se mide desde el borde visible.
+ */
+.torch {
+  position: absolute;
+  top: calc(5vh + 20vh);
+  width: 80px;
+  height: 310px;
+}
+.torch-left { left: calc(12vw + max(8px, 50vw - 576px - 100px)); }
+.torch-right { right: calc(12vw + max(8px, 50vw - 576px - 100px)); }
+.torch-right .torch-sprite { transform: scaleX(-1); }
+@media (max-width: 1100px) {
+  .torch { transform: scale(0.75); transform-origin: top center; }
+}
+@media (max-width: 767px) {
+  .torch { top: calc(5vh + 64px); transform: scale(0.42); }
+  .torch-left { left: calc(12vw - 18px); }
+  .torch-right { right: calc(12vw - 18px); }
+}
+.torch-sprite {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 12px rgba(0, 0, 0, 0.75)) brightness(calc(0.75 + var(--f, 0.85) * 0.3));
+}
+
+/* Luz sobre el muro: se inclina con el viento (--shift) y respira con la llama (--f). */
+.torch-light {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 760px;
+  height: 760px;
+  margin: -380px 0 0 -380px;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  opacity: calc(var(--f, 0.85) * 0.95);
+  transform: translateX(var(--shift, 0px)) scale(calc(0.86 + var(--f, 0.85) * 0.18));
+  background: radial-gradient(circle, rgba(255, 176, 72, 0.36) 0%, rgba(242, 130, 46, 0.15) 26%, rgba(200, 90, 30, 0.05) 46%, transparent 64%);
+}
+@media (max-width: 767px) {
+  .torch-light { width: 900px; height: 900px; margin: -450px 0 0 -450px; }
+}
+
+/* Llama viva sobre la canasta del sprite: se dobla con el viento (--lean) y cambia de altura con --f. */
+.torch-flame {
+  position: absolute;
+  left: 50%;
+  bottom: 84%;
+  width: 54px;
+  height: 84px;
+  margin-left: -27px;
+  transform-origin: 50% 100%;
+  transform: skewX(var(--lean, 0deg)) scaleY(calc(0.72 + var(--f, 0.85) * 0.4)) scaleX(calc(1.08 - var(--f, 0.85) * 0.12));
+  mix-blend-mode: screen;
+}
+.torch-flame::before,
+.torch-flame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50% 50% 44% 44% / 64% 64% 36% 36%;
+  background: radial-gradient(ellipse 50% 62% at 50% 80%, #fff4cf 0%, #ffc457 24%, #f2701f 52%, rgba(190, 50, 15, 0) 74%);
+  filter: blur(1.2px);
+  animation: flame-lick 0.9s ease-in-out infinite alternate;
+}
+.torch-flame::after {
+  inset: 22% 18% 0;
+  opacity: 0.8;
+  animation-duration: 0.63s;
+  animation-delay: -0.3s;
+}
+.torch-right .torch-flame::before { animation-duration: 1.07s; }
+@keyframes flame-lick {
+  from { transform: translateX(-1px) scale(1, 1); }
+  to { transform: translateX(2px) scale(0.93, 1.07); }
+}
+
+/* Chispas que suben y se desvían con el viento. */
+.torch-sparks {
+  position: absolute;
+  left: 50%;
+  bottom: 96%;
+  width: 0;
+  height: 0;
+}
+.torch-sparks i {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #ffcf6e;
+  box-shadow: 0 0 6px #ff9a2e;
+  opacity: 0;
+  animation: spark 2.6s ease-out infinite;
+}
+.torch-sparks i:nth-child(2) { animation-delay: -0.9s; animation-duration: 3.1s; left: -6px; }
+.torch-sparks i:nth-child(3) { animation-delay: -1.7s; animation-duration: 2.2s; left: 5px; }
+@keyframes spark {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(var(--shift, 0px) * 0.6 + 6px), -90px); }
+}
+
+/* ---------- Pergamino: paneles de contenido, ventanas, ajustes y avisos ---------- */
+
+[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel, .rival-toast) {
+  --paper: #c3ab7d;
+  --paper-2: #b29766;
+  --ink: #2a1c0e;
+  --muted: #5d4930;
+  --line: #957a50;
+  --accent: #8e2914;
+  --ok: #3d5a1b;
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-ok: var(--ok);
+  color: var(--ink);
+  border-color: #6f5432;
+  background-color: #c3ab7d;
+  background-image:
+    radial-gradient(ellipse 80% 70% at 50% 40%, rgba(255, 244, 210, 0.38), transparent 75%),
+    repeating-linear-gradient(0deg, rgba(95, 62, 22, 0.05) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(95, 62, 22, 0.035) 0 2px, transparent 2px 9px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.035' numOctaves='4' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 .36 0 0 0 0 .24 0 0 0 0 .1 0 0 0 .55 -.12'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23p)'/%3E%3C/svg%3E");
+  box-shadow:
+    inset 0 0 70px rgba(80, 45, 12, 0.55),
+    inset 0 0 14px rgba(50, 25, 6, 0.6),
+    0 22px 60px rgba(0, 0, 0, 0.7);
+}
+[data-skin='crypt'] .page {
+  position: relative;
+  border-width: 1px;
+  border-style: solid;
+  padding: clamp(16px, 3vw, 34px) clamp(14px, 3vw, 34px);
+}
+[data-skin='crypt'] :is(.page, .modal-panel) :is(h1, h2) {
+  text-shadow: 0 1px 0 rgba(255, 240, 205, 0.35);
+}
+/* Tarjetas y secciones dentro del pergamino: un tono más oscuro, sin otra textura encima. */
+[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) .surface {
+  background: rgba(120, 85, 40, 0.12);
+  border-color: #8a6e46;
+}
+
+/* Rodillos del papiro: arriba y abajo de cada panel de contenido y de cada ventana. */
+[data-skin='crypt'] :is(.page, .modal-panel)::before,
+[data-skin='crypt'] :is(.page, .modal-panel)::after {
+  content: '';
+  position: absolute;
+  left: -12px;
+  right: -12px;
+  height: 20px;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(to bottom, #3e2a15 0%, #8d6b40 22%, #d6bb88 42%, #a07c4c 62%, #5a3e1f 85%, #2e1f0f 100%);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(30, 18, 6, 0.6);
+}
+[data-skin='crypt'] :is(.page, .modal-panel)::before { top: -10px; }
+[data-skin='crypt'] :is(.page, .modal-panel)::after { top: calc(100% - 10px); }
+
+/* Pantallas: el pergamino se desenrolla de arriba abajo (el rodillo inferior baja y revela el contenido). */
+[data-skin='crypt'] .page-enter { animation: unroll 620ms cubic-bezier(.25,.8,.25,1) both; }
+[data-skin='crypt'] .page-enter::after { animation: roll-down 620ms cubic-bezier(.25,.8,.25,1) both; }
+/* El borde inferior visible sigue al centro del rodillo (top + 10px); al final se quita el recorte. */
+@keyframes unroll {
+  0% { clip-path: inset(-24px -24px calc(100% - 12px) -24px); }
+  98% { clip-path: inset(-24px -24px 0 -24px); }
+  99% { clip-path: inset(-24px); }
+  100% { clip-path: none; }
+}
+@keyframes roll-down {
+  from { top: 2px; }
+  to { top: calc(100% - 10px); }
+}
+
+/* Ventanas: también se desenrollan; al cerrar se enrollan de nuevo. */
+[data-skin='crypt'] .modal-panel { animation: unroll 460ms cubic-bezier(.25,.8,.25,1) both; }
+[data-skin='crypt'] .modal-panel::after { animation: roll-down 460ms cubic-bezier(.25,.8,.25,1) both; }
+[data-skin='crypt'] [data-closing] .modal-panel { animation: roll-up 170ms ease-in both; }
+@keyframes roll-up {
+  from { clip-path: inset(-24px); }
+  to { clip-path: inset(-24px -24px calc(100% - 12px) -24px); }
+}
+
+/* Ajustes: pergamino que se despliega desde la derecha. */
+[data-skin='crypt'] .settings-panel { animation: unroll-side 420ms cubic-bezier(.25,.8,.25,1) both; }
+@keyframes unroll-side {
+  0% { clip-path: inset(0 0 0 calc(100% - 14px)); }
+  99% { clip-path: inset(0); }
+  100% { clip-path: none; }
+}
+
+/* ---------- Barras: piedra oscura ---------- */
+
+[data-skin='crypt'] .app-header,
+[data-skin='crypt'] .app-tabbar {
+  background: rgba(12, 10, 8, 0.94);
+  border-color: #3a3027;
+  box-shadow: 0 1px 0 rgba(242, 160, 58, 0.1);
+}
+
+/* ---------- Botones de piedra tallada ---------- */
+
+[data-skin='crypt'] .btn {
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 230, 190, 0.1), inset 0 -2px 0 rgba(0, 0, 0, 0.45), 0 2px 0 rgba(7, 6, 5, 0.8);
+}
+[data-skin='crypt'] .btn[data-variant='primary'] {
+  background: linear-gradient(#3d3229, #261f19);
+  border-color: #5c4b3a;
+  color: #f1e4c6;
+}
+[data-skin='crypt'] .btn[data-variant='secondary'] {
+  background: linear-gradient(#5b3e22, #3d2914); /* Cuero. */
+  border-color: #2a1c0e;
+  color: #f1e4c6;
+}
+[data-skin='crypt'] .btn[data-variant='ghost'] { box-shadow: none; }
+@keyframes stone-press {
+  0% { transform: translateY(0); }
+  35% { transform: translate(-1px, 2px); }
+  60% { transform: translate(1px, 2px); }
+  100% { transform: translateY(1px); }
+}
+
+/* ---------- Hover: cada elemento interactivo se ilumina como al acercarle una antorcha ---------- */
+
+[data-skin='crypt'] :is(button, [role='tab'], [role='radio'], [role='switch'], [role='checkbox'], summary, select, input[type='text'], a[href][class~='border']):not(:disabled):hover {
+  border-color: var(--torch);
+  animation: torch-near 1.7s ease-in-out infinite;
+}
+/* Al presionar: se hunde como piedra (misma especificidad que el hover, va después para ganarle). */
+[data-skin='crypt'] :is(button, [role='tab'], [role='radio'], [role='switch'], [role='checkbox'], summary, select, input[type='text'], a[href][class~='border']):not(:disabled):active {
+  animation: stone-press 200ms ease-out, torch-near 1.7s ease-in-out infinite;
+}
+[data-skin='crypt'] .btn:is([data-variant='primary'], [data-variant='secondary']):not(:disabled):hover { color: #fff3da; }
+[data-skin='crypt'] a[href]:hover {
+  text-shadow: 0 0 10px rgba(242, 160, 58, 0.65), 0 0 2px rgba(255, 210, 140, 0.5);
+}
+@keyframes torch-near {
+  0%, 100% { box-shadow: 0 0 10px 1px rgba(242, 160, 58, 0.36), 0 0 26px rgba(242, 120, 40, 0.16); }
+  27% { box-shadow: 0 0 15px 2px rgba(250, 175, 70, 0.48), 0 0 34px rgba(242, 120, 40, 0.26); }
+  52% { box-shadow: 0 0 8px 0 rgba(242, 150, 50, 0.28), 0 0 20px rgba(242, 120, 40, 0.12); }
+  78% { box-shadow: 0 0 13px 1px rgba(246, 165, 60, 0.42), 0 0 30px rgba(242, 120, 40, 0.22); }
+}
+
+/* ---------- Juego ---------- */
+
+/* Error: la superficie se resquebraja. */
+[data-skin='crypt'] .answer-wrong { animation: shake 300ms; }
+[data-skin='crypt'] .answer-wrong::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60' preserveAspectRatio='none'%3E%3Cpath d='M0 31 L22 27 L35 36 L58 24 L71 33 L92 29 L104 40 L118 26 L136 34 L151 22 L170 35 L200 28 M58 24 L63 8 M104 40 L99 58 M151 22 L158 4 M35 36 L31 52' fill='none' stroke='%23000' stroke-width='2.2' stroke-linejoin='bevel'/%3E%3Cpath d='M0 32 L22 28 L35 37 L58 25 L71 34 L92 30 L104 41 L118 27 L136 35 L151 23 L170 36 L200 29' fill='none' stroke='%23e2d4b4' stroke-opacity='.35' stroke-width='.8'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  animation: crack-appear 900ms ease-out forwards;
+}
+@keyframes crack-appear {
+  0% { opacity: 0; clip-path: inset(0 100% 0 0); }
+  25% { opacity: 1; clip-path: inset(0 0 0 0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Rival acierta: una nota de pergamino entra desde el costado. */
+[data-skin='crypt'] .rival-toast { animation: note-in 420ms cubic-bezier(.25,.9,.3,1.15) both; }
+@keyframes note-in {
+  0% { opacity: 0; transform: translateX(110%) rotate(4deg); }
+  70% { opacity: 1; transform: translateX(-6px) rotate(-0.8deg); }
+  100% { transform: rotate(-0.5deg); }
+}
+[data-skin='crypt'] .lane-gain { background: var(--torch); }
+
+/* Código de sala: tinta sobre pergamino. */
+[data-skin='crypt'] .room-code {
+  color: #2a1c0e;
+  text-shadow: 0 1px 0 rgba(255, 240, 205, 0.4);
+}

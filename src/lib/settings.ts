@@ -3,10 +3,10 @@ import { useSyncExternalStore } from 'react';
 
 export type ThemePreference = 'system' | 'light' | 'dark'; // Modo de color (solo tema Normal).
 /** Tema visual: colores, tipografía, fondo, animaciones y sonidos. */
-export type Skin = 'normal' | 'medieval' | 'cyber';
+export type Skin = 'normal' | 'crypt' | 'cyber';
 export const SKINS: Record<Skin, { title: string; description: string }> = {
   normal: { title: 'Normal', description: 'Papel y tinta. Claro u oscuro.' },
-  medieval: { title: 'Medieval', description: 'Una cripta de piedra a la luz de las antorchas.' },
+  crypt: { title: 'Cripta', description: 'Piedra, musgo y pergamino a la luz de las antorchas.' },
   cyber: { title: 'Cyber', description: 'Realidad virtual de neón y hologramas.' },
 };
 export type MotionPreference = 'system' | 'full' | 'reduced';
@@ -42,14 +42,17 @@ const DEFAULTS: Settings = {
   skin: 'normal',
 };
 
-const SKIN_IDS: readonly Skin[] = ['normal', 'medieval', 'cyber'];
+const SKIN_IDS: readonly Skin[] = ['normal', 'crypt', 'cyber'];
+// Ids anteriores: el tema Cripta se llamó Medieval hasta v1.0.1.
+const LEGACY_SKINS: Record<string, Skin> = { medieval: 'crypt' };
 
 function read(): Settings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<Settings>;
-    const skin = SKIN_IDS.includes(parsed.skin as Skin) ? (parsed.skin as Skin) : DEFAULTS.skin;
+    const rawSkin = LEGACY_SKINS[String(parsed.skin)] ?? parsed.skin;
+    const skin = SKIN_IDS.includes(rawSkin as Skin) ? (rawSkin as Skin) : DEFAULTS.skin;
     return { ...DEFAULTS, ...parsed, skin, sounds: { ...DEFAULTS.sounds, ...(parsed.sounds ?? {}) } };
   } catch {
     return DEFAULTS;
@@ -100,7 +103,7 @@ export function applyDocumentSettings(settings: Settings = current): void {
   root.setAttribute('data-skin', settings.skin);
   // Barra del navegador móvil acorde al tema.
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', settings.skin === 'medieval' ? '#0e0c0a' : settings.skin === 'cyber' ? '#05060d' : '#f4efe4');
+  if (meta) meta.setAttribute('content', settings.skin === 'crypt' ? '#0e0c0a' : settings.skin === 'cyber' ? '#05060d' : '#f4efe4');
 }
 
 export function prefersReducedMotion(): boolean {

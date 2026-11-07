@@ -4,6 +4,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-07
+
+### Added
+
+- Cripta: antorchas de Gemini a los costados, con llama viva, chispas y luz que respira; ráfagas de viento al azar doblan las llamas, desplazan la luz y oscurecen la cripta.
+- Cripta: el muro se desplaza al cambiar de sección y sigue levemente al puntero (paralaje).
+- Cripta: el contenido, las ventanas, los ajustes y los avisos son pergaminos; las pantallas y ventanas se desenrollan al entrar y se enrollan al cerrar.
+- Cripta: todos los elementos interactivos (botones, pestañas, opciones, campos y tarjetas) se iluminan al pasar el puntero, como si se les acercara una antorcha.
+- Cyber: fuente de títulos incluida (`public/fonts/cyber-display.ttf`).
+
+### Changed
+
+- El tema Medieval pasa a llamarse **Cripta**. Quien lo tenía elegido lo conserva; sus recursos pasan a `public/themes/crypt/`.
+
 ## [1.0.1] - 2026-11-07
 
 ### Changed
