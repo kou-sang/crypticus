@@ -26,6 +26,7 @@ type ModeFields = Pick<
   | 'duel'
   | 'royale'
   | 'maxHintsPerClue'
+  | 'hintsPerGame'
   | 'surrender'
   | 'cooldownSec'
 >;
@@ -44,7 +45,9 @@ export function describeMode(c: ModeFields): string {
 export function describeModifiers(c: ModeFields): string[] {
   if (c.game === 'royale') return ['Progresiva', 'Último en pie'];
   if (c.game === 'duel') {
-    const tags = [`Daño por ${DUEL_DAMAGE_LABELS[c.duel?.damage ?? 'difficulty'].title.toLowerCase()}`, 'Combo'];
+    const tags = [`Daño por ${DUEL_DAMAGE_LABELS[c.duel?.damage ?? 'difficulty'].title.toLowerCase()}`];
+    if (c.duel?.combo !== false) tags.push('Combo');
+    if (c.surrender?.enabled) tags.push(`Rendirse ×${c.surrender.maxUses}`);
     if (c.comeback && c.comeback !== 'off') tags.push(COMEBACK_LABELS[c.comeback]);
     return tags;
   }
@@ -53,7 +56,7 @@ export function describeModifiers(c: ModeFields): string[] {
     if (c.difficultyVote) tags.push('Vota dificultad');
     if (c.winByTwo) tags.push('Diferencia de dos');
     if (c.surrender?.enabled) tags.push(`Rendirse ×${c.surrender.maxUses}`);
-    tags.push(c.maxHintsPerClue > 0 ? 'Con pistas' : 'Sin pistas');
+    tags.push(c.maxHintsPerClue === 0 ? 'Sin pistas' : c.hintsPerGame ? `${c.hintsPerGame} ${c.hintsPerGame === 1 ? 'pista' : 'pistas'} por partida` : 'Con pistas');
     if (c.cooldownSec) tags.push(`Cooldown ${c.cooldownSec}s`);
     tags.push('10 min');
     return tags;

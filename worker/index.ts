@@ -102,6 +102,7 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
     extraTime: competition.extraTime,
     bossLevel: competition.bossLevel,
     maxHintsPerClue: competition.maxHintsPerClue,
+    ...(typeof competition.hintsPerGame === 'number' ? { hintsPerGame: competition.hintsPerGame } : {}),
     wrongPenalty: competition.wrongPenalty,
     tierMix: competition.tierMix,
     hideScoreboard: competition.hideScoreboard === true,

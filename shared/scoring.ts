@@ -250,6 +250,9 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
     }
   }
   if (config.maxHintsPerClue < 0 || config.maxHintsPerClue > 10) errors.push('Las pistas por criptico deben estar entre 0 y 10.');
+  if (config.hintsPerGame !== undefined && (config.hintsPerGame < 1 || config.hintsPerGame > 10)) {
+    errors.push('Las pistas por partida deben estar entre 1 y 10.');
+  }
   if (config.wrongPenalty < 0 || config.wrongPenalty > LIMITS.maxWrongPenalty) {
     errors.push(`La penalización debe estar entre 0 y ${LIMITS.maxWrongPenalty}.`);
   }

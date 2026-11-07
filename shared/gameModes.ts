@@ -11,6 +11,9 @@ import type {
 export type RaceIntensity = 'peaceful' | 'hardcore';
 export const SUDDEN_DEATH_OPTIONS = [0, 3, 5, 10] as const;
 export const RACE_TARGET_OPTIONS = [3, 5, 7, 10] as const;
+/** Race: pistas totales por jugador en toda la partida. */
+export const HINTS_PER_GAME_OPTIONS = [1, 2] as const;
+
 export const DUEL_HP_OPTIONS = [100, 150, 200, 300, 500] as const;
 export const ROUND_INTERVAL_SEC = 3;
 export const RACE_DURATION_SEC = 10 * 60; // Tope de una carrera.
@@ -25,6 +28,7 @@ export interface RaceSettings {
   winByTwo: boolean;
   surrender: { enabled: boolean; maxUses: number };
   hints: boolean;
+  hintsPerGame: number; // Con pistas: 1 o 2 en toda la partida (ver HINTS_PER_GAME_OPTIONS).
   cooldownSec: number;
 }
 
@@ -73,6 +77,7 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
     winByTwo: false,
     surrender: { enabled: true, maxUses: 2 },
     hints: true,
+    hintsPerGame: 2,
     cooldownSec: 2,
   },
   royale: { baseSec: 120, incrementSec: 5, cooldownSec: 1 },
@@ -153,6 +158,7 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
       extraTime: { enabled: false, seconds: 60, maxUses: 1 },
       surrender: race.surrender,
       maxHintsPerClue: race.hints ? 2 : 0,
+      ...(race.hints ? { hintsPerGame: race.hintsPerGame } : {}),
       cooldownSec: race.cooldownSec,
     },
     maxPlayers: settings.game === 'boss' ? MODE_MAX_PLAYERS.boss : MODE_MAX_PLAYERS.race,
@@ -182,6 +188,7 @@ export function settingsFromConfig(config: CompetitionConfig): ModeSettings {
             winByTwo: config.winByTwo,
             surrender: config.surrender ? { ...config.surrender } : { ...d.race.surrender, enabled: false },
             hints: config.maxHintsPerClue > 0,
+            hintsPerGame: config.hintsPerGame ?? d.race.hintsPerGame,
             cooldownSec: config.cooldownSec ?? d.race.cooldownSec,
           }
         : d.race,
