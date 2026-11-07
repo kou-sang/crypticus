@@ -1,7 +1,7 @@
 // Inicialización del SDK cliente. Caché persistente en IndexedDB => cargas instantáneas y menos lecturas.
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -23,6 +23,22 @@ if (missing.length > 0) {
 
 export const firebaseApp = initializeApp(config);
 export const auth = getAuth(firebaseApp);
-export const db = initializeFirestore(firebaseApp, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-});
+/**
+ * iPhone y iPad (todos los navegadores usan WebKit): el IndexedDB de Safari puede colgar la caché persistente
+ * con varias pestañas, y el streaming de Firestore puede no llegar nunca (bloqueadores de contenido, Private Relay).
+ * Resultado: escrituras y lecturas que no terminan (p. ej. el alta del perfil). Ahí se usa caché en memoria y
+ * long polling forzado; en el resto, caché persistente y detección automática.
+ */
+function isAppleMobile(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const iPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1; // iPad con "versión de escritorio".
+  return iOS || iPadOS;
+}
+
+export const db = isAppleMobile()
+  ? initializeFirestore(firebaseApp, { localCache: memoryLocalCache(), experimentalForceLongPolling: true })
+  : initializeFirestore(firebaseApp, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalAutoDetectLongPolling: true,
+    });

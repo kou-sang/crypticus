@@ -13,9 +13,9 @@ Mientras no existan, se ve `wall-fallback.svg`, un muro repetible del mismo esti
 - **Sin antorchas ni fuentes de luz en el muro.** Las antorchas son un recurso aparte (`torch.webp`) y la luz, la llama, el viento y las chispas se animan por código encima.
 - **Centro tranquilo.** La losa de contenido tapa el centro, así que el detalle (moho, enredaderas, piedras grandes) va hacia los costados.
 
-### Antorcha
+### Antorchas
 
-`public/themes/crypt/torch.webp` es la antorcha de la izquierda de la imagen de Gemini, recortada con fondo transparente (115 × 445). La de la derecha es la misma, espejada. Para cambiarla, pide a Gemini la antorcha sola sobre fondo verde puro (`#00FF00`) y recórtala; con fondo de muro el recorte automático pierde partes.
+`public/themes/crypt/torch-1.webp`, `torch-2.webp` y `torch-3.webp` son las tres antorchas de Gemini recortadas del fondo verde (con el reflejo verde del fuego corregido). El tema usa la 1 a ambos lados (la derecha espejada). Para usar otra, cambia el `src` en `src/themes/SkinBackdrop.tsx`. La llama animada se dibuja encima de la canasta, a la altura de la 1.
 
 ### Cómo pedírselo a Gemini (Nano Banana Pro)
 

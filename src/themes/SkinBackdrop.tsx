@@ -10,7 +10,7 @@ function Torch({ side }: { side: 'left' | 'right' }) {
   return (
     <div className={`torch torch-${side}`} data-torch={side}>
       <span className="torch-light" />
-      <img className="torch-sprite" src="/themes/crypt/torch.webp" alt="" draggable={false} decoding="async" />
+      <img className="torch-sprite" src="/themes/crypt/torch-1.webp" alt="" draggable={false} decoding="async" />
       <span className="torch-flame" />
       <span className="torch-sparks">
         <i />

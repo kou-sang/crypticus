@@ -155,7 +155,8 @@ export function CluePanel({
   };
 
   return (
-    <div className="fade-in">
+    // data-clue-panel: se centra en pantalla con el teclado abierto. data-keep-keyboard: tocar aquí no cierra el teclado.
+    <div className="fade-in scroll-mt-28" data-clue-panel data-keep-keyboard>
       <div className="flex flex-wrap items-center gap-2">
         <p className="font-mono text-xs uppercase tracking-widest text-muted">{heading}</p>
         <Badge tone={TIER_TONE[cryptic.tier]}>{DIFFICULTY_LABELS[cryptic.tier]}</Badge>

@@ -1,5 +1,5 @@
 // Sala de competencia: lobby (Firestore) -> juego en vivo (WebSocket al Durable Object) -> resultados (Firestore).
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router';
 import { collection, doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -9,6 +9,8 @@ import { useFriends } from '../../hooks/useFriends';
 import { useGameChannel } from '../../hooks/useGameChannel';
 import { useReached } from '../../hooks/useNow';
 import { cx } from '../../lib/utils';
+import { setPlaying } from '../../lib/playing';
+import { releaseKeyboard } from './keyboardInput';
 import { gameDeadline, rankMetric } from '../../../shared/engine';
 import type { Competition, Participant } from '../../../shared/types';
 import { Badge, EmptyState, PageHeader, PageLoader } from '../../components/ui';
@@ -56,6 +58,35 @@ export default function CompetitionRoom() {
     [live, lobbyParticipants.data],
   );
   const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId }), [competitionId]);
+
+  // Partida en curso para el resto de la app (barra inferior oculta, confirmación al salir, aviso al cerrar).
+  const playingNow =
+    comp !== null &&
+    comp.participantIds.includes(profile.uid) &&
+    live !== null &&
+    live.status === 'live' &&
+    !(expired && !live.tiebreak);
+  useEffect(() => {
+    setPlaying(playingNow);
+    if (!playingNow) {
+      releaseKeyboard();
+      return;
+    }
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [playingNow]);
+  // Al salir de la sala: se libera todo.
+  useEffect(
+    () => () => {
+      setPlaying(false);
+      releaseKeyboard();
+    },
+    [],
+  );
 
   if (competition.loading) return <PageLoader />;
   if (!comp)

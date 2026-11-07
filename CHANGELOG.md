@@ -14,8 +14,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 - Cripta: todos los elementos interactivos (botones, pestañas, opciones, campos y tarjetas) se iluminan al pasar el puntero, como si se les acercara una antorcha.
 - Cyber: fuente de títulos incluida (`public/fonts/cyber-display.ttf`).
 
+### Fixed
+
+- iPhone/iPad: el alta del perfil (nombre y @usuario) podía quedar colgada sin salir de la bienvenida. En iOS Firestore usa caché en memoria y long polling; el alta tiene un límite de 15 s con un mensaje claro y tolera reintentos.
+- Celular en partida: el teclado ya no se cierra al cambiar de criptico ni durante la pausa entre rondas (un único input de juego que nunca se desmonta), y tocar las celdas o los botones del juego no lo cierra. El criptico se centra encima del teclado.
+- Celular en partida: se oculta la barra inferior (un toque accidental en «Inicio» sacaba del juego); los enlaces de la barra superior piden confirmación y cerrar o recargar la pestaña avisa antes.
+
 ### Changed
 
+- En rondas (Race Hardcore, Duel) la solución anterior solo se muestra en la pausa entre rondas; ya no queda al costado del criptico nuevo.
+- Fondos de Cripta nuevos (rocas más chicas) y antorchas recortadas del croma verde (`torch-1/2/3.webp`; se usa la 1).
 - El tema Medieval pasa a llamarse **Cripta**. Quien lo tenía elegido lo conserva; sus recursos pasan a `public/themes/crypt/`.
 
 ## [1.0.1] - 2026-11-07

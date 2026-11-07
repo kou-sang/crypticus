@@ -1,11 +1,10 @@
 // Celdas de respuesta editables, estilo crucigrama.
-// Un único <input> invisible recibe el teclado (físico o móvil); las celdas solo pintan y mueven el cursor.
-import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+// El teclado (físico o móvil) llega por un único <input> invisible compartido por toda la partida
+// (keyboardInput.ts): así el teclado del celular no se cierra al cambiar de criptico.
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { cx } from '../../lib/utils';
 import { enumerationGroups, toCellLetter } from './playUtils';
-
-// Centinela: permite detectar el borrado en teclados móviles que no emiten `keydown` de Backspace.
-const SENTINEL = ' ';
+import { attachKeyboard, centerInView, focusKeyboard, isKeyboardFocused } from './keyboardInput';
 
 export function AnswerGrid({
   enumeration,
@@ -24,59 +23,91 @@ export function AnswerGrid({
   celebrate: boolean;
   wrong: boolean;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [cursor, setCursor] = useState(() => Math.max(0, letters.findIndex((l) => !l)));
   const [focused, setFocused] = useState(false);
   const total = letters.length;
 
+  // Los manejadores del input compartido leen siempre el último estado.
+  const latest = useRef({ letters, cursor, locked, total, onLetters, onSubmit });
+  latest.current = { letters, cursor, locked, total, onLetters, onSubmit };
+
+  /** Lleva el criptico al centro de lo que se ve (con el teclado abierto, arriba del teclado). */
+  const center = () => {
+    const panel = formRef.current?.closest<HTMLElement>('[data-clue-panel]') ?? formRef.current;
+    if (panel) centerInView(panel);
+  };
+
+  useEffect(() => {
+    const write = (chars: string) => {
+      const { letters: current, cursor: start, locked: isLocked, total: size, onLetters: emit } = latest.current;
+      if (isLocked) return;
+      const next = [...current];
+      let position = start;
+      for (const char of chars) {
+        const letter = toCellLetter(char);
+        if (!letter) continue;
+        next[position] = letter;
+        if (position < size - 1) position += 1;
+      }
+      emit(next);
+      setCursor(position);
+    };
+    const erase = () => {
+      const { letters: current, cursor: start, locked: isLocked, onLetters: emit } = latest.current;
+      if (isLocked) return;
+      const next = [...current];
+      // Si la celda actual está vacía, borra la anterior (comportamiento de crucigrama).
+      const position = next[start] ? start : Math.max(0, start - 1);
+      next[position] = '';
+      emit(next);
+      setCursor(position);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      const { cursor: at, total: size, letters: current, locked: isLocked, onLetters: emit, onSubmit: submit } = latest.current;
+      const moves: Record<string, number> = { ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: size - 1 };
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submit();
+      } else if (event.key in moves) {
+        event.preventDefault();
+        setCursor(Math.min(Math.max(moves[event.key] ?? 0, 0), size - 1));
+      } else if (event.key === 'Delete' && !isLocked) {
+        event.preventDefault();
+        const next = [...current];
+        next[at] = '';
+        emit(next);
+      }
+    };
+    const detach = attachKeyboard({ onText: write, onErase: erase, onKey, onFocusChange: setFocused });
+    // Escritorio: el foco va solo a la grilla nueva. Celular: si el teclado ya estaba abierto, sigue abierto.
+    if (!isKeyboardFocused() && window.matchMedia('(pointer: fine)').matches) focusKeyboard();
+    if (isKeyboardFocused()) window.requestAnimationFrame(center);
+    return detach;
+  }, []);
+
+  // Con el teclado del celular abriéndose o cerrándose, el criptico vuelve al centro.
+  useEffect(() => {
+    if (!focused) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    let timer = 0;
+    const onResize = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(center, 120);
+    };
+    viewport.addEventListener('resize', onResize);
+    return () => {
+      window.clearTimeout(timer);
+      viewport.removeEventListener('resize', onResize);
+    };
+  }, [focused]);
+
   const focusAt = (index: number) => {
     if (locked) return;
     setCursor(Math.min(Math.max(index, 0), total - 1));
-    inputRef.current?.focus({ preventScroll: true });
-  };
-
-  const write = (chars: string) => {
-    const next = [...letters];
-    let position = cursor;
-    for (const char of chars) {
-      const letter = toCellLetter(char);
-      if (!letter) continue;
-      next[position] = letter;
-      if (position < total - 1) position += 1;
-    }
-    onLetters(next);
-    setCursor(position);
-  };
-
-  const erase = () => {
-    const next = [...letters];
-    // Si la celda actual está vacía, borra la anterior (comportamiento de crucigrama).
-    const position = next[cursor] ? cursor : Math.max(0, cursor - 1);
-    next[position] = '';
-    onLetters(next);
-    setCursor(position);
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    const moves: Record<string, number> = { ArrowLeft: cursor - 1, ArrowRight: cursor + 1, Home: 0, End: total - 1 };
-    if (event.key in moves) {
-      event.preventDefault();
-      setCursor(Math.min(Math.max(moves[event.key] ?? 0, 0), total - 1));
-    } else if (event.key === 'Backspace') {
-      event.preventDefault();
-      erase();
-    } else if (event.key === 'Delete') {
-      event.preventDefault();
-      const next = [...letters];
-      next[cursor] = '';
-      onLetters(next);
-    }
-  };
-
-  const handleChange = (value: string) => {
-    if (locked) return;
-    if (value.length < SENTINEL.length) return erase();
-    write(value.startsWith(SENTINEL) ? value.slice(SENTINEL.length) : value);
+    focusKeyboard();
+    window.setTimeout(center, 250);
   };
 
   const handleSubmit = (event: FormEvent) => {
@@ -86,9 +117,9 @@ export function AnswerGrid({
 
   let position = 0;
   return (
-    <form onSubmit={handleSubmit} data-wrong={wrong || undefined} className={cx('answer-grid relative', wrong && 'answer-wrong')}>
+    <form ref={formRef} onSubmit={handleSubmit} data-wrong={wrong || undefined} className={cx('answer-grid relative', wrong && 'answer-wrong')}>
       {/* Las casillas son botones: sin sonido de clic (el tipeo ya suena). */}
-      <div data-sound="off" className="flex flex-wrap gap-3" onClick={() => !locked && inputRef.current?.focus({ preventScroll: true })}>
+      <div data-sound="off" className="flex flex-wrap gap-3" onClick={() => focusAt(cursor)}>
         {enumerationGroups(enumeration).map((size, groupIndex) => (
           <div key={groupIndex} className="flex gap-px bg-ink p-px">
             {Array.from({ length: size }, () => {
@@ -120,26 +151,6 @@ export function AnswerGrid({
           </div>
         ))}
       </div>
-      <input
-        ref={inputRef}
-        value={SENTINEL}
-        onChange={(event) => handleChange(event.target.value)}
-        onKeyDown={handleKeyDown}
-        onFocus={(event) => {
-          setFocused(true);
-          event.currentTarget.setSelectionRange(SENTINEL.length, SENTINEL.length);
-        }}
-        onBlur={() => setFocused(false)}
-        readOnly={locked}
-        autoFocus
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="characters"
-        spellCheck={false}
-        enterKeyHint="send"
-        aria-label={`Tu respuesta: ${total} letras ${enumeration}`}
-        className="absolute left-0 top-0 size-px text-base opacity-0"
-      />
     </form>
   );
 }
