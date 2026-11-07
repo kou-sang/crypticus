@@ -4,7 +4,7 @@ import { DemoCryptic } from '../../components/DemoCryptic';
 import { useSession } from '../../hooks/useAuth';
 import { useFriends } from '../../hooks/useFriends';
 import { GAME_LABELS } from '../../../shared/scoring';
-import { RANKED_MODES } from '../../../shared/types';
+import { GAME_MODES } from '../../../shared/types';
 
 const TODAY = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -27,7 +27,7 @@ export default function DashboardPage() {
       )}
 
       <p className="text-lg leading-relaxed">
-        Cripticos en español, en tiempo real y contra otras personas. Cada pista tiene una explicación, y nunca se repite.
+        Cripticos en español, en tiempo real y contra otras personas. Cada criptico tiene su explicación y no se repite.
       </p>
 
       <div className="mt-6">
@@ -41,13 +41,18 @@ export default function DashboardPage() {
             Jugar →
           </Link>
         </div>
-        <ul className="mt-3 grid gap-px border border-ink bg-ink sm:grid-cols-3">
-          {RANKED_MODES.map((mode) => (
-            <li key={mode} className="bg-paper p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">{GAME_LABELS[mode].tagline}</p>
-              <p className="mt-1 font-display text-xl uppercase">{GAME_LABELS[mode].title}</p>
-            </li>
-          ))}
+        <ul className="mt-3 grid grid-cols-2 gap-px border border-ink bg-ink sm:grid-cols-4">
+          {GAME_MODES.map((mode) => {
+            const soon = mode === 'boss';
+            return (
+              <li key={mode} className={soon ? 'bg-paper-2 p-4' : 'bg-paper p-4'}>
+                <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${soon ? 'text-muted' : 'text-accent'}`}>
+                  {soon ? 'Pronto' : GAME_LABELS[mode].tagline}
+                </p>
+                <p className={`mt-1 font-display text-xl uppercase ${soon ? 'text-muted' : ''}`}>{GAME_LABELS[mode].title}</p>
+              </li>
+            );
+          })}
         </ul>
       </section>
 

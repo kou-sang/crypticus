@@ -11,6 +11,7 @@ import { errorMessage, pairId } from '../../lib/utils';
 import { Avatar, Button, EmptyState, ErrorBanner, PageLoader, Spinner } from '../../components/ui';
 import { RANKED_MODES, type HistoryEntry, type UserProfile } from '../../../shared/types';
 import { BackLink } from '../../components/BackLink';
+import { GAME_LABELS } from '../../../shared/scoring';
 import { ModePanel } from './ModePanel';
 
 // Las partidas se reparten entre los tres paneles: se piden suficientes para que cada modo tenga historia.
@@ -125,6 +126,18 @@ export default function ProfilePage() {
           {RANKED_MODES.map((mode) => (
             <ModePanel key={mode} mode={mode} user={profile} history={history} />
           ))}
+          <section aria-label="Boss" className="border-2 border-dashed border-line px-4 py-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="font-display text-2xl text-muted">
+                <span aria-hidden className="mr-2">
+                  ♛
+                </span>
+                {GAME_LABELS.boss.title}
+              </h2>
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted">Pronto</span>
+            </div>
+            <p className="mt-2 text-sm text-muted">{GAME_LABELS.boss.description}</p>
+          </section>
         </div>
       )}
     </>

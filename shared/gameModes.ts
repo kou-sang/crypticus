@@ -163,7 +163,6 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
       intervalSec: ROUND_INTERVAL_SEC, // Pausa de 3 s con la solución (en Pacífico, por jugador).
       difficultyVote: hardcore && race.difficultyVote,
       winByTwo: race.winByTwo,
-      extraTime: { enabled: false, seconds: 60, maxUses: 1 },
       surrender: race.surrender,
       maxHintsPerClue: race.hints ? 2 : 0,
       ...(race.hints ? { hintsPerGame: race.hintsPerGame } : {}),
