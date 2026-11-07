@@ -4,15 +4,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-11-07
-
-### Added
-
-- Cripta: antorchas de Gemini a los costados, con llama viva, chispas y luz que respira; ráfagas de viento al azar doblan las llamas, desplazan la luz y oscurecen la cripta.
-- Cripta: el muro se desplaza al cambiar de sección y sigue levemente al puntero (paralaje).
-- Cripta: el contenido, las ventanas, los ajustes y los avisos son pergaminos; las pantallas y ventanas se desenrollan al entrar y se enrollan al cerrar.
-- Cripta: todos los elementos interactivos (botones, pestañas, opciones, campos y tarjetas) se iluminan al pasar el puntero, como si se les acercara una antorcha.
-- Cyber: fuente de títulos incluida (`public/fonts/cyber-display.ttf`).
+## [1.1.1] - 2026-11-07
 
 ### Performance
 
@@ -23,6 +15,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 ### Fixed
 
 - Cyber: la fuente de títulos tenía las letras muy separadas; se ajustó el archivo para que se toquen, como la rotulación de referencia. Los títulos van en amarillo neón con eco cian.
+
+## [1.1.0] - 2026-11-07
+
+### Added
+
+- Cripta: antorchas de Gemini a los costados, con llama viva, chispas y luz que respira; ráfagas de viento al azar doblan las llamas, desplazan la luz y oscurecen la cripta.
+- Cripta: el muro se desplaza al cambiar de sección y sigue levemente al puntero (paralaje).
+- Cripta: el contenido, las ventanas, los ajustes y los avisos son pergaminos; las pantallas y ventanas se desenrollan al entrar y se enrollan al cerrar.
+- Cripta: todos los elementos interactivos (botones, pestañas, opciones, campos y tarjetas) se iluminan al pasar el puntero, como si se les acercara una antorcha.
+- Cyber: fuente de títulos incluida (`public/fonts/cyber-display.ttf`).
+
+### Fixed
+
 - Relojes con sonido y animación: el reloj de partida late cada segundo en los últimos 30 s, avisa al quedar 1 minuto y 30 segundos y hace tic en los últimos 10; la cuenta 3-2-1 suena en cada número, entra con un anillo que se expande y cierra con un sonido de arranque propio de cada tema.
 - iPhone/iPad: el alta del perfil (nombre y @usuario) podía quedar colgada sin salir de la bienvenida. En iOS Firestore usa caché en memoria y long polling; el alta tiene un límite de 15 s con un mensaje claro y tolera reintentos.
 - Celular en partida: el teclado ya no se cierra al cambiar de criptico ni durante la pausa entre rondas (un único input de juego que nunca se desmonta), y tocar las celdas o los botones del juego no lo cierra. El criptico se centra encima del teclado.
