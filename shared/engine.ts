@@ -255,7 +255,7 @@ export function duelMaxIncoming(state: LiveState, uid: string): number {
     comeback: state.config.comeback,
     hp: rival.score,
     rivalHp: me.score,
-    streak: (rival.streak ?? 0) + 1,
+    streak: duel.combo === false ? 1 : (rival.streak ?? 0) + 1,
   });
 }
 
@@ -452,8 +452,10 @@ export function applyAnswer(
   // Duel: acertar primero le quita vida al rival; los aciertos seguidos forman combo.
   if (state.config.duel) {
     const rival = Object.values(state.participants).find((p) => p.uid !== uid);
+    // Sin combo, cada acierto vale como aislado (la racha se sigue contando solo como dato).
     const streak = (participant.streak ?? 0) + 1;
     participant.streak = streak;
+    const comboStreak = state.config.duel.combo === false ? 1 : streak;
     if (rival) rival.streak = 0;
     const damage = rival
       ? Math.min(
@@ -465,14 +467,14 @@ export function applyAnswer(
             comeback: state.config.comeback,
             hp: participant.score,
             rivalHp: rival.score,
-            streak,
+            streak: comboStreak,
           }),
         )
       : 0;
     if (rival) rival.score = Math.max(0, rival.score - damage);
     participant.solvedIds = [...participant.solvedIds, crypticId];
     participant.lastSolvedAt = now;
-    pushEvent(state, { at: now, kind: 'damage', uid, crypticId, tier, points: damage, combo: streak });
+    pushEvent(state, { at: now, kind: 'damage', uid, crypticId, tier, points: damage, combo: comboStreak });
     onRoundSolved(state, uid, now, input.random ?? Math.random);
     return { correct: true, points: damage, finished: evaluate(state, now).finished, stale: false };
   }
@@ -575,7 +577,9 @@ export function toggleSkip(state: LiveState, input: { uid: string; now: number; 
   requireNoTiebreak(state);
   requireParticipant(state, input.uid);
   if (state.config.flow !== 'rounds' || !state.round) throw new GameError('skip_disabled', 'Solo disponible en rondas.');
-  if (state.config.game === 'race') throw new GameError('skip_disabled', 'En Race no se saltea: usa rendirse.');
+  if (state.config.game === 'race' || state.config.game === 'duel') {
+    throw new GameError('skip_disabled', 'En este modo no se saltea: usa rendirse.');
+  }
 
   state.skipVotes = toggle(state.skipVotes, input.uid);
   if (!everyone(state, state.skipVotes)) return { skipped: false };

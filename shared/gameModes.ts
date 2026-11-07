@@ -11,7 +11,7 @@ import type {
 export type RaceIntensity = 'peaceful' | 'hardcore';
 export const SUDDEN_DEATH_OPTIONS = [0, 3, 5, 10] as const;
 export const RACE_TARGET_OPTIONS = [3, 5, 7, 10] as const;
-export const DUEL_HP_OPTIONS = [100, 150, 200] as const;
+export const DUEL_HP_OPTIONS = [100, 150, 200, 300, 500] as const;
 export const ROUND_INTERVAL_SEC = 3;
 export const RACE_DURATION_SEC = 10 * 60; // Tope de una carrera.
 export const COOLDOWN_OPTIONS = [1, 2, 3, 5] as const;
@@ -35,10 +35,12 @@ export interface RoyaleSettings {
 }
 
 export interface DuelSettings {
-  hp: number;
+  hp: number; // De a 50 (ver LIMITS.duelHpStep).
   damage: DuelDamage;
   comeback: ComebackLevel;
   cooldownSec: number;
+  combo: boolean;
+  surrender: { enabled: boolean; maxUses: number }; // En vez de saltear: rendirse, como en Race.
 }
 
 export interface ModeSettings {
@@ -74,7 +76,7 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
     cooldownSec: 2,
   },
   royale: { baseSec: 120, incrementSec: 5, cooldownSec: 1 },
-  duel: { hp: 150, damage: 'difficulty', comeback: 'low', cooldownSec: 2 },
+  duel: { hp: 150, damage: 'difficulty', comeback: 'low', cooldownSec: 2, combo: true, surrender: { enabled: true, maxUses: 2 } },
 };
 
 export const MODE_MAX_PLAYERS: Record<GameMode, number> = { race: 8, royale: 8, duel: 2, boss: 4 };
@@ -113,7 +115,7 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
   }
 
   if (settings.game === 'duel') {
-    const { hp, damage, comeback } = settings.duel;
+    const { hp, damage, comeback, combo, surrender } = settings.duel;
     return {
       config: {
         ...base,
@@ -124,7 +126,8 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
         intervalSec: ROUND_INTERVAL_SEC,
         difficultyVote: false,
         comeback,
-        duel: { hp, damage },
+        duel: { hp, damage, combo },
+        surrender,
         cooldownSec: settings.duel.cooldownSec,
       },
       maxPlayers: MODE_MAX_PLAYERS.duel,
@@ -156,5 +159,44 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
     // Se gana por meta, no por agotar la lista: hay cripticos de sobra para los 10 minutos.
     clueCount: hardcore ? 30 : 60,
     title: `Race a ${race.target}${hardcore ? ' · Hardcore' : ''}`,
+  };
+}
+
+/**
+ * Inversa de `buildConfig`: reconstruye los ajustes del formulario a partir de una partida guardada
+ * (revancha con otros parámetros). Lo que la partida no tenía se completa con los valores por defecto.
+ */
+export function settingsFromConfig(config: CompetitionConfig): ModeSettings {
+  const d = DEFAULT_MODE_SETTINGS;
+  const game = config.game ?? 'race';
+  const hardcore = config.flow === 'rounds';
+  return {
+    game,
+    race:
+      game === 'race'
+        ? {
+            target: config.targetCount,
+            intensity: hardcore ? 'hardcore' : 'peaceful',
+            suddenDeathSec: hardcore ? config.rivalCountdownSec : d.race.suddenDeathSec,
+            difficultyVote: hardcore && config.difficultyVote,
+            winByTwo: config.winByTwo,
+            surrender: config.surrender ? { ...config.surrender } : { ...d.race.surrender, enabled: false },
+            hints: config.maxHintsPerClue > 0,
+            cooldownSec: config.cooldownSec ?? d.race.cooldownSec,
+          }
+        : d.race,
+    royale: config.royale
+      ? { baseSec: config.royale.baseSec, incrementSec: config.royale.incrementSec, cooldownSec: config.cooldownSec ?? d.royale.cooldownSec }
+      : d.royale,
+    duel: config.duel
+      ? {
+          hp: config.duel.hp,
+          damage: config.duel.damage,
+          comeback: config.comeback,
+          cooldownSec: config.cooldownSec ?? d.duel.cooldownSec,
+          combo: config.duel.combo !== false,
+          surrender: config.surrender ? { ...config.surrender } : { ...d.duel.surrender, enabled: false },
+        }
+      : d.duel,
   };
 }

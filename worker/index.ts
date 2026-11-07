@@ -107,7 +107,9 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
     hideScoreboard: competition.hideScoreboard === true,
     ...(competition.game ? { game: competition.game } : {}),
     ...(typeof competition.intervalSec === 'number' ? { intervalSec: competition.intervalSec } : {}),
-    ...(competition.duel ? { duel: { hp: Number(competition.duel.hp), damage: competition.duel.damage } } : {}),
+    ...(competition.duel
+      ? { duel: { hp: Number(competition.duel.hp), damage: competition.duel.damage, combo: competition.duel.combo !== false } }
+      : {}),
     ...(competition.royale
       ? { royale: { baseSec: Number(competition.royale.baseSec), incrementSec: Number(competition.royale.incrementSec) } }
       : {}),

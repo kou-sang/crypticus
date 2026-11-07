@@ -35,6 +35,9 @@ export const DEFAULT_CONFIG: CompetitionConfig = {
 };
 
 export const LIMITS = {
+  duelMinHp: 50,
+  duelMaxHp: 1000,
+  duelHpStep: 50,
   minDurationSec: 60,
   maxDurationSec: 3 * 60 * 60,
   minTargetCount: 1,
@@ -63,13 +66,13 @@ export const GAME_LABELS: Record<GameMode, { title: string; tagline: string; des
   },
   royale: {
     title: 'Royale',
-    tagline: 'Reloj de ajedrez',
+    tagline: 'Supervivencia',
     description: 'Cada acierto suma segundos a tu reloj; cada duda los consume. La dificultad sube sin pausa. Queda uno solo.',
   },
   duel: {
     title: 'Duel',
     tagline: 'Uno contra uno',
-    description: 'El mismo criptico para los dos. Quien lo resuelve primero golpea, y los aciertos seguidos golpean más fuerte.',
+    description: 'El mismo criptico para los dos. Quien lo resuelve primero golpea; con combo, los aciertos seguidos golpean más fuerte.',
   },
   boss: { title: 'Boss', tagline: 'Próximamente', description: 'Hasta cuatro jugadores contra un mismo adversario. En preparación.' },
 };
@@ -253,7 +256,10 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
   if (config.game === 'boss') errors.push('El modo Boss estará disponible próximamente.');
   if (config.game === 'duel') {
     if (maxPlayers !== 2) errors.push('Duel es solo para 2 jugadores.');
-    if (!config.duel || config.duel.hp < 50 || config.duel.hp > 500) errors.push('La vida del duelo debe estar entre 50 y 500.');
+    const hp = config.duel?.hp ?? 0;
+    if (hp < LIMITS.duelMinHp || hp > LIMITS.duelMaxHp || hp % LIMITS.duelHpStep !== 0) {
+      errors.push(`La vida del duelo debe estar entre ${LIMITS.duelMinHp} y ${LIMITS.duelMaxHp}, de a ${LIMITS.duelHpStep}.`);
+    }
   }
   if ((config.game === 'race' || config.game === 'royale') && maxPlayers > LIMITS.maxModePlayers) {
     errors.push(`Este modo admite hasta ${LIMITS.maxModePlayers} jugadores.`);

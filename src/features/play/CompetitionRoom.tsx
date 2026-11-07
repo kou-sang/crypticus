@@ -67,7 +67,11 @@ export default function CompetitionRoom() {
     );
 
   const isParticipant = comp.participantIds.includes(profile.uid);
-  const canJoin = comp.visibility !== 'friends' || comp.hostId === profile.uid || friendIds.includes(comp.hostId);
+  const canJoin =
+    comp.visibility !== 'friends' ||
+    comp.hostId === profile.uid ||
+    friendIds.includes(comp.hostId) ||
+    (comp.invitedIds ?? []).includes(profile.uid);
   const countdown = isLive && startedAt !== null && !started;
   // Con muerte súbita en curso el reloj de la partida ya venció, pero el juego sigue.
   const ended = live !== null && (live.status === 'finished' || (expired && !live.tiebreak));

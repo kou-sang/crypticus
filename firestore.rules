@@ -109,6 +109,21 @@ service cloud.firestore {
             && next().participantIds.size() == comp().participantIds.size() - 1)
         );
 
+      // Revancha: un jugador de la partida terminada enlaza su propuesta (la última reemplaza a la anterior).
+      allow update: if signedIn()
+        && comp().status == 'finished'
+        && request.auth.uid in comp().participantIds
+        && onlyChanged(['rematchId'])
+        && next().rematchId is string
+        && exists(/databases/$(database)/documents/competitions/$(next().rematchId));
+
+      // Revancha: un invitado la rechaza agregándose a declinedIds.
+      allow update: if signedIn()
+        && comp().status == 'lobby'
+        && request.auth.uid in comp().get('invitedIds', [])
+        && onlyChanged(['declinedIds'])
+        && next().declinedIds.toSet() == comp().get('declinedIds', []).toSet().union([request.auth.uid].toSet());
+
       allow delete: if isUser(comp().hostId) && comp().status == 'lobby';
 
       match /participants/{uid} {

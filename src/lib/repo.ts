@@ -146,6 +146,8 @@ export interface CreateCompetitionInput extends CompetitionConfig {
   maxPlayers: number;
   clueCount: number;
   invitedIds?: string[]; // Desafío directo a amigos.
+  rematchOf?: string; // Revancha: partida de origen.
+  invitedNames?: Record<string, string>;
 }
 
 export async function createCompetition(host: UserProfile, input: CreateCompetitionInput): Promise<string> {
@@ -201,10 +203,107 @@ export async function createCompetition(host: UserProfile, input: CreateCompetit
     winnerId: null,
     clueCount: input.clueCount,
     ...(input.invitedIds?.length ? { invitedIds: input.invitedIds.slice(0, 7) } : {}),
+    ...(input.rematchOf ? { rematchOf: input.rematchOf, declinedIds: [] } : {}),
+    ...(input.invitedNames ? { invitedNames: input.invitedNames } : {}),
   } satisfies Omit<Competition, 'id'>);
   batch.set(doc(competitionRef, 'participants', host.uid), newParticipant(host));
   await batch.commit();
   return competitionRef.id;
+}
+
+const REMATCH_PREFIX = 'Revancha · ';
+
+export function rematchTitle(title: string): string {
+  const base = title.startsWith(REMATCH_PREFIX) ? title.slice(REMATCH_PREFIX.length) : title;
+  return `${REMATCH_PREFIX}${base}`.slice(0, 60);
+}
+
+/** Reglas de juego guardadas en la partida (sin estado de sala). */
+export function configOf(comp: Competition): CompetitionConfig {
+  return {
+    mode: comp.mode,
+    scoring: comp.scoring,
+    flow: comp.flow,
+    durationSec: comp.durationSec,
+    targetCount: comp.targetCount,
+    winByTwo: comp.winByTwo === true,
+    difficultyVote: comp.difficultyVote === true,
+    rivalCountdownSec: Number(comp.rivalCountdownSec ?? 0),
+    comeback: comp.comeback,
+    extraTime: comp.extraTime,
+    bossLevel: comp.bossLevel,
+    maxHintsPerClue: comp.maxHintsPerClue,
+    wrongPenalty: comp.wrongPenalty,
+    tierMix: comp.tierMix,
+    hideScoreboard: comp.hideScoreboard === true,
+    ...(comp.game ? { game: comp.game } : {}),
+    ...(comp.intervalSec !== undefined ? { intervalSec: comp.intervalSec } : {}),
+    ...(comp.duel ? { duel: { ...comp.duel } } : {}),
+    ...(comp.royale ? { royale: { ...comp.royale } } : {}),
+    ...(comp.cooldownSec !== undefined ? { cooldownSec: comp.cooldownSec } : {}),
+    ...(comp.surrender ? { surrender: { ...comp.surrender } } : {}),
+  };
+}
+
+export interface RematchTarget {
+  competition: Competition;
+  names: Record<string, string>; // uid -> nombre de los jugadores de la partida.
+}
+
+/** Invitados de una revancha: todos los jugadores de la partida menos quien la propone. */
+function rematchInvites({ competition, names }: RematchTarget, hostUid: string) {
+  const invitedIds = competition.participantIds.filter((id) => id !== hostUid).slice(0, 7);
+  return {
+    invitedIds,
+    invitedNames: Object.fromEntries(invitedIds.map((id) => [id, names[id] ?? 'Jugador'])),
+    rematchOf: competition.id,
+  };
+}
+
+/** Misma configuración que la partida terminada (modo, reglas y sala) e invitación a los demás jugadores. */
+export function rematchInput(target: RematchTarget, hostUid: string): CreateCompetitionInput {
+  const comp = target.competition;
+  return {
+    ...configOf(comp),
+    title: rematchTitle(comp.title),
+    visibility: comp.visibility,
+    maxPlayers: comp.maxPlayers,
+    clueCount: typeof comp.clueCount === 'number' ? comp.clueCount : 30,
+    ...rematchInvites(target, hostUid),
+  };
+}
+
+/** Enlaza la propuesta desde la partida terminada para que los demás jugadores la vean. */
+async function linkRematch(fromId: string, rematchId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, 'competitions', fromId), { rematchId });
+  } catch (error) {
+    // Sin el enlace la sala igual existe; solo no aparece como propuesta en la partida anterior.
+    console.warn('[revancha] no se pudo enlazar', error);
+  }
+}
+
+/** Propone la revancha con las mismas reglas: crea la sala, invita a todos y la enlaza. */
+export async function proposeRematch(host: UserProfile, target: RematchTarget): Promise<string> {
+  const id = await createCompetition(host, rematchInput(target, host.uid));
+  await linkRematch(target.competition.id, id);
+  return id;
+}
+
+/** Revancha con otros parámetros: la sala se crea desde el formulario y luego se enlaza igual. */
+export async function proposeCustomRematch(host: UserProfile, fromId: string, input: CreateCompetitionInput): Promise<string> {
+  const id = await createCompetition(host, input);
+  await linkRematch(fromId, id);
+  return id;
+}
+
+export function rematchInvitesFor(target: RematchTarget, hostUid: string) {
+  return rematchInvites(target, hostUid);
+}
+
+/** Rechaza una revancha: queda registrado para que quien la propuso lo vea. */
+export async function declineRematch(competitionId: string, uid: string): Promise<void> {
+  await updateDoc(doc(db, 'competitions', competitionId), { declinedIds: arrayUnion(uid) });
 }
 
 function newParticipant(profile: UserProfile): Participant {

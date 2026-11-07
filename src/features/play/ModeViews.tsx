@@ -135,7 +135,8 @@ export const DuelBars = memo(function DuelBars({ state, uid }: { state: LiveStat
         const ratio = hp / maxHp;
         const low = hp > 0 && ratio <= LOW_HEALTH_RATIO;
         const lethal = duelOneHitFromDeath(state, p.uid);
-        const streak = p.streak ?? 0;
+        // Sin combo la racha no cambia el daño: no se muestra.
+        const streak = state.config.duel?.combo === false ? 0 : (p.streak ?? 0);
         return (
           <div key={p.uid} className={cx(index === 1 && 'text-right')}>
             <p className={cx('flex items-center gap-1.5 text-xs font-semibold', index === 1 && 'justify-end')}>
@@ -179,7 +180,7 @@ export const DuelAlerts = memo(function DuelAlerts({ state, uid }: { state: Live
   const hp = Math.max(0, me?.score ?? 0);
   const ratio = hp / maxHp;
   const lethal = duelOneHitFromDeath(state, uid);
-  const streak = me?.streak ?? 0;
+  const streak = state.config.duel?.combo === false ? 0 : (me?.streak ?? 0);
   const previous = useRef({ ratio, lethal, streak });
   const [flash, setFlash] = useState(0);
 
