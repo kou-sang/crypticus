@@ -8,9 +8,7 @@ import {
   resolveVote,
   revealableIds,
   tick,
-  toggleExtraTime,
   toggleEndVote,
-  toggleSkip,
   endVotesNeeded,
   type LiveState,
 } from './engine';
@@ -57,11 +55,11 @@ describe('flujo libre por tiempo', () => {
     expect(state.endReason).toBe('time');
   });
 
-  it('anti fuerza bruta y penalización por error', () => {
-    const state = setup({ wrongPenalty: 20 });
+  it('anti fuerza bruta: un error no resta puntos, pero hay espera mínima', () => {
+    const state = setup();
     answer(state, 'a', 'e1', true, 1000);
     answer(state, 'a', 'm1', false, 2000);
-    expect(state.participants.a!.score).toBe(80);
+    expect(state.participants.a!.score).toBe(100);
     expect(() => reserveAttempt(state, 'a', 'm1', 2100)).toThrow();
   });
 
@@ -134,13 +132,6 @@ describe('rondas y votación', () => {
     expect(resolveVote({}, ranked)).toBeNull();
   });
 
-  it('pasar requiere unanimidad', () => {
-    const state = setup({ flow: 'rounds' });
-    expect(toggleSkip(state, { uid: 'a', now: 1000, random: first }).skipped).toBe(false);
-    expect(toggleSkip(state, { uid: 'b', now: 1000, random: first }).skipped).toBe(true);
-    expect(state.round?.index).toBe(2);
-  });
-
   it('termina al agotar el pool', () => {
     const state = createLiveState({
       competitionId: 'c',
@@ -154,22 +145,6 @@ describe('rondas y votación', () => {
     });
     answer(state, 'a', 'm1', true, 1000);
     expect(state.endReason).toBe('exhausted');
-  });
-});
-
-describe('tiempo extra', () => {
-  it('se aplica por unanimidad y descuenta usos', () => {
-    const state = setup({ extraTime: { enabled: true, seconds: 30, maxUses: 1 } });
-    toggleExtraTime(state, { uid: 'a', now: 1000 });
-    expect(state.endsAt).toBe(100_000);
-    expect(toggleExtraTime(state, { uid: 'b', now: 1000 }).applied).toBe(true);
-    expect(state.endsAt).toBe(130_000);
-    expect(() => toggleExtraTime(state, { uid: 'a', now: 2000 })).toThrow();
-  });
-
-  it('deshabilitado lanza error', () => {
-    const state = setup();
-    expect(() => toggleExtraTime(state, { uid: 'a', now: 1000 })).toThrow();
   });
 });
 

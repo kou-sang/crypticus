@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   comebackFactor,
+  duelComboMultiplier,
   computeBossDamage,
   computeRatingDeltas,
   computeSolvePoints,
@@ -14,10 +15,7 @@ import { makeParticipant } from './testUtils';
 
 const solve = (overrides: Partial<Parameters<typeof computeSolvePoints>[0]> = {}) =>
   computeSolvePoints({
-    rule: 'standard',
     tier: 'easy',
-    hintsUsed: 0,
-    remainingRatio: 1,
     comeback: 'off',
     score: 0,
     leaderScore: 0,
@@ -31,31 +29,24 @@ describe('computeSolvePoints', () => {
     expect(solve({ tier: 'hard' })).toBe(200);
   });
 
-  it('fewestHints penaliza pistas con mínimo', () => {
-    expect(solve({ rule: 'fewestHints', hintsUsed: 1 })).toBe(70);
-    expect(solve({ rule: 'fewestHints', hintsUsed: 10 })).toBe(10);
-  });
-
-  it('speed suma bonus según tiempo restante', () => {
-    expect(solve({ rule: 'speed', remainingRatio: 1 })).toBe(200);
-    expect(solve({ rule: 'speed', remainingRatio: 0 })).toBe(100);
-  });
-
-  it('remontada: proporcional a la distancia con el líder y a la dificultad', () => {
-    // Fuerte + difícil + sin puntos frente a un líder => ×2
-    expect(solve({ tier: 'hard', comeback: 'high', score: 0, leaderScore: 400 })).toBe(400);
-    // Mitad del líder => ×1.5
-    expect(solve({ tier: 'hard', comeback: 'high', score: 200, leaderScore: 400 })).toBe(300);
+  it('remontada: suave 1 + brecha, fuerte 1 + 2·brecha, igual en cualquier dificultad', () => {
+    // Fuerte sin puntos frente a un líder => ×3
+    expect(solve({ tier: 'hard', comeback: 'high', score: 0, leaderScore: 400 })).toBe(600);
+    // Mitad del líder: fuerte ×2, suave ×1.5
+    expect(solve({ tier: 'hard', comeback: 'high', score: 200, leaderScore: 400 })).toBe(400);
+    expect(solve({ tier: 'hard', comeback: 'low', score: 200, leaderScore: 400 })).toBe(300);
     // El líder no recibe bonus
     expect(solve({ tier: 'hard', comeback: 'high', score: 400, leaderScore: 400 })).toBe(200);
-    // Fáciles no dan bonus de remontada
-    expect(solve({ tier: 'easy', comeback: 'high', score: 0, leaderScore: 400 })).toBe(100);
+    // También los fáciles
+    expect(solve({ tier: 'easy', comeback: 'low', score: 0, leaderScore: 400 })).toBe(200);
   });
 
   it('gapRatio y comebackFactor', () => {
     expect(gapRatio(100, 400)).toBe(0.75);
     expect(gapRatio(500, 400)).toBe(0);
-    expect(comebackFactor('low', 'medium', 0, 100)).toBe(1.25);
+    expect(comebackFactor('low', 0, 100)).toBe(2);
+    expect(comebackFactor('high', 75, 100)).toBe(1.5);
+    expect(comebackFactor('off', 0, 100)).toBe(1);
   });
 });
 
@@ -110,7 +101,7 @@ describe('validateConfig', () => {
   it('rechaza combinaciones inválidas', () => {
     expect(validateConfig({ ...DEFAULT_CONFIG, mode: 'boss', winByTwo: true }, 4).length).toBeGreaterThan(0);
     expect(validateConfig({ ...DEFAULT_CONFIG, difficultyVote: true, flow: 'free' }, 4).length).toBeGreaterThan(0);
-    expect(validateConfig({ ...DEFAULT_CONFIG, extraTime: { enabled: true, seconds: 5, maxUses: 1 } }, 4).length).toBeGreaterThan(0);
+    expect(validateConfig({ ...DEFAULT_CONFIG, maxHintsPerClue: 11 }, 4).length).toBeGreaterThan(0);
   });
 });
 
@@ -122,5 +113,12 @@ describe('parseDifficulty', () => {
     expect(parseDifficulty(5)).toBe('hard');
     expect(parseDifficulty(undefined)).toBe('medium');
     expect(parseDifficulty('rarísimo')).toBeNull();
+  });
+});
+
+describe('duelComboMultiplier', () => {
+  it('tabla de combo: ×1 0 %, ×2 15 %, ×3 30 %, ×4 50 %, ×5 80 %, ×6+ 110 %', () => {
+    expect([1, 2, 3, 4, 5, 6, 9].map(duelComboMultiplier)).toEqual([1, 1.15, 1.3, 1.5, 1.8, 2.1, 2.1]);
+    expect(duelComboMultiplier(0)).toBe(1);
   });
 });

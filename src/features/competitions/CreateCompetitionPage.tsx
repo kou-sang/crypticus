@@ -1,11 +1,11 @@
 // Crear partida: un modo, su parámetro principal y opciones compactas con botón de información.
 // La configuración de cada modo se recuerda entre visitas. Con ?rival=uid&name=... crea un desafío privado.
 // Con state.rematch (desde resultados) propone una revancha con otros parámetros a los mismos jugadores.
+// Con state.edit (anfitrión, sala en espera) edita las reglas de esa sala.
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
-import { useSession } from '../../hooks/useAuth';
-import { createCompetition, deleteCompetition, proposeCustomRematch } from '../../lib/repo';
-import type { RematchDraft } from '../play/RematchPanel';
+import { createCompetition, updateCompetition } from '../../lib/repo';
+import type { RematchDraft, RoomDraft } from '../play/RematchPanel';
 import { cx, errorMessage } from '../../lib/utils';
 import { loadJson, saveJson } from '../../lib/storage';
 import {
@@ -17,8 +17,10 @@ import {
   COOLDOWN_OPTIONS,
   RACE_TARGET_OPTIONS,
   ROYALE_PRESETS,
+  ROYALE_SKIP_OPTIONS,
   SUDDEN_DEATH_OPTIONS,
   SURRENDER_USES_OPTIONS,
+  type DuelFormat,
   type ModeSettings,
 } from '../../../shared/gameModes';
 import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, LIMITS, validateConfig } from '../../../shared/scoring';
@@ -35,7 +37,7 @@ interface Stored {
 
 const DEFAULT_STORED: Stored = { settings: DEFAULT_MODE_SETTINGS, visibility: 'public' };
 
-function loadStored(draft?: RematchDraft | null): Stored {
+function loadStored(draft?: RoomDraft | null): Stored {
   const stored: Stored = draft ? { settings: draft.settings, visibility: draft.visibility } : loadJson<Stored>(STORAGE_KEY, DEFAULT_STORED);
   // Mezcla profunda: versiones guardadas antes de agregar un campo no lo pierden.
   const settings = stored.settings ?? DEFAULT_MODE_SETTINGS;
@@ -371,6 +373,17 @@ function RoyalePanel({ settings, update }: { settings: ModeSettings['royale']; u
       </section>
       <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option
+        title="Saltear"
+        info={`Cada jugador puede saltear el criptico actual 1 o 2 veces en toda la partida. Cada salto resta del reloj lo mismo que suma un acierto (${settings.incrementSec} s).`}
+      >
+        <Chips<number>
+          label="Saltear"
+          value={settings.skips}
+          options={ROYALE_SKIP_OPTIONS.map((n): [number, string] => [n, n === 0 ? 'No' : `${n}×`])}
+          onChange={(skips) => update({ skips })}
+        />
+      </Option>
+      <Option
         title="Cómo se juega"
         info="Primer número: minutos de tu reloj. Segundo: segundos que suma cada acierto. Los cripticos son siempre los mismos para todos y cada vez más difíciles (10 fáciles, 10 medios, después difíciles). Sin pausas: al acertar pasas al siguiente. Quien llega a 0 queda eliminado; gana el último en pie."
       >
@@ -385,8 +398,22 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
   const [custom, setCustom] = useState(!preset);
   return (
     <>
+      <Option
+        title="Formato"
+        info="1 vs 1: cada uno con su vida. 2 vs 2: cada equipo comparte una sola barra de vida y cualquiera de los dos puede responder; el acierto de uno golpea por el equipo."
+      >
+        <Chips<DuelFormat>
+          label="Formato"
+          value={settings.format}
+          options={[
+            ['1v1', '1 vs 1'],
+            ['2v2', '2 vs 2'],
+          ]}
+          onChange={(format) => update({ format })}
+        />
+      </Option>
       <section className="py-2">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Vida</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">{settings.format === '2v2' ? 'Vida por equipo' : 'Vida'}</p>
         <div className="flex flex-wrap items-center gap-2">
           <Chips<number>
             label="Vida"
@@ -442,16 +469,16 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
       />
       <Option
         title="Remontada"
-        info="Quien tiene menos vida golpea más fuerte con cripticos medios y difíciles, en proporción a la diferencia de vida."
+        info="Quien va perdiendo golpea más fuerte según la brecha con el líder: brecha = (vida del líder − tu vida) / vida del líder. Suave: ×(1 + brecha). Fuerte: ×(1 + 2 × brecha)."
       >
         <Chips<ComebackLevel> label="Remontada" value={settings.comeback} options={COMEBACK} onChange={(comeback) => update({ comeback })} />
       </Option>
       <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option
         title="Cómo se juega"
-        info="Solo 2 jugadores, sin pistas. Ambos ven el mismo criptico (dificultad al azar). El primero en acertar lo cierra al instante y se muestran respuesta y explicación durante 3 segundos."
+        info="Sin pistas. Todos ven el mismo criptico (dificultad al azar). El primero en acertar lo cierra al instante y se muestran respuesta y explicación durante 3 segundos. La partida empieza solo con la sala completa: 2 jugadores en 1 vs 1, 4 en 2 vs 2."
       >
-        <span className="text-sm text-muted">1 contra 1</span>
+        <span className="text-sm text-muted">{settings.format === '2v2' ? '2 contra 2' : '1 contra 1'}</span>
       </Option>
     </>
   );
@@ -460,19 +487,24 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
 // ---------- Página ----------
 
 export default function CreateCompetitionPage() {
-  const { profile } = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const rivalId = params.get('rival');
   const rivalName = params.get('name') ?? 'tu amigo';
 
   const location = useLocation();
-  const rematch = (location.state as { rematch?: RematchDraft } | null)?.rematch ?? null;
-  const [stored, setStored] = useState<Stored>(() => loadStored(rematch));
-  const [title, setTitle] = useState(rematch?.title ?? '');
+  const navState = location.state as { rematch?: RematchDraft; edit?: RoomDraft } | null;
+  const rematch = navState?.rematch ?? null;
+  const edit = navState?.edit ?? null;
+  const draft = edit ?? rematch;
+  const [stored, setStored] = useState<Stored>(() => loadStored(draft));
+  const [title, setTitle] = useState(draft?.title ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => saveJson(STORAGE_KEY, stored), [stored]);
+  // Editar una sala no cambia la configuración recordada para la próxima partida nueva.
+  useEffect(() => {
+    if (!edit) saveJson(STORAGE_KEY, stored);
+  }, [stored, edit]);
 
   const { settings } = stored;
   const visibility: CompetitionVisibility = rivalId ? 'private' : stored.visibility;
@@ -501,17 +533,18 @@ export default function CreateCompetitionPage() {
         ...(rivalId ? { invitedIds: [rivalId] } : {}),
       };
       let id: string;
-      if (rematch) {
-        id = await proposeCustomRematch(profile, rematch.fromId, {
+      if (edit) {
+        await updateCompetition(edit.id, input);
+        id = edit.id;
+      } else if (rematch) {
+        id = await createCompetition({
           ...input,
           invitedIds: rematch.invitedIds,
           invitedNames: rematch.invitedNames,
           rematchOf: rematch.fromId,
         });
-        // La propuesta anterior (rechazada) se reemplaza por esta.
-        if (rematch.replaceId) await deleteCompetition(rematch.replaceId, profile.uid).catch(() => undefined);
       } else {
-        id = await createCompetition(profile, input);
+        id = await createCompetition(input);
       }
       navigate(`/c/${id}`, { replace: true });
     } catch (err) {
@@ -523,7 +556,11 @@ export default function CreateCompetitionPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <BackLink fallback="/jugar" />
-      <PageHeader kicker="Jugar" title={rematch ? 'Revancha con otros parámetros' : rivalId ? `Desafiar a ${rivalName}` : 'Nueva partida'} />
+      <PageHeader
+        kicker="Jugar"
+        title={edit ? 'Editar sala' : rematch ? 'Revancha con otros parámetros' : rivalId ? `Desafiar a ${rivalName}` : 'Nueva partida'}
+      />
+      {edit && <p className="-mt-4 mb-6 text-sm text-muted">Los jugadores que ya están en la sala siguen dentro y ven las reglas nuevas.</p>}
       {rematch && (
         <p className="-mt-4 mb-6 text-sm text-muted">
           Se enviará a {Object.values(rematch.invitedNames).join(', ') || 'los mismos jugadores'}. Empieza cuando acepten todos.
@@ -592,7 +629,7 @@ export default function CreateCompetitionPage() {
 
         <ErrorBanner error={error ?? (validation.length > 0 ? validation.join(' ') : null)} />
         <Button type="submit" loading={busy} disabled={validation.length > 0} className="h-12 w-full text-base">
-          {rivalId ? 'Crear desafío' : 'Crear sala'}
+          {edit ? 'Guardar cambios' : rivalId ? 'Crear desafío' : 'Crear sala'}
         </Button>
       </form>
     </div>

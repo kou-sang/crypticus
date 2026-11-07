@@ -18,7 +18,8 @@ interface RawDocument {
 // ---------- Cliente ----------
 
 export type Write =
-  | { kind: 'update'; path: string; data: Record<string, unknown> } // merge de campos listados
+  // Merge de campos listados; `clear` borra además esos campos si no vienen en `data`.
+  | { kind: 'update'; path: string; data: Record<string, unknown>; clear?: readonly string[] }
   | { kind: 'set'; path: string; data: Record<string, unknown> } // crea o reemplaza el documento
   | { kind: 'increment'; path: string; increments: Record<string, number> }
   // Agrega/actualiza claves de un campo mapa sin tocar el resto; crea el documento si no existe.
@@ -162,7 +163,7 @@ export class FirestoreRest {
       if (write.kind === 'update') {
         return {
           update: { name: this.name(write.path), fields: encodeFields(write.data) },
-          updateMask: { fieldPaths: Object.keys(write.data) },
+          updateMask: { fieldPaths: [...new Set([...Object.keys(write.data), ...(write.clear ?? [])])] },
           currentDocument: { exists: true },
         };
       }
