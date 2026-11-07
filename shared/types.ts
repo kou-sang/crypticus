@@ -25,11 +25,13 @@ export interface DuelConfig {
   hp: number; // Vida inicial de cada jugador.
   damage: DuelDamage; // El daño depende de la dificultad o de la velocidad.
   combo?: boolean; // Aciertos seguidos golpean más fuerte. Ausente (salas previas a v0.9) = activo.
+  teams?: boolean; // 2 vs 2: vida compartida por equipo; cualquiera del equipo puede responder.
 }
 
 export interface RoyaleConfig {
   baseSec: number; // Tiempo inicial del reloj de cada jugador.
   incrementSec: number; // Segundos que suma cada acierto.
+  skips?: number; // Saltos permitidos por jugador (0 = no se saltea). Cada uno resta tiempo del reloj.
 }
 
 /** Cómo se puntúa cada criptico resuelto (modos competitivos). */
@@ -135,11 +137,13 @@ export interface Competition extends CompetitionConfig {
   rematchOf?: string; // Sala de revancha: partida de origen.
   invitedNames?: Record<string, string>; // Sala de revancha: nombres de los invitados (para mostrar quién falta).
   declinedIds?: string[]; // Sala de revancha: invitados que la rechazaron.
+  teams?: Record<string, 0 | 1>; // Duel 2 vs 2: equipo elegido por cada jugador en la sala.
 }
 
 export interface Participant {
   uid: string;
   displayName: string;
+  team?: 0 | 1; // Duel 2 vs 2.
   score: number; // En 'boss' = daño infligido.
   solvedIds: string[];
   hintsByClue: Record<string, number>;
@@ -159,6 +163,7 @@ export interface Participant {
   // ---- Secuencial (Race Pacífico, Royale) ----
   nextOpensAt?: number; // El criptico en `cursor` no se muestra ni se puede responder antes.
   surrenders?: number; // Rendiciones usadas.
+  skipsUsed?: number; // Royale: saltos usados.
   tiebreakWon?: boolean; // Ganó la muerte súbita de desempate.
 }
 
@@ -208,4 +213,5 @@ export interface HistoryEntry {
   ratingAfter: number;
   /** Elo del modo (Race, Royale o Duel) tras la partida. Solo en partidas puntuables de 2 o más. */
   modeRatingAfter?: number;
+  modeRatingDelta?: number; // Cambio del Elo del modo en esta partida.
 }

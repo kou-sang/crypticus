@@ -1,11 +1,9 @@
 // Evolución del Elo: tiempo en el eje X, Elo en el eje Y. Una serie por modo (y la general). SVG sin librerías.
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { GAME_LABELS } from '../../shared/scoring';
-import { RANKED_MODES, type HistoryEntry, type RankedMode } from '../../shared/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { HistoryEntry, RankedMode } from '../../shared/types';
 import { niceTicks, timeLabel, timeTicks } from '../lib/chartScale';
-import { cx } from '../lib/utils';
 
-type Series = RankedMode | 'general';
+export type Series = RankedMode | 'general';
 
 const HEIGHT = 240;
 const MARGIN = { top: 12, right: 14, bottom: 34, left: 52 };
@@ -34,19 +32,23 @@ function seriesPoints(history: HistoryEntry[], series: Series): Point[] {
   return points;
 }
 
-/** Ancho real del contenedor: el SVG se dibuja en píxeles para que el texto no se achique en móvil. */
-function useWidth<T extends HTMLElement>(): [RefObject<T | null>, number] {
-  const ref = useRef<T>(null);
+/**
+ * Ancho real del contenedor: el SVG se dibuja en píxeles para que el texto no se achique en móvil.
+ * Ref por callback: el contenedor puede aparecer después (cuando llega el historial) y hay que medirlo entonces.
+ */
+function useWidth(): [(node: HTMLDivElement | null) => void, number] {
   const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const node = ref.current;
+  const observer = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
     if (!node) return;
     setWidth(node.clientWidth);
     if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => entry && setWidth(Math.round(entry.contentRect.width)));
-    observer.observe(node);
-    return () => observer.disconnect();
+    observer.current = new ResizeObserver(([entry]) => entry && setWidth(Math.round(entry.contentRect.width)));
+    observer.current.observe(node);
   }, []);
+  useEffect(() => () => observer.current?.disconnect(), []);
   return [ref, width];
 }
 
@@ -114,18 +116,19 @@ function Plot({ points, width }: { points: Point[]; width: number }) {
   );
 }
 
-export function RatingChart({ history }: { history: HistoryEntry[] }) {
-  const available = useMemo(
-    () => (['general', ...RANKED_MODES] as Series[]).filter((s) => seriesPoints(history, s).length > 0),
-    [history],
-  );
-  const [series, setSeries] = useState<Series | null>(null);
-  const active: Series = series && available.includes(series) ? series : (available.find((s) => s !== 'general') ?? 'general');
-  const points = useMemo(() => seriesPoints(history, active), [history, active]);
-  const [ref, width] = useWidth<HTMLDivElement>();
+/** Evolución del Elo de un modo (o el general). */
+export function RatingChart({ history, series }: { history: HistoryEntry[]; series: Series }) {
+  const points = useMemo(() => seriesPoints(history, series), [history, series]);
+  const [ref, width] = useWidth();
 
   if (points.length === 0) {
-    return <p className="text-sm text-muted">Juega una partida con rivales para ver la evolución de tu Elo.</p>;
+    return (
+      <p className="text-sm text-muted">
+        {history.length > 0
+          ? 'Las partidas anteriores a la versión 0.8 no guardaron el Elo del modo: el gráfico empieza con la próxima.'
+          : 'Juega una partida con rivales en este modo para ver la evolución de tu Elo.'}
+      </p>
+    );
   }
   const first = points[0]!;
   const last = points.at(-1)!;
@@ -133,32 +136,12 @@ export function RatingChart({ history }: { history: HistoryEntry[] }) {
 
   return (
     <figure>
-      {available.length > 1 && (
-        <div role="tablist" aria-label="Serie" className="mb-3 flex flex-wrap gap-1">
-          {available.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="tab"
-              aria-selected={s === active}
-              onClick={() => setSeries(s)}
-              className={cx(
-                'px-3 py-1 text-xs font-semibold uppercase tracking-widest transition-colors',
-                s === active ? 'bg-ink text-paper' : 'border border-line hover:bg-paper-2',
-              )}
-            >
-              {s === 'general' ? 'General' : GAME_LABELS[s].title}
-            </button>
-          ))}
-        </div>
-      )}
       <div ref={ref} className="w-full">
         {width > 0 && <Plot points={points} width={width} />}
       </div>
       <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-2 font-mono text-xs text-muted">
         <span>
-          {points.length} {points.length === 1 ? 'partida' : 'partidas'} · Elo actual <strong className="text-ink">{last.elo}</strong> (
-          {change >= 0 ? '+' : ''}
+          {points.length} {points.length === 1 ? 'partida' : 'partidas'} · Elo {last.elo} ({change >= 0 ? '+' : ''}
           {change})
         </span>
         <span className="flex gap-3">

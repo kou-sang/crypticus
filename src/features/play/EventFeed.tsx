@@ -8,7 +8,7 @@ function describe(event: GameEvent, state: LiveState): string | null {
   const tier = event.tier ? DIFFICULTY_LABELS[event.tier].toLowerCase() : '';
   switch (event.kind) {
     case 'surrender':
-      return `${name} se rindió`;
+      return state.config.royale ? `${name} salteó (${event.seconds ?? 0} s)` : `${name} se rindió`;
     case 'solve':
       if (state.config.game === 'race') {
         const solved = event.uid ? (state.participants[event.uid]?.solvedIds.length ?? 0) : 0;

@@ -117,6 +117,14 @@ service cloud.firestore {
         && next().rematchId is string
         && exists(/databases/$(database)/documents/competitions/$(next().rematchId));
 
+      // Duel 2 vs 2: cada jugador elige su equipo en la sala (solo su propia entrada, 0 o 1).
+      allow update: if signedIn()
+        && comp().status == 'lobby'
+        && request.auth.uid in comp().participantIds
+        && onlyChanged(['teams'])
+        && next().teams.diff(comp().get('teams', {})).affectedKeys().hasOnly([request.auth.uid])
+        && next().teams[request.auth.uid] in [0, 1];
+
       // Revancha: un invitado la rechaza agregándose a declinedIds.
       allow update: if signedIn()
         && comp().status == 'lobby'
@@ -130,6 +138,9 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if isUser(uid)
           && request.auth.uid in getAfter(/databases/$(database)/documents/competitions/$(competitionId)).data.participantIds
+          && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'solvedIds', 'hintsByClue', 'hintsUsed',
+               'attempts', 'wrongAttempts', 'lastSolvedAt', 'lastAttemptAt', 'joinedAt', 'device'])
+          && request.resource.data.uid == uid
           && request.resource.data.score == 0
           && request.resource.data.solvedIds == []
           && request.resource.data.hintsUsed == 0

@@ -12,6 +12,7 @@ import {
   rankPrimary,
   type RankMetric,
 } from './scoring';
+import { isTeamDuel, startBlocker, TEAM_SIZE } from './teams';
 import {
   DIFFICULTIES,
   type CompetitionConfig,
@@ -152,9 +153,22 @@ export function createLiveState(input: CreateInput): LiveState {
   const random = input.random ?? Math.random;
   const participants: Record<string, Participant> = {};
   const { royale, duel } = input.config;
+  // Guardia del servidor: Duel exige la cantidad exacta de jugadores (sin rival, el daño sería 0).
+  const blocker = startBlocker(input.config, input.participants.map((p) => p.uid));
+  if (blocker) throw new GameError('bad_players', blocker);
+  if (isTeamDuel(input.config)) {
+    const sizes = [0, 1].map((t) => input.participants.filter((p) => p.team === t).length);
+    if (sizes[0] !== TEAM_SIZE || sizes[1] !== TEAM_SIZE) throw new GameError('bad_teams', 'Los equipos deben ser de 2 contra 2.');
+  }
   for (const p of input.participants) {
+    // Solo se copian campos de identidad: el doc de participante lo escribe el cliente, y cualquier
+    // otro campo (racha, saltos usados, desempate ganado…) sería una trampa al iniciar.
     participants[p.uid] = {
-      ...p,
+      uid: p.uid,
+      displayName: String(p.displayName ?? '').slice(0, 32) || 'Jugador',
+      joinedAt: Number(p.joinedAt) || 0,
+      ...(p.device === 'mobile' || p.device === 'desktop' ? { device: p.device } : {}),
+      ...(isTeamDuel(input.config) && (p.team === 0 || p.team === 1) ? { team: p.team } : {}),
       score: duel ? duel.hp : 0, // Duel: el puntaje es la vida restante.
       solvedIds: [],
       hintsByClue: {},
@@ -166,6 +180,8 @@ export function createLiveState(input: CreateInput): LiveState {
       ...(royale ? { bankMs: royale.baseSec * 1000, eliminatedAt: null } : {}),
       ...(isSequential(input.config) ? { cursor: 0, nextOpensAt: input.startedAt } : {}),
       surrenders: 0,
+      skipsUsed: 0,
+      streak: 0,
     };
   }
   // Solo se conservan cripticos con secreto disponible en el catálogo.
@@ -246,7 +262,8 @@ export const SURRENDER_GRACE_MS = 5_000;
 export function duelMaxIncoming(state: LiveState, uid: string): number {
   const duel = state.config.duel;
   const me = state.participants[uid];
-  const rival = Object.values(state.participants).find((p) => p.uid !== uid);
+  const rivals = rivalsOf(state, uid);
+  const rival = rivals[0];
   if (!duel || !me || !rival) return 0;
   return computeDuelDamage({
     rule: duel.damage,
@@ -255,7 +272,7 @@ export function duelMaxIncoming(state: LiveState, uid: string): number {
     comeback: state.config.comeback,
     hp: rival.score,
     rivalHp: me.score,
-    streak: duel.combo === false ? 1 : (rival.streak ?? 0) + 1,
+    streak: duel.combo === false ? 1 : Math.max(...rivals.map((p) => p.streak ?? 0)) + 1,
   });
 }
 
@@ -273,6 +290,12 @@ export function royaleDeadline(state: LiveState, participant: Participant): numb
 }
 
 /** Tiempo restante del reloj de un jugador (Royale). */
+/** Royale: tiempo que resta saltar un criptico. */
+export const ROYALE_SKIP_DEFAULT_PENALTY_SEC = 5;
+export function royaleSkipPenaltyMs(royale: { incrementSec: number }): number {
+  return (royale.incrementSec > 0 ? royale.incrementSec : ROYALE_SKIP_DEFAULT_PENALTY_SEC) * 1000;
+}
+
 export function royaleRemaining(state: LiveState, participant: Participant, now: number): number {
   if (participant.eliminatedAt != null) return 0;
   return Math.max(0, royaleDeadline(state, participant) - Math.max(now, state.startedAt));
@@ -293,7 +316,46 @@ export function inTiebreak(state: LiveState): boolean {
 }
 
 export function rankState(state: LiveState): RankedParticipant[] {
-  return rankParticipants(Object.values(state.participants), rankMetric(state.config));
+  const ranked = rankParticipants(Object.values(state.participants), rankMetric(state.config));
+  if (!isTeamDuel(state.config)) return ranked;
+  // 2 vs 2: el puesto es del equipo. Ganador (o mejor vida/desempate) primero; si siguen iguales, empate.
+  const sideKey = (team: 0 | 1) => {
+    const members = ranked.filter((p) => p.team === team);
+    const won = state.winnerId !== null && members.some((p) => p.uid === state.winnerId) ? 1 : 0;
+    const tiebreak = members.some((p) => p.tiebreakWon) ? 1 : 0;
+    return [won, members[0]?.score ?? 0, tiebreak] as const;
+  };
+  const [a, b] = [sideKey(0), sideKey(1)];
+  const cmp = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+  const rankOf = (team: 0 | 1) => (cmp === 0 ? 1 : (team === 0) === cmp > 0 ? 1 : TEAM_SIZE + 1);
+  return ranked
+    .map((p) => ({ ...p, rank: rankOf(p.team === 1 ? 1 : 0) }))
+    .sort((x, y) => x.rank - y.rank);
+}
+
+// ---------- Equipos ----------
+
+/** Mismo bando: el mismo jugador o compañeros de equipo en Duel 2 vs 2. */
+export function sameSide(state: LiveState, a: string, b: string): boolean {
+  if (a === b) return true;
+  if (!isTeamDuel(state.config)) return false;
+  const ta = state.participants[a]?.team;
+  return ta !== undefined && ta === state.participants[b]?.team;
+}
+
+/** Jugadores del bando de `uid` (él incluido). */
+export function sideOf(state: LiveState, uid: string): Participant[] {
+  return Object.values(state.participants).filter((p) => sameSide(state, uid, p.uid));
+}
+
+/** Rivales de `uid`: el otro jugador (1 vs 1) o el otro equipo (2 vs 2). */
+export function rivalsOf(state: LiveState, uid: string): Participant[] {
+  return Object.values(state.participants).filter((p) => !sameSide(state, uid, p.uid));
+}
+
+/** Ganó la partida (en 2 vs 2, también el compañero de quien figura como ganador). */
+export function isOnWinningSide(state: LiveState, uid: string): boolean {
+  return state.winnerId !== null && sameSide(state, uid, state.winnerId);
 }
 
 /** Fin del reloj de la partida (incluye prórroga). */
@@ -450,13 +512,16 @@ export function applyAnswer(
   }
 
   // Duel: acertar primero le quita vida al rival; los aciertos seguidos forman combo.
+  // En 2 vs 2 la vida y la racha son del equipo: cualquiera de los dos puede responder.
   if (state.config.duel) {
-    const rival = Object.values(state.participants).find((p) => p.uid !== uid);
+    const side = sideOf(state, uid);
+    const rivals = rivalsOf(state, uid);
+    const rival = rivals[0];
     // Sin combo, cada acierto vale como aislado (la racha se sigue contando solo como dato).
-    const streak = (participant.streak ?? 0) + 1;
-    participant.streak = streak;
+    const streak = Math.max(...side.map((p) => p.streak ?? 0)) + 1;
+    for (const p of side) p.streak = streak;
     const comboStreak = state.config.duel.combo === false ? 1 : streak;
-    if (rival) rival.streak = 0;
+    for (const p of rivals) p.streak = 0;
     const damage = rival
       ? Math.min(
           rival.score,
@@ -471,7 +536,7 @@ export function applyAnswer(
           }),
         )
       : 0;
-    if (rival) rival.score = Math.max(0, rival.score - damage);
+    for (const p of rivals) p.score = Math.max(0, p.score - damage);
     participant.solvedIds = [...participant.solvedIds, crypticId];
     participant.lastSolvedAt = now;
     pushEvent(state, { at: now, kind: 'damage', uid, crypticId, tier, points: damage, combo: comboStreak });
@@ -654,8 +719,17 @@ export function passCryptic(state: LiveState, input: { uid: string; now: number 
   requireLive(state, input.now);
   requireNoTiebreak(state);
   const participant = requireParticipant(state, input.uid);
-  if (!state.config.royale) throw new GameError('pass_disabled', 'Solo disponible en Royale.');
+  const royale = state.config.royale;
+  if (!royale) throw new GameError('pass_disabled', 'Solo disponible en Royale.');
   if (participant.eliminatedAt != null) throw new GameError('eliminated', 'Ya fuiste eliminado.');
+  const used = participant.skipsUsed ?? 0;
+  if (used >= (royale.skips ?? 0)) throw new GameError('skip_exhausted', royale.skips ? 'No te quedan saltos.' : 'En esta partida no se saltea.');
+  const id = royaleCurrent(state, participant);
+  if (!id || !isPlayable(state, participant, id, input.now)) throw new GameError('not_playable', 'No hay criptico para saltear.');
+  // Saltar cuesta tiempo: lo mismo que suma un acierto (o 5 s si no hay incremento).
+  participant.skipsUsed = used + 1;
+  participant.bankMs = (participant.bankMs ?? 0) - royaleSkipPenaltyMs(royale);
+  pushEvent(state, { at: input.now, kind: 'surrender', uid: input.uid, crypticId: id, seconds: -royaleSkipPenaltyMs(royale) / 1000 });
   advanceCursor(state, participant, input.now);
   evaluate(state, input.now);
   return { passed: true };
@@ -842,7 +916,7 @@ function evaluate(state: LiveState, now: number): { finished: boolean } {
   // Duel: gana quien deja al rival sin vida.
   if (config.duel) {
     const knockedOut = players.find((p) => p.score <= 0);
-    if (knockedOut) return finish(state, 'knockout', players.find((p) => p.uid !== knockedOut.uid)?.uid ?? null, now);
+    if (knockedOut) return finish(state, 'knockout', players.find((p) => !sameSide(state, knockedOut.uid, p.uid))?.uid ?? null, now);
   }
   const solvedLead = leader ? leader.solvedIds.length - (second?.solvedIds.length ?? 0) : 0;
   const hasMargin = !config.winByTwo || solvedLead >= LIMITS.winByTwoMargin;
@@ -926,7 +1000,7 @@ function applyTiebreakAnswer(state: LiveState, participant: Participant, correct
     participant.wrongAttempts += 1; // Sin penalización: solo cuenta para las estadísticas.
     return { correct: false, points: 0, finished: false, stale: false };
   }
-  participant.tiebreakWon = true;
+  for (const p of sideOf(state, participant.uid)) p.tiebreakWon = true; // 2 vs 2: gana el equipo.
   participant.lastSolvedAt = now;
   tb.winnerId = participant.uid;
   pushEvent(state, { at: now, kind: 'tiebreak', uid: participant.uid, crypticId: tb.crypticId });

@@ -33,7 +33,7 @@ type ModeFields = Pick<
 
 export function describeMode(c: ModeFields): string {
   if (c.game === 'royale' && c.royale) return `Royale ${formatTimeControl(c.royale.baseSec, c.royale.incrementSec)}`;
-  if (c.game === 'duel' && c.duel) return `Duel · ${c.duel.hp} de vida`;
+  if (c.game === 'duel' && c.duel) return `Duel ${c.duel.teams ? '2 vs 2' : '1 vs 1'} · ${c.duel.hp} de vida`;
   if (c.game === 'race') return `Race a ${c.targetCount}`;
   const minutes = `${Math.round(c.durationSec / 60)} min`;
   if (c.mode === 'boss') return `Jefe ${BOSS_LABELS[c.bossLevel] ?? ''} · ${minutes}`;
@@ -43,7 +43,7 @@ export function describeMode(c: ModeFields): string {
 
 /** Etiquetas cortas de los modificadores activos. */
 export function describeModifiers(c: ModeFields): string[] {
-  if (c.game === 'royale') return ['Progresiva', 'Último en pie'];
+  if (c.game === 'royale') return ['Progresiva', 'Último en pie', c.royale?.skips ? `Saltear ×${c.royale.skips}` : 'Sin saltear'];
   if (c.game === 'duel') {
     const tags = [`Daño por ${DUEL_DAMAGE_LABELS[c.duel?.damage ?? 'difficulty'].title.toLowerCase()}`];
     if (c.duel?.combo !== false) tags.push('Combo');

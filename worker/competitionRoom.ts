@@ -21,6 +21,7 @@ import {
   isSequential,
   toggleSkip,
   type LiveState,
+  isOnWinningSide,
 } from '../shared/engine';
 import { computeRatingDeltas } from '../shared/scoring';
 import type { CompetitionConfig, Difficulty, Participant } from '../shared/types';
@@ -464,13 +465,14 @@ export class CompetitionRoom extends DurableObject<Env> {
         modeRatings[uid] = (rankedMode ? user.modeStats?.[rankedMode]?.rating : undefined) ?? 1200;
       });
       const modeDeltas = rankedMode && ranked.length >= 2 ? computeRatingDeltas(ranked, modeRatings) : {};
+      // En 2 vs 2 gana el equipo: el compañero de quien figura como ganador también gana.
       const outcomeOf = (p: { uid: string; rank: number }): 'win' | 'loss' | 'draw' =>
-        state.winnerId ? (p.uid === state.winnerId ? 'win' : 'loss') : p.rank === 1 ? 'draw' : 'loss';
+        state.winnerId ? (isOnWinningSide(state, p.uid) ? 'win' : 'loss') : p.rank === 1 ? 'draw' : 'loss';
       // El modo jefe es cooperativo: no altera el rating.
       const competitive = state.config.mode !== 'boss' && ranked.length >= 2;
       const deltas = competitive ? computeRatingDeltas(ranked, ratings) : {};
       const bossDefeated = state.endReason === 'bossDefeated';
-      const isWinner = (playerId: string) => (state.boss ? bossDefeated : playerId === state.winnerId);
+      const isWinner = (playerId: string) => (state.boss ? bossDefeated : isOnWinningSide(state, playerId));
 
       const writes: Write[] = [
         {
@@ -491,6 +493,7 @@ export class CompetitionRoom extends DurableObject<Env> {
               solved: p.solvedIds.length,
               hintsUsed: p.hintsUsed,
               ratingDelta: deltas[p.uid] ?? 0,
+              ...(p.team !== undefined ? { team: p.team } : {}),
             })),
           },
         },
@@ -518,7 +521,7 @@ export class CompetitionRoom extends DurableObject<Env> {
               ratingDelta: deltas[p.uid] ?? 0,
               ratingAfter: (ratings[p.uid] ?? 1200) + (deltas[p.uid] ?? 0),
               ...(rankedMode && ranked.length >= 2
-                ? { modeRatingAfter: (modeRatings[p.uid] ?? 1200) + (modeDeltas[p.uid] ?? 0) }
+                ? { modeRatingAfter: (modeRatings[p.uid] ?? 1200) + (modeDeltas[p.uid] ?? 0), modeRatingDelta: modeDeltas[p.uid] ?? 0 }
                 : {}),
             },
           })),
