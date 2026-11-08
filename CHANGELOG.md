@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-08
+
+### Fixed
+
+- Alta trabada en «Firma tu primera partida» (Brave y Safari en iPhone, Firefox en PC): tras «Continuar» volvía a la misma pantalla.
+  - «Sin perfil» ahora solo se decide con respuesta del servidor; la caché vacía o un listener caído ya no mandan al alta.
+  - El listener del perfil se reconecta solo si falla (antes, un error lo dejaba muerto hasta recargar) y, si no confirma en 8 s, se consulta una vez al servidor.
+  - El perfil recién creado se usa al instante, sin esperar al listener.
+  - El alta es idempotente: si el perfil ya existía, se devuelve en vez de reescribirlo (las reglas lo rechazaban).
+  - Si el servidor no responde, se muestra «No pudimos cargar tu perfil» con el código de error y un botón para reintentar, en lugar del alta.
+
 ## [1.2.0] - 2026-11-07
 
 ### Added

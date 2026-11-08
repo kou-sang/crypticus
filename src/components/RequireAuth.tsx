@@ -2,21 +2,24 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
 import { PageLoader } from './ui';
+import { ProfileOffline } from './ProfileOffline';
 
 export function RequireAuth() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, profileOffline } = useAuth();
   const location = useLocation();
 
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/entrar" replace state={{ from: location.pathname }} />;
+  if (profileOffline) return <ProfileOffline />;
   if (!profile) return <Navigate to="/bienvenida" replace state={{ from: location.pathname }} />;
   return <Outlet />;
 }
 
 /** Solo para invitados: si ya hay sesión con perfil, va al inicio. */
 export function GuestOnly() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, profileOffline } = useAuth();
   if (loading) return <PageLoader />;
+  if (profileOffline) return <ProfileOffline />;
   if (user && profile) return <Navigate to="/inicio" replace />;
   if (user && !profile) return <Navigate to="/bienvenida" replace />;
   return <Outlet />;

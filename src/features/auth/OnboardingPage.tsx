@@ -6,9 +6,10 @@ import { createProfile } from '../../lib/repo';
 import { errorMessage, toHandle } from '../../lib/utils';
 import { Button, ErrorBanner, Input, PageLoader } from '../../components/ui';
 import { Logo } from '../../components/Logo';
+import { ProfileOffline } from '../../components/ProfileOffline';
 
 export default function OnboardingPage() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, profileOffline, adoptProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? '/inicio';
@@ -20,6 +21,7 @@ export default function OnboardingPage() {
 
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/entrar" replace />;
+  if (profileOffline) return <ProfileOffline />;
   if (profile) return <Navigate to={from} replace />;
 
   const handleSubmit = async (event: FormEvent) => {
@@ -29,7 +31,9 @@ export default function OnboardingPage() {
     if (!/^[a-z0-9_]{3,20}$/.test(handle)) return setError('El usuario debe tener 3–20 caracteres: a-z, 0-9 o _.');
     setBusy(true);
     try {
-      await createProfile(user.uid, displayName, handle);
+      // Se adopta el perfil antes de navegar: si el listener tarda o está bloqueado, la guarda de rutas
+      // ya lo ve y no devuelve a /bienvenida.
+      adoptProfile(await createProfile(user.uid, displayName, handle));
       navigate(from, { replace: true });
     } catch (err) {
       setError(errorMessage(err));
