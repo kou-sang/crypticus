@@ -24,7 +24,7 @@ export function useLiveDoc<T>(ref: DocumentReference | null, deps: unknown[]): L
       (error) => setState({ data: null, loading: false, error }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, serverOnly]);
+  }, deps);
 
   return state;
 }
