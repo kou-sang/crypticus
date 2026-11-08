@@ -24,13 +24,22 @@ export function useLiveDoc<T>(ref: DocumentReference | null, deps: unknown[]): L
       (error) => setState({ data: null, loading: false, error }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, serverOnly]);
 
   return state;
 }
 
+export interface LiveQueryOptions {
+  /**
+   * Ignora los resultados de la caché local y espera al servidor. Para listas donde un documento viejo en caché
+   * engaña (p. ej. desafíos: salas ya borradas o empezadas que la caché aún tiene «en espera»).
+   */
+  serverOnly?: boolean;
+}
+
 /** Suscribe a una consulta. Pasa `null` para desactivar. */
-export function useLiveQuery<T>(query: Query | null, deps: unknown[]): LiveState<T[]> {
+export function useLiveQuery<T>(query: Query | null, deps: unknown[], options: LiveQueryOptions = {}): LiveState<T[]> {
+  const { serverOnly = false } = options;
   const [state, setState] = useState<LiveState<T[]>>({ data: [], loading: query !== null, error: null });
 
   useEffect(() => {
@@ -41,14 +50,18 @@ export function useLiveQuery<T>(query: Query | null, deps: unknown[]): LiveState
     setState((prev) => ({ ...prev, loading: true }));
     return onSnapshot(
       query,
-      (snap) => setState({ data: snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as T), loading: false, error: null }),
+      { includeMetadataChanges: serverOnly },
+      (snap) => {
+        if (serverOnly && snap.metadata.fromCache) return;
+        setState({ data: snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as T), loading: false, error: null });
+      },
       (error) => {
         console.error('[firestore] query error', error);
         setState({ data: [], loading: false, error });
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, serverOnly]);
 
   return state;
 }

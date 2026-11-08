@@ -1,7 +1,8 @@
 // Amigos: desafíos recibidos, lista al estilo Lichess (ratings por modo + Desafiar), búsqueda y solicitudes.
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { collection, limit, query, where } from 'firebase/firestore';
+import { collection, limit, orderBy, query, where } from 'firebase/firestore';
+import { isActiveRoom } from '../../lib/rooms';
 import { db } from '../../lib/firebase';
 import { useLiveQuery } from '../../hooks/useFirestore';
 import { useSession } from '../../hooks/useAuth';
@@ -61,14 +62,22 @@ export default function FriendsPage() {
 
   const other = (r: FriendRequest) => users.get(r.from === profile.uid ? r.to : r.from);
 
-  // Desafíos: salas privadas donde un amigo me invitó (el estado se filtra aquí para no requerir índice compuesto).
+  // Desafíos: salas donde me invitaron, las más recientes primero (índice invitedIds + createdAt).
+  // Solo datos del servidor: la caché local guardaba salas ya borradas o empezadas como «en espera»,
+  // y aparecían unos segundos como desafíos fantasma hasta que llegaba la respuesta real.
   const invites = useLiveQuery<Competition>(
-    query(collection(db, 'competitions'), where('invitedIds', 'array-contains', profile.uid), limit(10)),
+    query(collection(db, 'competitions'), where('invitedIds', 'array-contains', profile.uid), orderBy('createdAt', 'desc'), limit(10)),
     [profile.uid],
+    { serverOnly: true },
   );
-  // Pendientes: en espera, sin haber entrado ni rechazado.
+  // Pendientes: en espera, recientes y sin haber entrado ni rechazado. Una sala abandonada en espera no es un desafío.
+  const now = Date.now();
   const challenges = invites.data.filter(
-    (c) => c.status === 'lobby' && !c.participantIds.includes(profile.uid) && !(c.declinedIds ?? []).includes(profile.uid),
+    (c) =>
+      c.status === 'lobby' &&
+      isActiveRoom(c, now) &&
+      !c.participantIds.includes(profile.uid) &&
+      !(c.declinedIds ?? []).includes(profile.uid),
   );
   const navigate = useNavigate();
 

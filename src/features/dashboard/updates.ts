@@ -66,7 +66,7 @@ export const UPDATES: readonly UpdateEntry[] = [
     title: 'Desempate y revancha',
     items: [
       'Muerte súbita con cripticos de 2 o 3 palabras si hay empate en la cima.',
-      'Pide revancha con las mismas reglas: empieza sola cuando aceptan todos.',
+      'Pide revancha con las mismas reglas: los rivales aceptan y vuelven a la sala.',
     ],
   },
   {

@@ -4,6 +4,21 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-08
+
+### Changed
+
+- Revancha: al aceptar entras a la sala y el anfitrión inicia la partida (antes empezaba sola cuando aceptaban todos).
+
+### Fixed
+
+- Aviso «Hay una versión nueva» sin haber desplegado: ahora solo aparece si lo desplegado es más nuevo que lo que corre en el navegador, y muestra las versiones (`v1.2.1 → v1.2.2`).
+- Salas fantasma en Amigos y en Jugar → Amigos:
+  - Se ignoraba el orden: con `limit(30)`, Firestore devolvía 30 salas cualquiera (casi todas viejas) y la lista cambiaba sola. Ahora van las más recientes.
+  - Se mostraba primero la caché local, con salas ya borradas o empezadas como «en espera», hasta que llegaba la respuesta del servidor. Ahora se espera al servidor.
+  - Las salas abandonadas (en espera más de 6 h, o «en vivo» más de 3 h) ya no aparecen.
+- Requiere dos índices nuevos en Firestore (paso 2 del deploy).
+
 ## [1.2.1] - 2026-11-08
 
 ### Fixed

@@ -90,7 +90,7 @@ export function RematchPanel({ target, profile }: { target: RematchTarget; profi
       <h2 className="font-display text-2xl">Revancha</h2>
       {open && (mine || accepted) ? (
         <>
-          <p className="text-sm text-muted">{mine ? 'Propusiste la revancha.' : 'Aceptaste la revancha.'} Empieza cuando acepten todos.</p>
+          <p className="text-sm text-muted">{mine ? 'Propusiste la revancha: inicias la partida desde la sala.' : 'Aceptaste la revancha: el anfitrión la inicia desde la sala.'}</p>
           <Button onClick={() => navigate(`/c/${open.id}`)}>Ir a la sala</Button>
         </>
       ) : open && invited && !declined ? (

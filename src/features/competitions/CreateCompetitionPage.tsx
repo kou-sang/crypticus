@@ -1,5 +1,5 @@
-// Revancha con otros parámetros (desde resultados): se definen las reglas antes de invitar, porque la revancha
-// empieza sola cuando aceptan todos. Las salas nuevas se crean desde Jugar («+ Crear») y se editan dentro.
+// Revancha con otros parámetros (desde resultados): se definen las reglas antes de invitar; quienes aceptan
+// entran a la sala y el anfitrión la inicia. Las salas nuevas se crean desde Jugar («+ Crear») y se editan dentro.
 // Enlaces viejos (/jugar/nueva y /jugar/nueva?rival=…) redirigen a la creación rápida.
 import { useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
@@ -58,7 +58,7 @@ function RematchForm({ rematch }: { rematch: RematchDraft }) {
       <BackLink fallback="/jugar" />
       <PageHeader kicker="Jugar" title="Revancha con otros parámetros" />
       <p className="-mt-4 mb-6 text-sm text-muted">
-        Se enviará a {Object.values(rematch.invitedNames).join(', ') || 'los mismos jugadores'}. Empieza cuando acepten todos.
+        Se enviará a {Object.values(rematch.invitedNames).join(', ') || 'los mismos jugadores'}. Quien acepte entra a la sala; tú inicias la partida.
       </p>
       <RoomRulesForm stored={stored} onChange={setStored} />
       <div className="mt-6 space-y-3">

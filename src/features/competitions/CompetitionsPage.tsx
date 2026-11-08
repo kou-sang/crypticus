@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { collection, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useSession } from '../../hooks/useAuth';
+import { isActiveRoom } from '../../lib/rooms';
 import { useLiveQuery } from '../../hooks/useFirestore';
 import { useFriends } from '../../hooks/useFriends';
 import type { Competition } from '../../../shared/types';
@@ -90,6 +91,7 @@ export default function CompetitionsPage() {
         )
       : null,
     [tab],
+    { serverOnly: true },
   );
 
   const friendsLive = useLiveQuery<Competition>(
@@ -98,17 +100,20 @@ export default function CompetitionsPage() {
           collection(db, 'competitions'),
           where('visibility', '==', 'friends'),
           where('hostId', 'in', friendKey.split(',')),
+          // Las más recientes (índice visibility + hostId + createdAt). Antes, sin orden, el límite devolvía
+          // 30 salas cualquiera (casi todas terminadas o abandonadas) y la lista cambiaba sola.
+          orderBy('createdAt', 'desc'),
           limit(30),
         )
       : null,
     [tab, friendKey],
+    { serverOnly: true },
   );
 
   const source = tab === 'public' ? publicLive : friendsLive;
-  const items =
-    tab === 'public'
-      ? source.data
-      : source.data.filter((c) => c.status !== 'finished').sort((a, b) => b.createdAt - a.createdAt);
+  // Sin salas terminadas ni abandonadas (en espera o «en vivo» de hace horas).
+  const now = Date.now();
+  const items = source.data.filter((c) => isActiveRoom(c, now));
 
   return (
     <>
