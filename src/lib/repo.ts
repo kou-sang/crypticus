@@ -21,7 +21,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { chunk, detectDevice, pairId } from './utils';
+import { chunk, detectDevice, pairId, withTimeout } from './utils';
 import {
   type Competition,
   type CompetitionConfig,
@@ -40,37 +40,39 @@ import { api } from './api';
 
 const PROFILE_TIMEOUT_MS = 15_000;
 
-/** Corta una operación de red que no responde (en iOS una escritura podía quedar colgada para siempre). */
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
 const NO_SERVER =
   'No hubo respuesta del servidor. Revisa la conexión; en iPhone, desactiva los bloqueadores de contenido y el Relay privado para este sitio e intenta de nuevo.';
 
-export async function createProfile(uid: string, displayName: string, handle: string): Promise<void> {
+/**
+ * Alta del perfil. Devuelve el perfil para usarlo al instante (`adoptProfile`), sin esperar al listener.
+ * Idempotente: si el perfil ya existe (alta anterior que el listener no llegó a mostrar), lo devuelve tal cual;
+ * antes se reescribía y las reglas lo rechazaban (solo permiten cambiar el nombre).
+ */
+export async function createProfile(uid: string, displayName: string, handle: string): Promise<UserProfile> {
+  const userRef = doc(db, 'users', uid);
   const handleRef = doc(db, 'handles', handle);
   // Desde el servidor: la caché local podría decir "libre" con un @usuario ya tomado (o tomado por uno mismo).
-  const existing = await withTimeout(getDocFromServer(handleRef), PROFILE_TIMEOUT_MS, NO_SERVER);
-  if (existing.exists()) {
-    // Reintento de un alta a medias: el @usuario ya es mío, solo falta el perfil.
-    if (existing.get('uid') !== uid) throw new Error(`@${handle} ya está en uso.`);
-  }
+  const [current, existing] = await withTimeout(
+    Promise.all([getDocFromServer(userRef), getDocFromServer(handleRef)]),
+    PROFILE_TIMEOUT_MS,
+    NO_SERVER,
+  );
+  if (current.exists()) return current.data() as UserProfile;
+  // Reintento de un alta a medias: el @usuario ya es mío, solo falta el perfil.
+  if (existing.exists() && existing.get('uid') !== uid) throw new Error(`@${handle} ya está en uso.`);
 
-  const batch = writeBatch(db);
-  if (!existing.exists()) batch.set(handleRef, { uid });
-  batch.set(doc(db, 'users', uid), {
+  const profile = {
     uid,
     displayName: displayName.trim(),
     handle,
     stats: { played: 0, wins: 0, solved: 0, hintsUsed: 0 },
     createdAt: Date.now(),
-  } satisfies UserProfile);
+  } satisfies UserProfile;
+  const batch = writeBatch(db);
+  if (!existing.exists()) batch.set(handleRef, { uid });
+  batch.set(userRef, profile);
   await withTimeout(batch.commit(), PROFILE_TIMEOUT_MS, NO_SERVER);
+  return profile;
 }
 
 export async function findUserByHandle(handle: string): Promise<UserProfile | null> {
