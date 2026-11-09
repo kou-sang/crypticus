@@ -1,5 +1,5 @@
 // Sala de espera: unirse, salir, compartir enlace e iniciar.
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Competition, Participant, UserProfile } from '../../../shared/types';
 import { api } from '../../lib/api';
@@ -36,16 +36,10 @@ export function LobbyView({
   const ordered = [...participants].sort((a, b) => a.joinedAt - b.joinedAt);
   const teams = teamDuel ? assignTeams(ordered.map((p) => p.uid), competition.teams ?? {}) : {};
 
-  // Revancha: empieza sola cuando aceptan todos los invitados.
+  // Revancha: quien acepta entra a la sala; el anfitrión la inicia cuando quiera (ya no empieza sola).
   const invited = competition.rematchOf ? (competition.invitedIds ?? []) : [];
   const declined = competition.declinedIds ?? [];
   const allAccepted = invited.length > 0 && invited.every((id) => competition.participantIds.includes(id));
-  const autoStarted = useRef(false);
-  useEffect(() => {
-    if (!isHost || !allAccepted || autoStarted.current) return;
-    autoStarted.current = true;
-    api.start(competition.id).catch((err: unknown) => setError(errorMessage(err)));
-  }, [isHost, allAccepted, competition.id]);
 
   // Editar la sala actual en una ventana: los que ya entraron siguen dentro y ven las reglas nuevas.
   const changeParameters = () => setEditing(true);
@@ -164,7 +158,13 @@ export function LobbyView({
 
       {invited.length > 0 && (
         <section aria-label="Revancha" className="border-l-4 border-ink bg-paper-2/60 px-4 py-3 text-sm">
-          <p className="font-semibold">Revancha: empieza cuando acepten todos.</p>
+          <p className="font-semibold">
+            {allAccepted
+              ? isHost
+                ? 'Revancha: aceptaron todos. Inicia la partida cuando quieras.'
+                : 'Revancha: aceptaron todos. Esperando a que el anfitrión la inicie.'
+              : 'Revancha: el anfitrión la inicia cuando estén todos.'}
+          </p>
           <ul className="mt-2 space-y-1">
             {invited.map((id) => {
               const status = competition.participantIds.includes(id) ? 'aceptó' : declined.includes(id) ? 'rechazó' : 'pendiente';
