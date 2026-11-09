@@ -9,6 +9,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 ### Changed
 
 - Revancha: al aceptar entras a la sala y el anfitrión inicia la partida (antes empezaba sola cuando aceptaban todos).
+- Novedades en Inicio: solo las 3 últimas versiones destacadas y un botón «Mostrar todo» que abre el historial completo en lenguaje común (novedades y arreglos de cada versión, desde la 0.1). `updates.ts` pasa a `RELEASES` con `highlight`, `news` y `fixes`.
 
 ### Fixed
 

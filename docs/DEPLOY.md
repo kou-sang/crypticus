@@ -285,7 +285,7 @@ npx tsx --env-file=.env.local scripts/backfill-royale-pools.ts
 
 ### Novedades en Inicio
 
-Cuando un deploy trae algo importante para los jugadores (no bug fixes ni cambios menores), agrega una entrada **al principio** de `src/features/dashboard/updates.ts` con la misma versión de `package.json`.
+En cada versión, agrega una entrada **al principio** de `src/features/dashboard/updates.ts`, con la misma versión de `package.json` y en lenguaje común: `news` para lo nuevo y `fixes` para los arreglos. Marca `highlight: true` solo si trae algo importante para los jugadores: Inicio muestra las 3 últimas destacadas, y «Mostrar todo» abre el historial completo.
 
 ## 7. Desarrollo local (opcional)
 
