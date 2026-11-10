@@ -105,12 +105,12 @@ export const Briefing = memo(function Briefing({
             </p>
             <ul className="list-disc space-y-1.5 pl-6">
               <li>
-                <strong>Ronda normal:</strong> cada uno recibe 2 cripticos. Al resolverlos atacas al jefe en el momento, y al cerrar la ronda
-                ganas oro; si no llegas, el jefe te golpea. Equivocarse solo cuesta 2 s de espera.
+                <strong>Ronda normal:</strong> cada uno recibe 2 cripticos. Cada criptico resuelto es un golpe al jefe en el momento y da 15 +
+                número de ronda de oro. Si no resuelves los dos a tiempo, el jefe te golpea. Equivocarse solo cuesta 2 s de espera.
               </li>
               <li>
-                <strong>Ronda difícil (grupal):</strong> todos reciben un criptico difícil. Si todos lo resuelven, todos atacan y se abre la
-                tienda; si alguno falla, el jefe golpea a todos.
+                <strong>Ronda difícil (grupal):</strong> todos reciben un criptico medio o difícil (desde la ronda 11, difícil o muy difícil).
+                Si todos lo resuelven, todos atacan y se abre la tienda; si alguno falla, el jefe golpea a todos.
               </li>
               <li>
                 <strong>Tienda:</strong> oro e inventario individuales, 4 casillas, 45 s.

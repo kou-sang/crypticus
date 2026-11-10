@@ -260,8 +260,14 @@ body {
 .coop-enter { animation: coop-enter 260ms ease-out both; }
 
 /* Manchas de los piojos de PHARAONIS sobre la zona de cripticos. */
-.coop-lice { position: absolute; border-radius: 9999px; background: rgba(0, 0, 0, 0.5); pointer-events: none; animation: coop-enter 300ms ease-out both; }
+/* Manchas de piojos: forma, tamaño, giro y alfa van en línea. Sin mezcla: superpuestas se oscurecen. La entrada
+   solo anima la opacidad para no pisar el giro (`transform`). */
+.coop-lice { position: absolute; pointer-events: none; animation: coop-lice-in 300ms ease-out both; }
+@keyframes coop-lice-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .coop-float, .coop-shake, .coop-heal-glow, .coop-banner, .coop-enter { animation-duration: 1ms; }
+  .coop-float, .coop-shake, .coop-heal-glow, .coop-banner, .coop-enter, .coop-lice { animation-duration: 1ms; }
 }

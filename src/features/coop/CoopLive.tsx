@@ -1,6 +1,6 @@
 // Partida COOP en vivo, en pantalla completa (boceto): arena arriba; zona de cripticos, panel propio y
 // habilidades abajo; tienda en una ventana. Antes de empezar, la explicación y la presentación de jefes.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { coopLevelLabel } from '../../../shared/coop/balance';
@@ -13,7 +13,9 @@ import { useCoopChannel } from '../../hooks/useCoopChannel';
 import { setPlaying } from '../../lib/playing';
 import { playCue } from '../../lib/sound';
 import { canPlayCoop, cx, errorMessage } from '../../lib/utils';
+import { ChatPanel } from '../chat/ChatPanel';
 import { Arena } from './Arena';
+import { BossDetails } from './BossDetails';
 import { Briefing } from './Briefing';
 import { DraftWindow } from './DraftWindow';
 import { CrypticZone } from './CrypticZone';
@@ -188,6 +190,40 @@ function LeaveButton({ onLeave }: { onLeave: () => void }) {
   );
 }
 
+/**
+ * Chat de sala desplegable: el mismo chat de la competencia, en una columna al costado. Queda montado aunque esté
+ * cerrado para marcar mensajes nuevos de los demás (el historial previo a la partida no cuenta como nuevo).
+ */
+function useChatDrawer() {
+  // `seen`: último mensaje ajeno ya visto (undefined hasta la primera carga, que no cuenta como nuevo).
+  const [chat, setChat] = useState<{ open: boolean; latest: string | null; seen: string | null | undefined }>({
+    open: false,
+    latest: null,
+    seen: undefined,
+  });
+  const onActivity = useCallback((id: string | null) => {
+    setChat((prev) => ({ ...prev, latest: id, seen: prev.open || prev.seen === undefined ? id : prev.seen }));
+  }, []);
+  const toggle = useCallback(() => setChat((prev) => ({ ...prev, open: !prev.open, seen: prev.latest })), []);
+  const unread = !chat.open && chat.latest !== null && chat.latest !== chat.seen;
+  return { open: chat.open, toggle, unread, onActivity };
+}
+
+function ChatToggle({ open, unread, onToggle }: { open: boolean; unread: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-controls="coop-chat"
+      className={cx('relative border px-3 py-1 text-sm font-semibold', open ? 'border-ink bg-ink text-paper' : 'border-ink')}
+    >
+      Chat {open ? '›' : '‹'}
+      {unread && <span aria-label="Mensajes nuevos" className="absolute -right-1 -top-1 size-2.5 rounded-full bg-accent" />}
+    </button>
+  );
+}
+
 export function CoopLive({ competition, profile }: { competition: Competition; profile: UserProfile }) {
   const navigate = useNavigate();
   const allowed = canPlayCoop();
@@ -196,9 +232,18 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
   const game = view?.game ?? null;
   const fx = useCoopFx(onEvents, game, profile.uid);
   const [details, setDetails] = useState<string | null>(null);
+  const [bossOpen, setBossOpen] = useState(false);
+  const openBoss = useCallback(() => setBossOpen(true), []);
   const [shopOpen, setShopOpen] = useState(false);
   const lowTimeRound = useRef(0);
   const fullscreen = useCoopFullscreen();
+  const chat = useChatDrawer();
+  const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId: competition.id }), [competition.id]);
+  const chatRef = useRef<HTMLElement>(null);
+  // Al abrir el chat, el foco va a su campo de texto (al cerrarlo, la grilla vuelve con el próximo clic).
+  useEffect(() => {
+    if (chat.open) chatRef.current?.querySelector('input')?.focus();
+  }, [chat.open]);
 
   const me = game?.players.find((p) => p.id === profile.uid) ?? null;
   const shopNumber = game?.phase === 'shop' ? game.shop?.number : undefined;
@@ -245,92 +290,122 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
   // Portal al <body>: dentro de la página, la animación de entrada (transform) y la perspectiva del tema Cyber
   // convierten a `.page` en el contenedor de lo `fixed`, y la partida quedaba recortada a su altura.
   return createPortal(
-    <div className="coop-screen fixed inset-0 z-40 flex flex-col overflow-hidden bg-paper text-ink">
-      {/* Avisos grandes arriba de todo (muerte, resurrección, resultado). */}
-      {fx.banners.map((banner, index) => (
-        <p
-          key={banner.id}
-          role="status"
-          className={cx(
-            'coop-banner fixed left-1/2 z-50 border-2 px-8 py-3 font-display text-3xl font-semibold shadow-lg',
-            banner.tone === 'death' && 'border-accent bg-paper text-accent',
-            banner.tone === 'revive' && 'border-ok bg-paper text-ok',
-            banner.tone === 'result' && 'border-ink bg-ink text-paper',
-            banner.tone === 'boss' && 'border-ink bg-paper',
-          )}
-          style={{ top: 16 + index * 72 }}
-        >
-          {banner.text}
-        </p>
-      ))}
-
-      {!view ? (
-        <PageLoader />
-      ) : view.draft || view.briefing ? (
-        <>
-          <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-3">
-            <LeaveButton onLeave={leave} />
-            <FullscreenButton isFull={fullscreen.isFull} onEnter={fullscreen.enter} />
-          </div>
-          <div className="min-h-0 flex-1">
-            {view.draft ? (
-              <DraftWindow view={view} meId={profile.uid} now={now} act={act} />
-            ) : (
-              <Briefing view={view} meId={profile.uid} now={now} act={act} />
+    <div className="coop-screen fixed inset-0 z-40 flex overflow-hidden bg-paper text-ink">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Avisos grandes arriba de todo (muerte, resurrección, resultado). */}
+        {fx.banners.map((banner, index) => (
+          <p
+            key={banner.id}
+            role="status"
+            className={cx(
+              'coop-banner fixed left-1/2 z-50 border-2 px-8 py-3 font-display text-3xl font-semibold shadow-lg',
+              banner.tone === 'death' && 'border-accent bg-paper text-accent',
+              banner.tone === 'revive' && 'border-ok bg-paper text-ok',
+              banner.tone === 'result' && 'border-ink bg-ink text-paper',
+              banner.tone === 'boss' && 'border-ink bg-paper',
             )}
-          </div>
-        </>
-      ) : !game ? (
-        <PageLoader />
-      ) : (
-        <>
-          <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-ink px-4 py-1.5">
-            <div className="flex items-center gap-2">
+            style={{ top: 16 + index * 88 }}
+          >
+            {banner.text}
+            {banner.detail && <span className="mt-1 block max-w-xl font-sans text-sm font-normal">{banner.detail}</span>}
+          </p>
+        ))}
+
+        {!view ? (
+          <PageLoader />
+        ) : view.draft || view.briefing ? (
+          <>
+            <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-3">
               <LeaveButton onLeave={leave} />
-              <SurrenderControl game={game} meId={profile.uid} now={now} act={act} />
+              <div className="flex items-center gap-2">
+                <FullscreenButton isFull={fullscreen.isFull} onEnter={fullscreen.enter} />
+                <ChatToggle open={chat.open} unread={chat.unread} onToggle={chat.toggle} />
+              </div>
             </div>
-            <p className="text-sm font-semibold uppercase tracking-widest">
-              COOP {coopLevelLabel(game.level, game.stage)} · Jefe {Math.min(game.bossIndex + 1, game.bosses.length)}/{game.bosses.length}
-              {game.roundNumber > 0 && ` · Ronda ${game.roundNumber}${game.roundKind === 'hard' ? ' (difícil)' : ''}`}
-            </p>
-            <div className="flex items-center justify-end gap-3">
-              <FullscreenButton isFull={fullscreen.isFull} onEnter={fullscreen.enter} />
-              {connection !== 'open' && <span className="text-xs text-accent">Reconectando…</span>}
-              <span className={cx('font-mono text-lg font-bold tabular-nums', game.totalMs - gameTime(game, now) < 60_000 && 'text-accent')}>
-                {clock(game.totalMs - gameTime(game, now))}
-              </span>
+            <div className="min-h-0 flex-1">
+              {view.draft ? (
+                <DraftWindow view={view} meId={profile.uid} now={now} act={act} />
+              ) : (
+                <Briefing view={view} meId={profile.uid} now={now} act={act} />
+              )}
             </div>
-          </header>
+          </>
+        ) : !game ? (
+          <PageLoader />
+        ) : (
+          <>
+            <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-ink px-4 py-1.5">
+              <div className="flex items-center gap-2">
+                <LeaveButton onLeave={leave} />
+                <SurrenderControl game={game} meId={profile.uid} now={now} act={act} />
+              </div>
+              <p className="text-sm font-semibold uppercase tracking-widest">
+                COOP {coopLevelLabel(game.level, game.stage)} · Jefe {Math.min(game.bossIndex + 1, game.bosses.length)}/{game.bosses.length}
+                {game.roundNumber > 0 && ` · Ronda ${game.roundNumber}${game.roundKind === 'hard' ? ' (difícil)' : ''}`}
+              </p>
+              <div className="flex items-center justify-end gap-3">
+                <FullscreenButton isFull={fullscreen.isFull} onEnter={fullscreen.enter} />
+                <ChatToggle open={chat.open} unread={chat.unread} onToggle={chat.toggle} />
+                {connection !== 'open' && <span className="text-xs text-accent">Reconectando…</span>}
+                <span className={cx('font-mono text-lg font-bold tabular-nums', game.totalMs - gameTime(game, now) < 60_000 && 'text-accent')}>
+                  {clock(game.totalMs - gameTime(game, now))}
+                </span>
+              </div>
+            </header>
 
-          <main className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.95fr)_minmax(0,1fr)] gap-3 p-3">
-            <Arena state={game} meId={profile.uid} floaters={fx.floaters} hits={fx.hits} heals={fx.heals} onSelect={setDetails} />
-            <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-3">
-              <CrypticZone
+            <main className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.95fr)_minmax(0,1fr)] gap-3 p-3">
+              <Arena
                 state={game}
-                me={me}
-                cryptics={view.mine.cryptics}
-                act={act}
-                now={now}
-                log={fx.log}
-                lice={fx.lice}
-                onOpenShop={() => setShopOpen(true)}
+                meId={profile.uid}
+                floaters={fx.floaters}
+                pulses={fx.pulses}
+                gt={Math.floor(gameTime(game, now) / 1000) * 1000}
+                onSelect={setDetails}
+                onSelectBoss={openBoss}
               />
-              {me ? <MyPanel state={game} me={me} now={now} act={act} /> : <EmptyState title="Estás mirando la partida" />}
-            </div>
-          </main>
+              <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-3">
+                <CrypticZone
+                  state={game}
+                  me={me}
+                  cryptics={view.mine.cryptics}
+                  act={act}
+                  now={now}
+                  log={fx.log}
+                  lice={fx.lice}
+                  onOpenShop={() => setShopOpen(true)}
+                />
+                {me ? <MyPanel state={game} me={me} now={now} act={act} /> : <EmptyState title="Estás mirando la partida" />}
+              </div>
+            </main>
 
-          {me && game.phase === 'shop' && me.status === 'alive' && (
-            <ShopWindow state={game} me={me} now={now} open={shopOpen} onClose={() => setShopOpen(false)} act={act} />
-          )}
-          <PlayerDetails state={game} playerId={details} now={now} onClose={() => setDetails(null)} />
-          {game.result && (
-            <div className="coop-enter fixed bottom-6 left-1/2 z-50 -translate-x-1/2 border-2 border-ink bg-paper px-6 py-3 text-center shadow-lg">
-              <p className="font-display text-2xl">{game.result.won ? '¡Victoria!' : game.result.surrendered ? 'Se rindieron' : 'Derrota'}</p>
-              <p className="text-sm text-muted">Calculando resultados y Elo…</p>
-            </div>
-          )}
-        </>
-      )}
+            {me && game.phase === 'shop' && me.status === 'alive' && (
+              <ShopWindow state={game} me={me} now={now} open={shopOpen} onClose={() => setShopOpen(false)} act={act} />
+            )}
+            <PlayerDetails state={game} playerId={details} now={now} onClose={() => setDetails(null)} />
+            <BossDetails state={game} open={bossOpen} onClose={() => setBossOpen(false)} />
+            {game.result && (
+              <div className="coop-enter fixed bottom-6 left-1/2 z-50 -translate-x-1/2 border-2 border-ink bg-paper px-6 py-3 text-center shadow-lg">
+                <p className="font-display text-2xl">{game.result.won ? '¡Victoria!' : game.result.surrendered ? 'Se rindieron' : 'Derrota'}</p>
+                <p className="text-sm text-muted">Calculando resultados y Elo…</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <aside
+        id="coop-chat"
+        ref={chatRef}
+        aria-label="Chat de sala"
+        className={cx('w-80 shrink-0 flex-col border-l-2 border-ink bg-paper', chat.open ? 'flex' : 'hidden')}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-ink px-3 py-1.5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest">Chat de sala</h2>
+          <button type="button" onClick={chat.toggle} className="px-2 text-sm" aria-label="Cerrar chat">
+            ✕
+          </button>
+        </div>
+        <ChatPanel target={chatTarget} fill onActivity={chat.onActivity} className="min-h-0 flex-1 border-0" />
+      </aside>
     </div>,
     document.body,
   );

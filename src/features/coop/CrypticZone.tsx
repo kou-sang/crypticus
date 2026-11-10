@@ -1,6 +1,7 @@
 // Zona de cripticos (boceto): aquí pasa todo lo que hay que leer. Cripticos de la ronda, votaciones,
 // presentación del jefe, avisos de la tienda y el registro de eventos.
 import { useEffect, useMemo, useState } from 'react';
+import { GOLD_PER_CRYPTIC_BASE } from '../../../shared/coop/balance';
 import { BOSSES } from '../../../shared/coop/catalog/bosses';
 import { gameTime } from '../../../shared/coop/engine';
 import { shiftLetter } from '../../../shared/coop/letters';
@@ -196,6 +197,12 @@ function RoundCryptics({
       ) : (
         <p className="font-semibold text-ok">✓ Resolviste todo. Esperando al resto…</p>
       )}
+      {state.roundKind === 'normal' && me.status === 'alive' && current && (
+        <p className="text-xs text-muted">
+          Cada criptico resuelto golpea al jefe al instante y da {GOLD_PER_CRYPTIC_BASE + state.roundNumber} de oro. Si no resuelves todos
+          antes del final, el jefe te golpea.
+        </p>
+      )}
       {explanation && <p className="text-xs text-muted">Anterior: {explanation}</p>}
     </div>
   );
@@ -287,15 +294,29 @@ export function CrypticZone({
         )}
         {state.result && <p className="font-display text-3xl">{state.result.won ? '¡Victoria!' : 'Derrota'}</p>}
       </div>
-      <ol aria-label="Registro" className="max-h-20 shrink-0 space-y-0.5 overflow-y-auto border-t border-line px-4 py-1.5 text-[11px] leading-snug text-muted">
-        {log.map((line) => (
-          <li key={line.id} className="coop-enter">
+      {/* Lo más reciente arriba: antes quedaba oculto bajo el desborde. */}
+      <ol aria-label="Registro" className="max-h-24 shrink-0 space-y-0.5 overflow-y-auto border-t border-line px-4 py-1.5 text-[11px] leading-snug text-muted">
+        {[...log].reverse().map((line, index) => (
+          <li key={line.id} className={cx('coop-enter', index === 0 && 'text-ink')}>
             {line.text}
           </li>
         ))}
       </ol>
       {lice.map((stain) => (
-        <span key={stain.id} className="coop-lice" style={{ left: `${stain.left}%`, top: `${stain.top}%`, width: stain.size, height: stain.size }} />
+        <span
+          key={stain.id}
+          className="coop-lice"
+          style={{
+            left: `${stain.left}%`,
+            top: `${stain.top}%`,
+            width: stain.width,
+            height: stain.height,
+            borderRadius: stain.radius,
+            transform: `rotate(${stain.rotate}deg)`,
+            // Color de la tinta del tema (oscura en claros, clara en oscuros) con alfa bajo.
+            background: `color-mix(in srgb, var(--ink) ${Math.round(stain.alpha * 100)}%, transparent)`,
+          }}
+        />
       ))}
     </section>
   );

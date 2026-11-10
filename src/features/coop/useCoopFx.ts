@@ -1,6 +1,8 @@
 // Efectos de la partida COOP a partir de los eventos del servidor: números flotantes de daño/curación,
 // sacudidas, avisos grandes (muerte y resurrección), registro de la zona de cripticos, manchas y sonidos.
 import { useEffect, useRef, useState } from 'react';
+import { PHARAONIS_EFFECTS, type PharaonisEffect } from '../../../shared/coop/catalog/bosses';
+import { PHARAONIS_EFFECT_INFO } from '../../../shared/coop/effects';
 import type { CoopEvent } from '../../../shared/coop/events';
 import type { CoopState } from '../../../shared/coop/state';
 import { playCue, playUi, type Cue } from '../../lib/sound';
@@ -19,6 +21,8 @@ export interface Floater {
 export interface Banner {
   id: number;
   text: string;
+  /** Segunda línea opcional (qué hace lo que pasó). */
+  detail?: string;
   tone: 'death' | 'revive' | 'boss' | 'result';
 }
 
@@ -27,17 +31,43 @@ export interface LogLine {
   text: string;
 }
 
+/** Pulso visual de un objetivo: `n` cambia la `key` (reinicia la animación); `kind` decide cuál se reproduce. */
+export interface Pulse {
+  n: number;
+  kind: 'hit' | 'heal';
+}
+
+/** Mancha de los piojos de PHARAONIS. Posición en %, tamaño en px, giro en grados, alfa de la tinta 0–1. */
 export interface LiceStain {
   id: number;
   left: number;
   top: number;
-  size: number;
+  width: number;
+  height: number;
+  rotate: number;
+  /** `border-radius` irregular (8 radios): da la forma de mancha. */
+  radius: string;
+  alpha: number;
 }
 
 const FLOATER_MS = 1_300;
 const BANNER_MS = 3_200;
-const LOG_LIMIT = 8;
-const LICE_LIMIT = 14;
+const DETAIL_BANNER_MS = 6_000;
+const LOG_LIMIT = 12;
+
+/** Causa corta junto al número flotante (el golpe del jefe no la lleva: se ve en el registro). */
+const DAMAGE_CAUSE: Partial<Record<Extract<CoopEvent, { type: 'damage' }>['source'], string>> = {
+  burn: 'quemadura',
+  poison: 'veneno',
+  pharaonis: 'PHARAONIS',
+  apple: 'manzana',
+  offer: 'oferta',
+  gedeon: 'soldado',
+  naaman: 'ofrenda',
+};
+/** Manchas por golpe y tope en pantalla (las más viejas se van primero). */
+const LICE_PER_HIT = 10;
+const LICE_LIMIT = 60;
 
 /** 12 → 18 px según la cantidad (proporcional, en 4 escalones). */
 export function floaterSize(amount: number): number {
@@ -49,6 +79,25 @@ export function floaterSize(amount: number): number {
 }
 
 /** PRNG pequeño para ubicar las manchas a partir de la semilla del evento. */
+/**
+ * Mancha al azar: tamaño de 10 a 64 px, proporción 0,6–1,6, giro libre y contorno irregular. Translúcida
+ * (14–24 % de la tinta del tema): donde se superponen dos o más, se oscurece por acumulación.
+ */
+function liceStain(random: () => number): Omit<LiceStain, 'id'> {
+  const base = 10 + random() ** 1.6 * 54; // Más manchas chicas que grandes.
+  const ratio = 0.6 + random();
+  const r = () => `${Math.round(30 + random() * 40)}%`;
+  return {
+    left: random() * 94,
+    top: random() * 88,
+    width: Math.round(base * Math.sqrt(ratio)),
+    height: Math.round(base / Math.sqrt(ratio)),
+    rotate: Math.round(random() * 360),
+    radius: `${r()} ${r()} ${r()} ${r()} / ${r()} ${r()} ${r()} ${r()}`,
+    alpha: 0.14 + random() * 0.1,
+  };
+}
+
 function seeded(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -64,9 +113,8 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
   const [banners, setBanners] = useState<Banner[]>([]);
   const [log, setLog] = useState<LogLine[]>([]);
   const [lice, setLice] = useState<LiceStain[]>([]);
-  /** Contador por objetivo: cambia la `key` del elemento para reiniciar la animación. */
-  const [hits, setHits] = useState<Record<string, number>>({});
-  const [heals, setHeals] = useState<Record<string, number>>({});
+  /** Último pulso por objetivo: antes, una curación remontaba la tarjeta con la sacudida de daño. */
+  const [pulses, setPulses] = useState<Record<string, Pulse>>({});
   const seq = useRef(0);
   const latestState = useRef(state);
   latestState.current = state;
@@ -85,7 +133,7 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
         const id = () => (seq.current += 1);
 
         for (const event of events) {
-          const text = describeEvent(event, current);
+          const text = describeEvent(event, current, meId);
           if (text) lines.push({ id: id(), text });
           switch (event.type) {
             case 'playerHit':
@@ -102,11 +150,19 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
             case 'bossHit':
               if (event.evaded) nextFloaters.push({ id: id(), target: event.playerId, text: 'Esquivó', tone: 'miss', size: 12 });
               break;
-            case 'damage':
-              nextFloaters.push({ id: id(), target: event.playerId, text: `−${event.amount}`, tone: 'damage', size: floaterSize(event.amount) });
+            case 'damage': {
+              const cause = DAMAGE_CAUSE[event.source];
+              nextFloaters.push({
+                id: id(),
+                target: event.playerId,
+                text: cause ? `−${event.amount} ${cause}` : `−${event.amount}`,
+                tone: 'damage',
+                size: floaterSize(event.amount),
+              });
               hitTargets.add(event.playerId);
               if (event.playerId === meId) cues.add(event.amount >= 50 ? 'danger' : 'hit');
               break;
+            }
             case 'heal':
               nextFloaters.push({ id: id(), target: event.playerId, text: `+${event.amount}`, tone: 'heal', size: floaterSize(event.amount) });
               healTargets.add(event.playerId);
@@ -133,7 +189,16 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
             case 'bossDefeated':
               cues.add('success');
               break;
-            case 'bossAbility':
+            case 'bossAbility': {
+              // Plagas de PHARAONIS: aviso grande con qué se activó y cómo afecta (en el registro se perdía).
+              const index = event.bossId === 'pharaonis' ? PHARAONIS_EFFECTS.indexOf(event.ability as PharaonisEffect) : -1;
+              if (index >= 0) {
+                const info = PHARAONIS_EFFECT_INFO[PHARAONIS_EFFECTS[index]!];
+                nextBanners.push({ id: id(), text: `PHARAONIS · Plaga ${index + 1}: ${info.name}`, detail: `${info.detail}.`, tone: 'boss' });
+              }
+              cues.add('danger');
+              break;
+            }
             case 'secretRevealed':
               cues.add('danger');
               break;
@@ -143,7 +208,7 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
               break;
             case 'lice': {
               const random = seeded(event.seed);
-              for (let i = 0; i < 3; i += 1) stains.push({ id: id(), left: random() * 90, top: random() * 80, size: 18 + random() * 36 });
+              for (let i = 0; i < LICE_PER_HIT; i += 1) stains.push({ id: id(), ...liceStain(random) });
               break;
             }
             case 'roundStart':
@@ -166,13 +231,14 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
         }
         if (nextBanners.length > 0) {
           setBanners((prev) => [...prev, ...nextBanners]);
-          const ids = new Set(nextBanners.map((b) => b.id));
-          window.setTimeout(() => setBanners((prev) => prev.filter((b) => !ids.has(b.id))), BANNER_MS);
+          // Los avisos con explicación quedan más tiempo en pantalla para poder leerlos.
+          for (const banner of nextBanners) {
+            window.setTimeout(() => setBanners((prev) => prev.filter((b) => b.id !== banner.id)), banner.detail ? DETAIL_BANNER_MS : BANNER_MS);
+          }
         }
         if (lines.length > 0) setLog((prev) => [...prev, ...lines].slice(-LOG_LIMIT));
         if (stains.length > 0) setLice((prev) => [...prev, ...stains].slice(-LICE_LIMIT));
-        if (hitTargets.size > 0) setHits((prev) => bump(prev, hitTargets));
-        if (healTargets.size > 0) setHeals((prev) => bump(prev, healTargets));
+        if (hitTargets.size > 0 || healTargets.size > 0) setPulses((prev) => pulse(prev, hitTargets, healTargets));
         if (events.some((e) => e.type === 'shopOpen')) playUi('open');
         // Un sonido por tipo y por difusión: varios golpes juntos no se apilan.
         for (const cue of cues) playCue(cue);
@@ -180,11 +246,14 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
     [subscribe, meId],
   );
 
-  return { floaters, banners, log, lice, hits, heals };
+  return { floaters, banners, log, lice, pulses };
 }
 
-function bump(prev: Record<string, number>, targets: Set<string>): Record<string, number> {
+/** Si en la misma difusión un objetivo recibe daño y curación, se ve el daño. */
+function pulse(prev: Record<string, Pulse>, hit: Set<string>, healed: Set<string>): Record<string, Pulse> {
   const next = { ...prev };
-  for (const target of targets) next[target] = (next[target] ?? 0) + 1;
+  for (const target of new Set([...hit, ...healed])) {
+    next[target] = { n: (prev[target]?.n ?? 0) + 1, kind: hit.has(target) ? 'hit' : 'heal' };
+  }
   return next;
 }

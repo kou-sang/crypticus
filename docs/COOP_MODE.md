@@ -40,10 +40,10 @@ Falta:
 
 ## Interpretaciones (confirmar si alguna no es así)
 
-1. Ronda normal: cada jugador golpea al jefe **en el momento** en que resuelve todos sus cripticos. Si ese golpe lo derriba, la ronda termina ahí: nadie más recibe daño y los ganadores cobran su oro. El oro y los efectos de ronda ganada llegan al cerrar la ronda. En la ronda difícil, los ataques siguen al final y en orden de asiento. El daño que sobra sobre un jefe muerto se pierde.
-2. Orden al terminar la ronda: ataques de los jugadores → efectos de PHARAONIS → quemaduras previas de LEVIATHAN → golpes del jefe → oro → inhibición de JEZABEL. Las quemaduras nuevas arden desde la ronda siguiente.
+1. Ronda normal: cada criptico resuelto es un golpe al jefe **en el momento** (2 golpes por ronda completa). Si un golpe lo derriba, la ronda termina ahí y nadie más recibe daño. Si no, al cerrar la ronda el jefe golpea a quien no resolvió todos. El oro (15 + número de la ronda en curso, con los bonus de oro) se cobra al resolver **cada** criptico, en cualquier ronda y aunque no se complete; solo lo cobran los vivos. Los efectos de ronda ganada llegan al cerrar la ronda. En la ronda difícil, los ataques siguen al final y en orden de asiento. El daño que sobra sobre un jefe muerto se pierde.
+2. Orden al terminar la ronda: ataques de los jugadores → efectos de PHARAONIS → quemaduras previas de LEVIATHAN → golpes del jefe → progreso de ronda ganada → inhibición de JEZABEL. Las quemaduras nuevas arden desde la ronda siguiente.
 3. Los muertos no retienen la ronda: termina cuando todos los vivos no inhibidos resolvieron. Su curación de 20 se aplica al resolver.
-4. Ronda difícil: el 60 % de los cripticos son difíciles y el 40 % muy difíciles de 2 palabras (el manual no da el reparto).
+4. Ronda difícil: hasta la ronda 10, 50 % medios y 50 % difíciles; desde la 11, 60 % difíciles y 40 % muy difíciles de 2 palabras (`HARD_ROUND_TIER_TABLE`; el reparto no está confirmado).
 5. Las armas especiales (Espada de Goliat, Arco de Jonatán, Anillo del Faraón) también cambian el tipo de daño. La Vara de Moisés no es un arma.
 6. La armadura de los jugadores reduce cualquier daño del jefe. El veneno, las quemaduras, la manzana, el 5 % de PHARAONIS y los 100 de la oferta secreta son daño directo, sin armadura.
 7. El Manto de Elías evita el golpe por completo (0 de daño).
@@ -53,7 +53,7 @@ Falta:
 11. HAMAN: el recargo se aplica a todo lo que cuesta oro (también a las recargas). No baja aunque HAMAN muera.
 12. Cruz de Jesús: aparece como máximo una vez por partida.
 13. Tienda: las ofertas de cada jugador no se repiten entre sí. Quien ya tiene un objeto «uno por jugador» no lo ve. Los objetos únicos de la party no aparecen si alguien ya los tiene.
-14. DEBBORA: su activa revela una pista del criptico actual sin gastar su contador.
+14. DEBBORA: su activa revela una pista del criptico actual sin gastar su contador. Empieza con 1 carga (máximo 2); recarga en la tienda.
 15. Las habilidades activas se usan en ronda, tienda o votación (una vez por ronda). No se usan durante la presentación de un jefe.
 16. Flujo al iniciar: selección de personajes (60 s; al vencer, quien no eligió recibe uno libre al azar) → carga con explicación salteable (90 s o todos listos) → presentación del primer jefe. Quien sale antes de empezar queda fuera desde el primer instante.
 17. Rendición: «Rendirse» abre una votación de 30 s de partida. Votan vivos y caídos (no los que salieron). Un «no» solo retira ese voto; pasa con el sí de todos y termina en derrota (cuenta para el Elo como cualquier derrota).
@@ -79,6 +79,6 @@ Con los números del manual v2, los bots no ganan nunca. Bot «normal»: resuelv
 Causas medidas (30 partidas de 4 jugadores):
 
 - **La ronda difícil casi nunca se supera** (8 de 119): hay que resolver un difícil o muy difícil en 30 s (21 s contra el jefe Expert), y tienen que lograrlo **todos**. Cada fallo golpea a toda la party: es la mayor fuente de muertes. Además, casi nunca se abre la tienda.
-- **El daño de los jugadores es bajo** frente a la vida de los jefes: 30 por jugador por ronda ganada, contra 630 del jefe Easy con 4 jugadores. Hacen falta ~7 rondas perfectas solo para el primero.
+- **El daño de los jugadores es bajo** frente a la vida de los jefes: 30 por criptico (60 por jugador por ronda normal completa), contra 630 del jefe Easy con 4 jugadores. Hacen falta ~3–4 rondas perfectas solo para el primero.
 
 El modelo de los bots es una estimación: los tiempos reales de resolución deciden. Ajustes a evaluar en `balance.ts`: ronda difícil de 60 s, ataque base 45–60 o vida de los jefes −30 %, y daño base de los jefes 30 (+10 por categoría).

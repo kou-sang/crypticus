@@ -16,6 +16,25 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.7.0',
+    date: '2026-11-10',
+    title: 'COOP: chat, estados y oro por criptico',
+    highlight: true,
+    news: [
+      'En las rondas normales de COOP, cada criptico que resuelves golpea al jefe al instante.',
+      'En COOP, cada criptico que resuelves da 15 + el número de la ronda de oro, al instante.',
+      'La ronda difícil trae cripticos medios o difíciles; desde la ronda 11, difíciles o muy difíciles.',
+      'Chat de la sala al costado durante la partida, con aviso de mensajes nuevos.',
+      'Cada jugador muestra sus efectos de estado (quemado, envenenado, soldado, buffs…) con el tiempo que les queda.',
+      'El registro cuenta cada golpe y la causa de cada daño.',
+      'Toca al jefe para ver sus habilidades y efectos. PHARAONIS avisa en grande cada plaga que activa y muestra cuál viene.',
+    ],
+    fixes: [
+      'Curarse ya no hace temblar la tarjeta como si recibieras daño.',
+      'Debbora ya puede usar su habilidad: empieza con 1 carga.',
+    ],
+  },
+  {
     version: '1.6.0',
     date: '2026-11-10',
     title: 'COOP: golpes al instante',

@@ -27,9 +27,45 @@ export function nameOf(state: CoopState | null, playerId: string | null | undefi
   return player ? player.name : 'Alguien';
 }
 
+/** Causa del daño directo (sin golpe del jefe) para el registro. `null`: no se registra. */
+const DAMAGE_SOURCE_TEXT: Partial<Record<Extract<CoopEvent, { type: 'damage' }>['source'], string>> = {
+  burn: 'quemadura de LEVIATHAN',
+  pharaonis: 'estallido de PHARAONIS',
+  apple: 'la manzana',
+  offer: 'la oferta secreta',
+};
+
+const bossName = (state: CoopState | null): string => {
+  const boss = state?.bosses[state.bossIndex];
+  return boss ? BOSSES[boss.id].name : 'El jefe';
+};
+
+/** Portador de la Túnica de José que recibió parte del golpe (otro jugador vivo con la túnica). */
+const tunicHolder = (state: CoopState | null, targetId: string): string =>
+  nameOf(state, state?.players.find((p) => p.id !== targetId && p.status === 'alive' && p.inventory.some((i) => i.itemId === 'josephTunic'))?.id);
+
 /** Línea para el registro de la zona de cripticos. `null`: no se registra (lo muestran otras animaciones). */
-export function describeEvent(event: CoopEvent, state: CoopState | null): string | null {
+export function describeEvent(event: CoopEvent, state: CoopState | null, meId?: string): string | null {
+  const who = (playerId: string) => (playerId === meId ? 'Tú' : nameOf(state, playerId));
   switch (event.type) {
+    case 'playerHit': {
+      const target = event.target === 'rex' ? SUMMONS.rexAssuerus.name : bossName(state);
+      const how = [event.soldier && 'soldado', event.sacrifice && 'sacrificio', event.evaded && 'esquivó parte'].filter(Boolean).join(', ');
+      return `${who(event.playerId)} → ${target}: −${event.amount}${how ? ` (${how})` : ''}.`;
+    }
+    case 'bossHit': {
+      if (event.evaded) return event.playerId === meId ? `Esquivaste el golpe de ${bossName(state)}.` : `${nameOf(state, event.playerId)} esquivó el golpe de ${bossName(state)}.`;
+      const extra = [
+        event.crit && 'crítico',
+        event.absorbed > 0 && `soldado absorbe ${event.absorbed}`,
+        event.redirected > 0 && `${tunicHolder(state, event.playerId)} recibe ${event.redirected} por la Túnica de José`,
+      ].filter(Boolean);
+      return `${bossName(state)} → ${who(event.playerId)}: −${event.amount}${extra.length > 0 ? ` (${extra.join(', ')})` : ''}.`;
+    }
+    case 'damage': {
+      const cause = DAMAGE_SOURCE_TEXT[event.source];
+      return cause ? `${who(event.playerId)}: −${event.amount} por ${cause}.` : null;
+    }
     case 'bossIntro':
       return `Aparece ${BOSSES[event.bossId].name}.`;
     case 'roundStart':
@@ -37,7 +73,7 @@ export function describeEvent(event: CoopEvent, state: CoopState | null): string
     case 'roundEnd':
       if (event.kind === 'hard') return event.hardSuccess ? '¡Todos resolvieron! Atacan y se abre la tienda.' : 'Alguien no resolvió: todos reciben daño.';
       return event.winners.length > 0
-        ? `Ganaron la ronda (oro): ${event.winners.map((id) => nameOf(state, id)).join(', ')}.`
+        ? `Ganaron la ronda: ${event.winners.map((id) => nameOf(state, id)).join(', ')}.`
         : 'Nadie resolvió a tiempo.';
     case 'bossAbility': {
       const boss = BOSSES[event.bossId].name;

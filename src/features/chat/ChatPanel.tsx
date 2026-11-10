@@ -20,7 +20,21 @@ export type ChatTarget = { kind: 'chat'; chatId: string } | { kind: 'competition
 
 const MESSAGE_LIMIT = 50;
 
-export const ChatPanel = memo(function ChatPanel({ target, className, compact = false }: { target: ChatTarget; className?: string; compact?: boolean }) {
+export const ChatPanel = memo(function ChatPanel({
+  target,
+  className,
+  compact = false,
+  fill = false,
+  onActivity,
+}: {
+  target: ChatTarget;
+  className?: string;
+  compact?: boolean;
+  /** Ocupa toda la altura del contenedor (panel lateral). */
+  fill?: boolean;
+  /** Aviso con el id del último mensaje ajeno (contador de no leídos del panel desplegable). */
+  onActivity?: (lastForeignId: string | null) => void;
+}) {
   const { profile } = useSession();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +52,11 @@ export const ChatPanel = memo(function ChatPanel({ target, className, compact = 
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages.length]);
 
+  const lastForeignId = live.data.find((m) => m.authorId !== profile.uid)?.id ?? null; // `data` va del más nuevo al más viejo.
+  useEffect(() => {
+    if (!live.loading) onActivity?.(lastForeignId);
+  }, [live.loading, lastForeignId, onActivity]);
+
   const handleSend = async (event: FormEvent) => {
     event.preventDefault();
     const text = draft;
@@ -54,7 +73,7 @@ export const ChatPanel = memo(function ChatPanel({ target, className, compact = 
 
   return (
     <div className={cx('flex min-h-0 flex-col border border-line', className)}>
-      <div ref={scrollRef} className={cx('flex-1 space-y-2 overflow-y-auto p-3', compact ? 'max-h-72' : 'min-h-[50dvh]')}>
+      <div ref={scrollRef} className={cx('flex-1 space-y-2 overflow-y-auto p-3', fill ? 'min-h-0' : compact ? 'max-h-72' : 'min-h-[50dvh]')}>
         {live.error && <ErrorBanner error="No tienes acceso a este chat." />}
         {messages.length === 0 && !live.loading && <p className="py-8 text-center text-sm text-muted">Sin mensajes todavía.</p>}
         {messages.map((message, index) => {
