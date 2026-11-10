@@ -11,6 +11,7 @@ import { playCue } from '../../lib/sound';
 import { canPlayCoop, cx } from '../../lib/utils';
 import { Arena } from './Arena';
 import { Briefing } from './Briefing';
+import { DraftWindow } from './DraftWindow';
 import { CrypticZone } from './CrypticZone';
 import { MyPanel } from './MyPanel';
 import { PlayerDetails } from './PlayerDetails';
@@ -128,7 +129,14 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
         </p>
       ))}
 
-      {view.briefing ? (
+      {(view.draft || view.briefing) && (
+        <div className="absolute left-4 top-3 z-10">
+          <LeaveButton onLeave={leave} />
+        </div>
+      )}
+      {view.draft ? (
+        <DraftWindow view={view} meId={profile.uid} now={now} act={act} />
+      ) : view.briefing ? (
         <Briefing view={view} meId={profile.uid} now={now} act={act} />
       ) : !game ? (
         <PageLoader />

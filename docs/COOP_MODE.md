@@ -54,6 +54,7 @@ Todo forma parte de la v1.3.0, **sin desplegar**. Falta:
 13. Tienda: las ofertas de cada jugador no se repiten entre sí. Quien ya tiene un objeto «uno por jugador» no lo ve. Los objetos únicos de la party no aparecen si alguien ya los tiene.
 14. DEBBORA: su activa revela una pista del criptico actual sin gastar su contador.
 15. Las habilidades activas se usan en ronda, tienda o votación (una vez por ronda). No se usan durante la presentación de un jefe.
+16. Flujo al iniciar: selección de personajes (60 s; al vencer, quien no eligió recibe uno libre al azar) → carga con explicación salteable (90 s o todos listos) → presentación del primer jefe. Quien sale antes de empezar queda fuera desde el primer instante.
 
 ## Balance (simulador)
 

@@ -8,7 +8,9 @@ import type { CoopState, PlayerStats, PlayerStatus } from './state';
 
 /** Acciones del jugador. El servidor las valida y las traduce al motor. */
 export type CoopClientAction =
-  | { kind: 'ready' } // Saltear la explicación previa.
+  | { kind: 'pick'; character: CharacterId } // Selección de personaje (se puede cambiar hasta confirmar).
+  | { kind: 'lock' } // Confirmar el personaje elegido.
+  | { kind: 'ready' } // Carga lista / saltear la explicación.
   | { kind: 'answer'; slot: number; guess: string }
   | { kind: 'hint' }
   | { kind: 'active'; targetId?: string; amount?: number }
@@ -43,14 +45,29 @@ export interface CoopPlayerSetup {
   character: CharacterId;
 }
 
+/** Jugador al iniciar la sala, antes de elegir personaje. */
+export interface CoopSeat {
+  uid: string;
+  name: string;
+}
+
+/** Selección de personajes (tras «Iniciar»): elegir, confirmar; al vencer, se asigna uno libre al azar. */
+export interface CoopDraftView {
+  endsAt: number;
+  picks: Record<string, CharacterId>;
+  locked: string[];
+}
+
 export interface CoopView {
   competitionId: string;
   title: string;
   level: CoopLevel;
-  players: CoopPlayerSetup[];
+  /** Durante la selección, `character` puede faltar (ver `draft.picks`). */
+  players: Array<CoopSeat & { character?: CharacterId }>;
+  draft: CoopDraftView | null;
   /** Jefes en orden (se conocen desde la explicación previa, para presentarlos). */
   bosses: BossId[];
-  /** Explicación previa (salteable): termina al vencer o cuando todos están listos. */
+  /** Carga y explicación previa (salteable): termina al vencer o cuando todos están listos. */
   briefing: { endsAt: number; ready: string[] } | null;
   /** Estado del motor sin la semilla (con ella se podrían predecir las tiradas). */
   game: CoopState | null;
@@ -61,6 +78,7 @@ export interface CoopView {
 }
 
 export const COOP_BRIEFING_MS = 90_000;
+export const COOP_DRAFT_MS = 60_000;
 
 /** Resumen guardado en `competitions/{id}.coopResult` al terminar (lo lee la pantalla de resultados). */
 export interface CoopResultSummary {

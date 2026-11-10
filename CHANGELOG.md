@@ -10,12 +10,14 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 - **Modo COOP** (nivel AT; NT «Pronto»): de 4 a 8 jugadores contra 4 jefes en 22 minutos, solo en PC o laptop.
   - Motor determinista en `shared/coop` (rondas normales y difíciles, tienda, votaciones, 7 jefes, 11 personajes y 16 objetos).
-  - Sala con elección de personaje y explicación previa salteable (cómo se juega, jefes y personajes).
+  - Al iniciar, ventana de selección de personajes (60 s, sin repetir; quien no elige recibe uno libre) y luego pantalla de carga con las tarjetas de la party, la explicación salteable, los jefes y los personajes.
   - Pantalla completa según los bocetos: arena con el jefe al centro y los jugadores alrededor, zona de cripticos, panel propio con objetos y habilidades, y ventana de tienda.
   - Siluetas propias de jefes, personajes y objetos; números de daño y curación proporcionales; avisos de muerte y resurrección; sonidos nuevos por tema (oro, habilidad, resurrección).
   - Elo COOP contra el rating del nivel (AT 1500), con su panel en el Perfil y su pestaña en el Ranking.
   - Resultados propios: estadísticas por jugador (daño, recibido, curación, oro, cripticos, caídas, pistas, activas y Elo), totales del equipo, estado de cada jefe y soluciones de los cripticos jugados.
   - Simulador de balance: `npx tsx scripts/simulate-coop.ts`.
+
+- Jugar: sección «Tus salas pendientes» con las salas abiertas en las que estás (también privadas y de amigos), hasta cancelarlas o que venzan.
 
 ### Removed
 
@@ -23,7 +25,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ### Deploy
 
-- Reglas de Firestore (`coopCharacters`) y secretos con enunciado: `import-cryptics.ts --secrets-only` (ver DEPLOY 6.3).
+- Secretos con enunciado: `import-cryptics.ts --secrets-only` (ver DEPLOY 6.3).
 
 ## [1.2.2] - 2026-11-08
 

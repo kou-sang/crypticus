@@ -7,7 +7,6 @@ import { chooseTeam, deleteCompetition, joinCompetition, leaveCompetition } from
 import { assignTeams, isTeamDuel, startBlocker, TEAM_LABELS, TEAM_SIZE, type Team } from '../../../shared/teams';
 import { RoomSettingsDialog } from './RoomSettingsDialog';
 import { canPlayCoop, errorMessage } from '../../lib/utils';
-import { CharacterPicker } from '../coop/CharacterPicker';
 import { Avatar, Badge, Button, ErrorBanner } from '../../components/ui';
 import { describeMode, describeModifiers } from '../competitions/CompetitionCard';
 
@@ -157,8 +156,6 @@ export function LobbyView({
         </ul>
       </section>
       )}
-
-      {coop && <CharacterPicker competition={competition} participants={ordered} meId={profile.uid} />}
 
       {deviceBlocked && (
         <p role="alert" className="border-l-4 border-accent pl-3 text-sm">

@@ -110,10 +110,20 @@ export default function CompetitionsPage() {
     { serverOnly: true },
   );
 
+  // Mis salas abiertas (las que creé o en las que estoy): siguen visibles hasta cancelarlas o que venzan,
+  // aunque sean privadas o de amigos (antes solo aparecían en las listas públicas/de amigos de otros).
+  const mineLive = useLiveQuery<Competition>(
+    query(collection(db, 'competitions'), where('participantIds', 'array-contains', profile.uid), orderBy('createdAt', 'desc'), limit(10)),
+    [profile.uid],
+    { serverOnly: true },
+  );
+
   const source = tab === 'public' ? publicLive : friendsLive;
   // Sin salas terminadas ni abandonadas (en espera o «en vivo» de hace horas).
   const now = Date.now();
-  const items = source.data.filter((c) => isActiveRoom(c, now));
+  const mine = mineLive.data.filter((c) => isActiveRoom(c, now));
+  const mineIds = new Set(mine.map((c) => c.id));
+  const items = source.data.filter((c) => isActiveRoom(c, now) && !mineIds.has(c.id));
 
   return (
     <>
@@ -128,6 +138,19 @@ export default function CompetitionsPage() {
         }
       />
       <CreateRoomDialog key={rival?.uid ?? 'new'} open={creating} rival={rival} onClose={() => setCreating(false)} />
+
+      {mine.length > 0 && (
+        <section aria-labelledby="my-rooms" className="mb-8">
+          <h2 id="my-rooms" className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted">
+            Tus salas pendientes
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {mine.map((c) => (
+              <CompetitionCard key={c.id} competition={c} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="mb-6 flex gap-1">
         {(['public', 'friends'] as const).map((value) => (
