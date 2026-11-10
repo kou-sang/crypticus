@@ -22,6 +22,7 @@ export const RELEASES: readonly Release[] = [
     highlight: false,
     news: [
       'Race Hardcore: la dificultad del próximo criptico se vota cuando todos terminan, durante 7 s. Gana la mayoría; si empatan, se sortea entre las más votadas.',
+      'Los avisos de la partida (rondas nuevas, daño, aciertos…) ahora aparecen dentro del chat de la sala.',
     ],
     fixes: [
       'La pantalla ya no baja sola al resolver un criptico en Royale.',
