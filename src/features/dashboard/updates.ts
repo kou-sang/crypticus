@@ -16,6 +16,16 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.6.0',
+    date: '2026-11-10',
+    title: 'COOP: golpes al instante',
+    highlight: false,
+    news: [
+      'En las rondas normales de COOP golpeas al jefe apenas resuelves tus cripticos. Si cae, la ronda termina y nadie más recibe daño.',
+      'El historial de COOP en el perfil muestra nivel, resultado, ronda, jefes derrotados y Elo.',
+    ],
+  },
+  {
     version: '1.5.0',
     date: '2026-11-10',
     title: 'COOP: tres dificultades',

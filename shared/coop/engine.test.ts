@@ -242,11 +242,12 @@ describe('jefes', () => {
   it('HAMAN: un golpe de al menos 10 % invoca a REX ASSUERUS, que recibe los ataques', () => {
     const game = startGame('haman', ['samson', 'mathusala', 'urias', 'eliseus']);
     const used = act(game.state, { type: 'useActive', playerId: 'p0' }, game.now + 1_000).state;
-    const { state, events } = solveAll(used, game.now + 10_000, ['p0']);
-    const boss = currentBoss(state)!;
-    expect(ofType(events, 'bossAbility').some((e) => e.ability === 'summonRex')).toBe(true);
-    expect(boss.haman.rex).not.toBeNull();
-    expect(ofType(events, 'playerHit').filter((h) => h.target === 'rex').length).toBeGreaterThan(0);
+    // El sacrificio de SAMSON (al cerrar la ronda) invoca a REX; en la ronda siguiente los golpes van a REX.
+    const first = solveAll(used, game.now + 10_000, ['p0']);
+    expect(ofType(first.events, 'bossAbility').some((e) => e.ability === 'summonRex')).toBe(true);
+    expect(currentBoss(first.state)!.haman.rex).not.toBeNull();
+    const second = solveAll(first.state, game.now + 11_000);
+    expect(ofType(second.events, 'playerHit').filter((h) => h.target === 'rex').length).toBeGreaterThan(0);
   });
 
   it('se pierde si se acaba el tiempo total', () => {
@@ -317,5 +318,42 @@ describe('subniveles AT1/AT2/AT3', () => {
     expect(created.stage).toBe(2);
     const legacy = { ...created, stage: undefined };
     expect(bossDamage(legacy, legacy.bosses[0]!, 0)).toBeCloseTo(bossDamage(created, created.bosses[0]!, 0));
+  });
+});
+
+describe('ronda normal: golpe inmediato', () => {
+  it('quien resuelve sus cripticos ataca en el momento; el oro llega al cerrar la ronda', () => {
+    const { state, now } = startGame('serpentis');
+    const hp = currentBoss(state)!.hp;
+    let current = state;
+    const p0 = current.players[0]!;
+    const events: CoopEvent[] = [];
+    p0.assignments.forEach((_, slot) => {
+      const result = act(current, { type: 'solve', playerId: 'p0', slot }, now + 1_000);
+      current = result.state;
+      events.push(...result.events);
+    });
+    expect(ofType(events, 'playerHit').filter((h) => h.playerId === 'p0')).toHaveLength(1);
+    expect(currentBoss(current)!.hp).toBeLessThan(hp);
+    expect(current.phase).toBe('round');
+    expect(ofType(events, 'gold')).toHaveLength(0);
+    // Al cerrar la ronda no vuelve a atacar.
+    const end = solveAll(current, now + 2_000, ['p0']);
+    expect(ofType(end.events, 'playerHit').filter((h) => h.playerId === 'p0')).toHaveLength(0);
+    expect(ofType(end.events, 'gold').some((g) => g.playerId === 'p0')).toBe(true);
+  });
+
+  it('si el golpe derriba al jefe, la ronda termina ya y nadie recibe daño', () => {
+    const { state, now } = startGame('serpentis');
+    currentBoss(state)!.hp = 1;
+    let current = state;
+    const events: CoopEvent[] = [];
+    current.players[0]!.assignments.forEach((_, slot) => {
+      const result = act(current, { type: 'solve', playerId: 'p0', slot }, now + 1_000);
+      current = result.state;
+      events.push(...result.events);
+    });
+    expect(ofType(events, 'bossDefeated')).toHaveLength(1);
+    expect(ofType(events, 'bossHit')).toHaveLength(0);
   });
 });

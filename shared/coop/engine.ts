@@ -486,8 +486,9 @@ function endRound(ctx: Ctx): void {
   const hardSuccess = kind === 'hard' ? participants.length > 0 && winners.length === participants.length : null;
   ctx.events.push({ type: 'roundEnd', gt, round, kind, winners: winners.map((p) => p.id), hardSuccess });
 
-  // 1) Ataques de los jugadores, en orden de asiento. SAMSON sacrificado ataca aunque esté muerto.
-  const attackers = kind === 'normal' ? winners : hardSuccess ? participants : [];
+  // 1) Ataques pendientes, en orden de asiento. En la normal ya atacaron al resolver (salvo estados viejos).
+  //    SAMSON sacrificado ataca aunque esté muerto.
+  const attackers = kind === 'normal' ? winners.filter((p) => p.attackedRound !== round) : hardSuccess ? participants : [];
   for (const player of state.players) {
     if (boss.hp <= 0) break;
     if (attackers.includes(player)) playerAttack(ctx, player, false);
@@ -1148,6 +1149,19 @@ function solve(ctx: Ctx, player: PlayerState, slot: number): void {
     const target = alivePlayers(state).sort((a, b) => a.hp - b.hp || a.seat - b.seat)[0];
     if (target) heal(ctx, target, DEAD_SOLVE_HEAL, 'deadSolve', player);
     return;
+  }
+  // Ronda normal: quien resuelve todos sus cripticos golpea al jefe en el momento (el oro llega al cerrar la ronda).
+  if (state.roundKind === 'normal' && allSolved(player)) {
+    const boss = currentBoss(state);
+    if (boss && boss.hp > 0 && player.attackedRound !== state.roundNumber) {
+      player.attackedRound = state.roundNumber;
+      playerAttack(ctx, player, false);
+    }
+    // Si el golpe derribó al jefe, la ronda termina ya: nadie más recibe daño.
+    if (boss && boss.hp <= 0) {
+      endRound(ctx);
+      return;
+    }
   }
   const participants = roundParticipants(state);
   if (participants.length > 0 && participants.every(allSolved)) endRound(ctx);

@@ -569,7 +569,14 @@ export class CompetitionRoom extends DurableObject<Env> {
                 modeRatingAfter: ratings[uid]! + (deltas[uid] ?? 0),
                 modeRatingDelta: deltas[uid] ?? 0,
                 ratingPool: 'coop',
-                coop: { level: coop.level, stage: coop.stage ?? 2, character: player.character, bossesDefeated },
+                coop: {
+                  level: coop.level,
+                  stage: coop.stage ?? 2,
+                  character: player.character,
+                  bossesDefeated,
+                  bosses: game.bosses.length,
+                  rounds: game.roundNumber,
+                },
               },
             },
             {
