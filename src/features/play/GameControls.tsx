@@ -1,6 +1,6 @@
-// Votación de la dificultad del próximo criptico (Race Hardcore).
+// Votación de la dificultad del próximo criptico (Race Hardcore): se abre cuando todos terminaron, dura 7 s.
 import { useState } from 'react';
-import type { LiveState } from '../../../shared/engine';
+import { DIFFICULTY_VOTE_MS, type LiveState } from '../../../shared/engine';
 import { DIFFICULTY_LABELS } from '../../../shared/scoring';
 import { DIFFICULTIES, type Difficulty } from '../../../shared/types';
 import type { GameActions } from '../../hooks/useGameChannel';
@@ -23,7 +23,7 @@ export function DifficultyVote({ state, uid, actions }: { state: LiveState; uid:
 
   return (
     <section aria-label="Votar dificultad del próximo criptico">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Próximo criptico</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Vota la dificultad del próximo criptico</p>
       <div className="grid grid-cols-3 gap-1">
         {DIFFICULTIES.map((tier) => {
           const count = Object.values(votes).filter((v) => v === tier).length;
@@ -43,7 +43,9 @@ export function DifficultyVote({ state, uid, actions }: { state: LiveState; uid:
           );
         })}
       </div>
-      <p className="mt-1 text-[11px] text-muted">En empate decide quien va perdiendo.</p>
+      <p className="mt-1 text-[11px] text-muted">
+        {DIFFICULTY_VOTE_MS / 1000} s para votar. Gana la mayoría; en empate se sortea entre las más votadas. Sin votos: medio.
+      </p>
       <ErrorBanner error={error} />
     </section>
   );

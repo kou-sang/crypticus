@@ -4,6 +4,8 @@ import {
   applyDifficultyVote,
   applyHint,
   createLiveState,
+  DIFFICULTY_VOTE_MS,
+  nextDeadline,
   reserveAttempt,
   resolveVote,
   revealableIds,
@@ -12,7 +14,7 @@ import {
   endVotesNeeded,
   type LiveState,
 } from './engine';
-import { DEFAULT_CONFIG, rankParticipants } from './scoring';
+import { DEFAULT_CONFIG } from './scoring';
 import { makeParticipant } from './testUtils';
 import type { CompetitionConfig, Difficulty } from './types';
 
@@ -118,18 +120,33 @@ describe('rondas y votación', () => {
     expect(state.participants.b!.score).toBe(0);
   });
 
-  it('la votación elige la dificultad del siguiente', () => {
-    const state = setup({ flow: 'rounds', difficultyVote: true });
-    applyDifficultyVote(state, { uid: 'a', tier: 'hard', now: 500 });
-    applyDifficultyVote(state, { uid: 'b', tier: 'hard', now: 500 });
+  it('la votación abre cuando la ronda cierra, dura 7 s y gana la mayoría', () => {
+    const state = setup({ flow: 'rounds', difficultyVote: true, rivalCountdownSec: 0 });
+    // Durante la ronda no se vota.
+    expect(() => applyDifficultyVote(state, { uid: 'a', tier: 'hard', now: 500 })).toThrow();
     answer(state, 'a', 'm1', true, 1000);
+    expect(state.round?.voting).toBe(true);
+    expect(state.round?.crypticId).toBe('');
+    expect(state.round?.opensAt).toBe(1000 + DIFFICULTY_VOTE_MS);
+    applyDifficultyVote(state, { uid: 'a', tier: 'easy', now: 2000 });
+    applyDifficultyVote(state, { uid: 'b', tier: 'hard', now: 2000 });
+    applyDifficultyVote(state, { uid: 'a', tier: 'hard', now: 3000 }); // Cambia su voto.
+    expect(nextDeadline(state, 3000)).toBe(1000 + DIFFICULTY_VOTE_MS);
+    // Nadie puede responder mientras se vota.
+    expect(() => reserveAttempt(state, 'b', 'm1', 3000)).toThrow();
+    tick(state, 1000 + DIFFICULTY_VOTE_MS);
+    expect(state.round?.voting).toBe(false);
     expect(state.round?.tier).toBe('hard');
+    expect(state.round?.opensAt).toBe(1000 + DIFFICULTY_VOTE_MS);
+    // Votación cerrada.
+    expect(() => applyDifficultyVote(state, { uid: 'a', tier: 'easy', now: 9000 })).toThrow();
   });
 
-  it('empate: gana el voto del que va perdiendo', () => {
-    const ranked = rankParticipants([makeParticipant({ uid: 'lead', score: 500 }), makeParticipant({ uid: 'last', score: 100 })]);
-    expect(resolveVote({ lead: 'easy', last: 'hard' }, ranked)).toBe('hard');
-    expect(resolveVote({}, ranked)).toBeNull();
+  it('gana siempre la mayoría; en empate se sortea entre las más votadas', () => {
+    expect(resolveVote({ a: 'easy', b: 'easy', c: 'hard' })).toBe('easy');
+    expect(resolveVote({ lead: 'easy', last: 'hard' }, () => 0)).toBe('easy');
+    expect(resolveVote({ lead: 'easy', last: 'hard' }, () => 0.99)).toBe('hard');
+    expect(resolveVote({})).toBeNull();
   });
 
   it('termina al agotar el pool', () => {
