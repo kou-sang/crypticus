@@ -1,6 +1,7 @@
 // Protocolo WebSocket entre el cliente y el Durable Object de cada competencia.
 import type { LiveState } from './engine';
 import type { Difficulty } from './types';
+import type { CoopClientAction, CoopReply, CoopView } from './coop/protocol';
 
 /** Mensajes cliente -> servidor. `reqId` correlaciona la respuesta. */
 export type ClientMessage =
@@ -11,6 +12,7 @@ export type ClientMessage =
   | { type: 'endVote'; reqId: string }
   | { type: 'pass'; reqId: string } // Royale: pasar al siguiente criptico
   | { type: 'surrender'; reqId: string } // Race: rendirse ante el criptico actual
+  | { type: 'coop'; reqId: string; action: CoopClientAction } // Modo COOP
   | { type: 'ping'; sentAt?: number } // Eco en pong: el cliente mide RTT y desfase de reloj.
   | { type: 'probeAck'; id: number }; // Respuesta a `probe`: el servidor mide el RTT de este jugador.
 
@@ -46,7 +48,8 @@ export interface Solution {
 export type ServerMessage =
   | { type: 'ready'; uid: string; state: LiveState | null; solutions: Solution[]; serverTime: number }
   | { type: 'state'; state: LiveState; solutions: Solution[] }
-  | { type: 'reply'; reqId: string; ok: true; data: AnswerReply | HintReply | AckReply }
+  | { type: 'coopState'; view: CoopView }
+  | { type: 'reply'; reqId: string; ok: true; data: AnswerReply | HintReply | AckReply | CoopReply }
   | { type: 'reply'; reqId: string; ok: false; error: { code: string; message: string } }
   | { type: 'error'; code: string; message: string }
   | { type: 'pong'; serverTime: number; sentAt?: number }

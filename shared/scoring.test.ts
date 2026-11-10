@@ -99,7 +99,6 @@ describe('validateConfig', () => {
     expect(validateConfig(DEFAULT_CONFIG, 8)).toEqual([]);
   });
   it('rechaza combinaciones inválidas', () => {
-    expect(validateConfig({ ...DEFAULT_CONFIG, mode: 'boss', winByTwo: true }, 4).length).toBeGreaterThan(0);
     expect(validateConfig({ ...DEFAULT_CONFIG, difficultyVote: true, flow: 'free' }, 4).length).toBeGreaterThan(0);
     expect(validateConfig({ ...DEFAULT_CONFIG, maxHintsPerClue: 11 }, 4).length).toBeGreaterThan(0);
   });

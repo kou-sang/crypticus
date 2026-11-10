@@ -13,13 +13,13 @@ describe('royaleCategory', () => {
 });
 
 describe('ratingPoolOf', () => {
-  it('Race y Duel tienen un pool; Royale depende del tiempo; Boss no puntúa', () => {
+  it('Race y Duel tienen un pool; Royale depende del tiempo; COOP tiene el suyo', () => {
     expect(ratingPoolOf('race')).toBe('race');
     expect(ratingPoolOf('duel')).toBe('duel');
     expect(ratingPoolOf('royale', { baseSec: 120 })).toBe('royale_bullet');
     expect(ratingPoolOf('royale', { baseSec: 60 })).toBe('royale_hyperbullet');
     expect(ratingPoolOf('royale')).toBeNull();
-    expect(ratingPoolOf('boss')).toBeNull();
+    expect(ratingPoolOf('coop')).toBe('coop');
     expect(ratingPoolOf(undefined)).toBeNull();
   });
 

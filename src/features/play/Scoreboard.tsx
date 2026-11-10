@@ -10,7 +10,6 @@ export const Scoreboard = memo(function Scoreboard({
   total,
   metric = 'score',
   hideScores = false,
-  isBoss = false,
   unit,
 }: {
   participants: Participant[];
@@ -18,7 +17,6 @@ export const Scoreboard = memo(function Scoreboard({
   total: number; // Para la barra de progreso
   metric?: RankMetric;
   hideScores?: boolean;
-  isBoss?: boolean;
   unit?: string; // Etiqueta bajo el puntaje (p. ej. "vida" en Duel).
 }) {
   const ranked = hideScores
@@ -42,7 +40,6 @@ export const Scoreboard = memo(function Scoreboard({
           <span className="text-right font-mono text-sm font-semibold tabular-nums">
             {hideScores || metric === 'solved' || metric === 'survival' ? `${p.solvedIds.length}✓` : p.score}
             {unit && !hideScores && <span className="block text-[10px] font-normal text-muted">{unit}</span>}
-            {isBoss && !hideScores && <span className="block text-[10px] font-normal text-muted">daño</span>}
             {metric === 'solved' && !hideScores && <span className="block text-[10px] font-normal text-muted">{p.score} pts</span>}
           </span>
         </li>

@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { DemoCryptic } from '../../components/DemoCryptic';
 import { useSession } from '../../hooks/useAuth';
 import { useFriends } from '../../hooks/useFriends';
-import { GAME_LABELS } from '../../../shared/scoring';
+import { COOP_ENABLED, GAME_LABELS } from '../../../shared/scoring';
 import { GAME_MODES } from '../../../shared/types';
 import { UpdatesPanel } from './UpdatesPanel';
 
@@ -51,7 +51,7 @@ export default function DashboardPage() {
           </div>
           <ul className="mt-3 grid grid-cols-2 gap-px border border-ink bg-ink sm:grid-cols-4">
             {GAME_MODES.map((mode) => {
-              const soon = mode === 'boss';
+              const soon = mode === 'coop' && !COOP_ENABLED;
               return (
                 <li key={mode} className={soon ? 'bg-paper-2 p-4' : 'bg-paper p-4'}>
                   <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${soon ? 'text-muted' : 'text-accent'}`}>

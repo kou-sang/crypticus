@@ -9,13 +9,13 @@ import {
   type RatingPool,
   type RoyaleCategory,
 } from '../../shared/ratingPools';
-import type { HistoryEntry, ModeStats, RankedMode, UserProfile } from '../../shared/types';
+import type { GameMode, HistoryEntry, ModeStats, RankedMode, UserProfile } from '../../shared/types';
 
 export const EMPTY_STATS: ModeStats = { rating: 1200, played: 0, wins: 0, losses: 0, draws: 0 };
 
-export const MODE_GLYPH: Record<RankedMode, string> = { race: '➶', royale: '◷', duel: '⚔' };
+export const MODE_GLYPH: Record<GameMode, string> = { race: '➶', royale: '◷', duel: '⚔', coop: '♛' };
 
-export function modeOfPool(pool: RatingPool): RankedMode {
+export function modeOfPool(pool: RatingPool): GameMode {
   return isRoyalePool(pool) ? 'royale' : pool;
 }
 

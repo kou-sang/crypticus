@@ -14,6 +14,9 @@ export interface WorkerCrypticSecret {
   answer?: string; // Forma legible para mostrar al final (los importes anteriores no la tienen).
   tiebreak?: boolean; // Pool de desempate: nunca entra en la selección normal.
   kind?: string; // Tipo principal (primer tag). Importes anteriores a v1.0 no lo tienen.
+  /** Enunciado y enumeración (COOP los manda con cada ronda). Importes anteriores a COOP no los tienen. */
+  clue?: string;
+  enumeration?: string;
 }
 
 const secrets = rawSecrets as unknown as Record<string, WorkerCrypticSecret>;
@@ -40,6 +43,14 @@ export function catalogByTier(): Record<Difficulty, string[]> {
 /** Tipo de criptico para repartir la selección (undefined si el import no lo trae). */
 export function crypticKind(crypticId: string): string | undefined {
   return getCrypticSecret(crypticId)?.kind;
+}
+
+/** Cantidad de palabras de la respuesta (desempate COOP: «muy difícil» de 2 o de 3 palabras). */
+export function answerWords(crypticId: string): number {
+  const secret = getCrypticSecret(crypticId);
+  if (secret?.answer) return secret.answer.trim().split(/[\s-]+/).filter(Boolean).length;
+  const groups = secret?.enumeration?.match(/\d+/g);
+  return groups ? groups.length : 1;
 }
 
 /** Pool de desempate (respuestas de 2 y 3 palabras), por dificultad. */

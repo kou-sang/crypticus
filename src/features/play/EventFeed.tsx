@@ -15,7 +15,7 @@ function describe(event: GameEvent, state: LiveState): string | null {
         return `${name} acertó · ${solved}/${state.config.targetCount}`;
       }
       if (state.config.royale) return `${name} acertó (+${event.seconds ?? 0}s)`;
-      return state.boss ? `${name} golpeó al jefe (−${event.points})` : `${name} resolvió uno ${tier} (+${event.points})`;
+      return `${name} resolvió uno ${tier} (+${event.points})`;
     case 'damage':
       return `${name} quitó ${event.points} de vida${(event.combo ?? 1) >= 2 ? ` (combo ×${event.combo})` : ''}`;
     case 'eliminated':

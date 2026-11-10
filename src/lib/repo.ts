@@ -232,6 +232,11 @@ export async function chooseTeam(competitionId: string, uid: string, team: 0 | 1
   await updateDoc(doc(db, 'competitions', competitionId), { [`teams.${uid}`]: team });
 }
 
+/** COOP: elige personaje en la sala (las reglas solo dejan tocar la propia entrada). */
+export async function chooseCharacter(competitionId: string, uid: string, character: string): Promise<void> {
+  await updateDoc(doc(db, 'competitions', competitionId), { [`coopCharacters.${uid}`]: character });
+}
+
 /** Rechaza una revancha: queda registrado para que quien la propuso lo vea. */
 export async function declineRematch(competitionId: string, uid: string): Promise<void> {
   await updateDoc(doc(db, 'competitions', competitionId), { declinedIds: arrayUnion(uid) });

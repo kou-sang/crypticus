@@ -16,7 +16,7 @@ import {
   type LiveState,
 } from './engine';
 import { buildConfig, DEFAULT_MODE_SETTINGS, settingsFromConfig, type ModeSettings } from './gameModes';
-import { validateConfig } from './scoring';
+import { COOP_ENABLED, validateConfig } from './scoring';
 import { makeParticipant } from './testUtils';
 import type { Difficulty } from './types';
 
@@ -69,9 +69,14 @@ describe('buildConfig', () => {
     }
   });
 
-  it('Boss queda deshabilitado (próximamente)', () => {
-    const built = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'boss' });
-    expect(validateConfig(built.config, built.maxPlayers).length > 0).toBe(true);
+  it('COOP: nivel AT para 4 a 8; NT bloqueado; deshabilitado hasta COOP_ENABLED', () => {
+    const built = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'coop' });
+    expect(built.config.coop).toEqual({ level: 'AT' });
+    expect(built.maxPlayers).toBe(8);
+    const errors = validateConfig(built.config, built.maxPlayers);
+    expect(errors.includes('El modo COOP estará disponible próximamente.')).toBe(!COOP_ENABLED);
+    const nt = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'coop', coop: { level: 'NT' } });
+    expect(validateConfig(nt.config, nt.maxPlayers)).toContain('El nivel NT todavía no está disponible.');
   });
 });
 

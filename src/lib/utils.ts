@@ -62,6 +62,16 @@ export function detectDevice(): 'mobile' | 'desktop' {
   }
 }
 
+/** COOP es solo para PC o laptop: puntero fino (mouse o trackpad) y pantalla ancha. */
+export const COOP_MIN_WIDTH = 1024;
+export function canPlayCoop(): boolean {
+  try {
+    return detectDevice() === 'desktop' && window.matchMedia(`(min-width: ${COOP_MIN_WIDTH}px)`).matches;
+  } catch {
+    return false;
+  }
+}
+
 /** Corta una operación de red que no responde (en iOS una escritura o lectura podía quedar colgada para siempre). */
 export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;

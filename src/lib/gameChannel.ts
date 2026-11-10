@@ -4,11 +4,14 @@ import { ApiError } from './api';
 import type { AckReply, ActionMessage, AnswerReply, ClientMessage, HintReply, ServerMessage, Solution } from '../../shared/protocol';
 import type { LiveState } from '../../shared/engine';
 import type { Difficulty } from '../../shared/types';
+import type { CoopClientAction, CoopReply, CoopView } from '../../shared/coop/protocol';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
 
 export interface GameChannelHandlers {
   onReady: (state: LiveState | null, solutions: Solution[], serverTime: number) => void;
+  /** Salas COOP: el servidor manda la vista del jugador en lugar de `ready`/`state`. */
+  onCoop?: (view: CoopView) => void;
   onLatency?: (sample: { rttMs: number; offsetMs: number }) => void;
   onState: (state: LiveState, solutions: Solution[]) => void;
   onConnection: (state: ConnectionState) => void;
@@ -99,6 +102,10 @@ export class GameChannel {
     return this.request<AckReply>({ type: 'endVote', reqId: this.nextId() });
   }
 
+  coop(action: CoopClientAction): Promise<CoopReply> {
+    return this.request<CoopReply>({ type: 'coop', reqId: this.nextId(), action });
+  }
+
   dispose(): void {
     this.disposed = true;
     this.clearTimers();
@@ -159,6 +166,16 @@ export class GameChannel {
         break;
       case 'state':
         this.handlers.onState(message.state, message.solutions ?? []);
+        break;
+      case 'coopState':
+        // La primera vista equivale a `ready`: la sesión quedó autenticada.
+        if (!this.authenticated) {
+          this.authenticated = true;
+          this.attempts = 0;
+          this.handlers.onConnection('open');
+          this.startPing();
+        }
+        this.handlers.onCoop?.(message.view);
         break;
       case 'reply': {
         const pending = this.pending.get(message.reqId);

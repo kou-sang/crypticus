@@ -4,6 +4,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+### Added
+
+- COOP (oculto hasta el PR 3, `COOP_ENABLED`): motor en `shared/coop`, sala con elección de personaje (sin repetir), explicación previa salteable, Durable Object con asignación de cripticos sin repetir, enunciados enviados con cada ronda y resultado con Elo contra el rating del nivel.
+
+### Removed
+
+- Modo Jefe de la v0.2 (nunca habilitado): lo reemplaza COOP.
+
+### Deploy
+
+- `npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json --secrets-only`: los secretos ahora incluyen enunciado y enumeración (COOP los manda con cada ronda). Reglas de Firestore nuevas (`coopCharacters`).
+
 ## [1.2.2] - 2026-11-08
 
 ### Changed

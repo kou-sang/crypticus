@@ -6,7 +6,7 @@ export type RoyaleCategory = 'hyperbullet' | 'bullet' | 'rapid';
 export const ROYALE_CATEGORIES: readonly RoyaleCategory[] = ['hyperbullet', 'bullet', 'rapid'];
 
 export type RoyalePool = `royale_${RoyaleCategory}`;
-export type RatingPool = 'race' | RoyalePool | 'duel';
+export type RatingPool = 'race' | RoyalePool | 'duel' | 'coop';
 export const RATING_POOLS: readonly RatingPool[] = ['race', 'royale_hyperbullet', 'royale_bullet', 'royale_rapid', 'duel'];
 
 /** Límite superior (inclusive) del tiempo inicial de cada categoría; lo que supera a Bullet es Rapid. */
@@ -24,9 +24,9 @@ export function royaleCategory(baseSec: number): RoyaleCategory {
   return baseSec <= CATEGORY_MAX_BASE_SEC.bullet ? 'bullet' : 'rapid';
 }
 
-/** Pool de Elo de una partida. `null`: la partida no es puntuable (Boss o sin modo). */
+/** Pool de Elo de una partida. COOP: un Elo contra el rating fijo del nivel. `null`: sin modo. */
 export function ratingPoolOf(game: GameMode | undefined, royale?: Pick<RoyaleConfig, 'baseSec'> | null): RatingPool | null {
-  if (game === 'race' || game === 'duel') return game;
+  if (game === 'race' || game === 'duel' || game === 'coop') return game;
   if (game === 'royale') return royale ? `royale_${royaleCategory(royale.baseSec)}` : null;
   return null;
 }

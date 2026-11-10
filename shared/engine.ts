@@ -2,9 +2,6 @@
 // Lo ejecuta el Durable Object; la validación criptográfica de respuestas ocurre fuera (async)
 // y aquí solo llega `correct: boolean`.
 import {
-  BOSS_HEAL_ON_MISS,
-  bossMaxHp,
-  computeBossDamage,
   computeDuelDamage,
   computeSolvePoints,
   LIMITS,
@@ -74,7 +71,6 @@ export type GameEventKind =
   | 'round'
   | 'overtime'
   | 'hint'
-  | 'heal'
   | 'countdown'
   | 'eliminated'
   | 'damage'
@@ -97,8 +93,6 @@ export type EndReason =
   | 'target'
   | 'winByTwo'
   | 'exhausted'
-  | 'bossDefeated'
-  | 'bossSurvived'
   | 'voted'
   | 'lastStanding' // Royale
   | 'knockout' // Duel
@@ -119,7 +113,6 @@ export interface LiveState {
   catalog: Record<string, CatalogEntry>;
   usedIds: string[]; // 'rounds': cripticos ya jugados
   round: RoundState | null;
-  boss: { maxHp: number; hp: number } | null;
   endVotes?: string[]; // Opcional: estados guardados antes de v0.5 no lo tienen.
   tiebreakIds?: string[]; // Cripticos de desempate reservados (secretos hasta abrir). Opcional: estados previos a v0.8.
   tiebreak?: TiebreakState | null;
@@ -208,7 +201,6 @@ export function createLiveState(input: CreateInput): LiveState {
     catalog: input.catalog,
     usedIds: [],
     round: null,
-    boss: input.config.mode === 'boss' ? { maxHp: 0, hp: 0 } : null,
     endVotes: [],
     tiebreakIds: (input.tiebreakIds ?? []).filter(known),
     tiebreak: null,
@@ -217,10 +209,6 @@ export function createLiveState(input: CreateInput): LiveState {
     endReason: null,
     finishedAt: null,
   };
-  if (state.boss) {
-    const hp = bossMaxHp(input.config.bossLevel, input.participants.length);
-    state.boss = { maxHp: hp, hp };
-  }
   if (input.config.flow === 'rounds') openRound(state, 'medium', input.startedAt, random);
   return state;
 }
@@ -478,19 +466,10 @@ export function applyAnswer(
 
   if (!input.correct) {
     participant.wrongAttempts += 1;
-    if (state.boss) {
-      // Fallar cura al jefe.
-      const heal = Math.min(state.boss.maxHp - state.boss.hp, BOSS_HEAL_ON_MISS[state.config.bossLevel]);
-      if (heal > 0) {
-        state.boss.hp += heal;
-        pushEvent(state, { at: now, kind: 'heal', uid, points: heal });
-      }
-    }
     return { correct: false, points: 0, finished: evaluate(state, now).finished, stale: false };
   }
 
   const tier = state.catalog[crypticId]!.tier;
-  const ratio = remainingRatio(state, now);
 
   // Royale: cada acierto suma segundos al reloj y avanza al siguiente criptico.
   if (state.config.royale) {
@@ -536,19 +515,13 @@ export function applyAnswer(
     return { correct: true, points: damage, finished: evaluate(state, now).finished, stale: false };
   }
 
-  let points: number;
-  if (state.boss) {
-    points = Math.min(state.boss.hp, computeBossDamage(tier, ratio));
-    state.boss.hp = Math.max(0, state.boss.hp - points);
-  } else {
-    const leaderScore = Math.max(0, ...Object.values(state.participants).map((p) => p.score));
-    points = computeSolvePoints({
-      tier,
-      comeback: state.config.comeback,
-      score: participant.score,
-      leaderScore,
-    });
-  }
+  const leaderScore = Math.max(0, ...Object.values(state.participants).map((p) => p.score));
+  const points = computeSolvePoints({
+    tier,
+    comeback: state.config.comeback,
+    score: participant.score,
+    leaderScore,
+  });
   participant.score += points;
   participant.solvedIds = [...participant.solvedIds, crypticId];
   participant.lastSolvedAt = now;
@@ -701,7 +674,7 @@ export function toggleEndVote(state: LiveState, input: { uid: string; now: numbe
   const ranked = rankState(state);
   const leader = ranked[0];
   const tiedAtTop = ranked.filter((p) => p.rank === 1).length > 1;
-  const winnerId = state.boss || !leader || tiedAtTop ? null : leader.uid;
+  const winnerId = !leader || tiedAtTop ? null : leader.uid;
   finish(state, 'voted', winnerId, input.now);
   return { ended: true };
 }
@@ -837,14 +810,6 @@ function evaluate(state: LiveState, now: number): { finished: boolean } {
   const { config } = state;
   const players = Object.values(state.participants);
 
-  // Jefe (cooperativo)
-  if (state.boss) {
-    if (state.boss.hp <= 0) return finish(state, 'bossDefeated', null, now);
-    if (isExhausted(state, players)) return finish(state, 'bossSurvived', null, now);
-    if (now >= gameDeadline(state)) return finish(state, 'bossSurvived', null, now);
-    return { finished: false };
-  }
-
   const ranked = rankState(state);
   const leader = ranked[0];
   const second = ranked[1];
@@ -915,7 +880,7 @@ export function tiedLeaders(state: LiveState): string[] {
 /** Termina la partida o, si hay empate en la cima y cripticos de desempate, abre la muerte súbita. */
 function finishOrTiebreak(state: LiveState, reason: EndReason, winnerId: string | null, now: number): { finished: boolean } {
   const ids = state.tiebreakIds ?? [];
-  if (!state.boss && !state.tiebreak && ids.length > 0) {
+  if (!state.tiebreak && ids.length > 0) {
     const tied = tiedLeaders(state);
     if (tied.length >= 2) {
       const opensAt = now + TIEBREAK_INTRO_MS;

@@ -122,3 +122,13 @@ describe('Seguridad al iniciar', () => {
     expect(a.team).toBeUndefined(); // 1 vs 1: sin equipos
   });
 });
+
+describe('COOP: requisitos para iniciar', () => {
+  const coop = { game: 'coop' as const };
+  it('de 4 a 8 jugadores, cada uno con un personaje distinto', () => {
+    expect(startBlocker(coop, ['a', 'b', 'c'])).toMatch(/falta 1/);
+    expect(startBlocker({ ...coop, coopCharacters: { a: 'enoch', b: 'nathan', c: 'urias' } }, ['a', 'b', 'c', 'd'])).toMatch(/1 jugador/);
+    expect(startBlocker({ ...coop, coopCharacters: { a: 'enoch', b: 'nathan', c: 'urias', d: 'enoch' } }, ['a', 'b', 'c', 'd'])).toMatch(/Enoch/);
+    expect(startBlocker({ ...coop, coopCharacters: { a: 'enoch', b: 'nathan', c: 'urias', d: 'hiram' } }, ['a', 'b', 'c', 'd'])).toBeNull();
+  });
+});
