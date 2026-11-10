@@ -74,9 +74,12 @@ export const ChatPanel = memo(function ChatPanel({
   const messages = [...live.data].reverse();
   const entries = mergeEntries(messages, systemLines ?? []);
 
+  // Baja al final con cada entrada nueva (la lista puede tener tope: se mira la última, no el largo).
+  const lastEntry = entries[entries.length - 1];
+  const lastKey = lastEntry ? (lastEntry.kind === 'system' ? lastEntry.line.key : lastEntry.message.id) : '';
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [entries.length]);
+  }, [lastKey]);
 
   const lastForeignId = live.data.find((m) => m.authorId !== profile.uid)?.id ?? null; // `data` va del más nuevo al más viejo.
   useEffect(() => {

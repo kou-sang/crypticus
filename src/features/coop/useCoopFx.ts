@@ -29,6 +29,8 @@ export interface Banner {
 export interface LogLine {
   id: number;
   text: string;
+  /** Hora local de llegada (ms): ordena la línea entre los mensajes del chat. */
+  at: number;
 }
 
 /** Pulso visual de un objetivo: `n` cambia la `key` (reinicia la animación); `kind` decide cuál se reproduce. */
@@ -54,6 +56,8 @@ const FLOATER_MS = 1_300;
 const BANNER_MS = 3_200;
 const DETAIL_BANNER_MS = 6_000;
 const LOG_LIMIT = 12;
+/** Líneas que se conservan para el chat lateral (más que en la zona de cripticos). */
+const HISTORY_LIMIT = 80;
 
 /** Causa corta junto al número flotante (el golpe del jefe no la lleva: se ve en el registro). */
 const DAMAGE_CAUSE: Partial<Record<Extract<CoopEvent, { type: 'damage' }>['source'], string>> = {
@@ -112,6 +116,7 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
   const [floaters, setFloaters] = useState<Floater[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [log, setLog] = useState<LogLine[]>([]);
+  const [history, setHistory] = useState<LogLine[]>([]);
   const [lice, setLice] = useState<LiceStain[]>([]);
   /** Último pulso por objetivo: antes, una curación remontaba la tarjeta con la sacudida de daño. */
   const [pulses, setPulses] = useState<Record<string, Pulse>>({});
@@ -134,7 +139,7 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
 
         for (const event of events) {
           const text = describeEvent(event, current, meId);
-          if (text) lines.push({ id: id(), text });
+          if (text) lines.push({ id: id(), text, at: Date.now() });
           switch (event.type) {
             case 'playerHit':
               nextFloaters.push({
@@ -236,7 +241,10 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
             window.setTimeout(() => setBanners((prev) => prev.filter((b) => b.id !== banner.id)), banner.detail ? DETAIL_BANNER_MS : BANNER_MS);
           }
         }
-        if (lines.length > 0) setLog((prev) => [...prev, ...lines].slice(-LOG_LIMIT));
+        if (lines.length > 0) {
+          setLog((prev) => [...prev, ...lines].slice(-LOG_LIMIT));
+          setHistory((prev) => [...prev, ...lines].slice(-HISTORY_LIMIT));
+        }
         if (stains.length > 0) setLice((prev) => [...prev, ...stains].slice(-LICE_LIMIT));
         if (hitTargets.size > 0 || healTargets.size > 0) setPulses((prev) => pulse(prev, hitTargets, healTargets));
         if (events.some((e) => e.type === 'shopOpen')) playUi('open');
@@ -246,7 +254,7 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
     [subscribe, meId],
   );
 
-  return { floaters, banners, log, lice, pulses };
+  return { floaters, banners, log, history, lice, pulses };
 }
 
 /** Si en la misma difusión un objetivo recibe daño y curación, se ve el daño. */

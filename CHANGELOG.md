@@ -9,7 +9,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 ### Changed
 
 - Race Hardcore, votación de dificultad: ya no se vota durante el criptico. Cuando todos terminan (o cierra la cuenta atrás) se abre una votación de 7 s (`DIFFICULTY_VOTE_MS`) mientras se muestra la solución anterior; al cerrar se sortea el criptico de la dificultad ganadora y abre en el acto. Reemplaza la pausa entre rondas (se usa la mayor de las dos).
-- Sala: los avisos de la partida («Nueva ronda: medio», «X quitó N de vida», aciertos, eliminaciones, prórroga…) van dentro del chat de sala, intercalados por hora y en gris, en vez de una lista aparte. Durante la partida los espectadores ven el chat en solo lectura.
+- Sala: los avisos de la partida («Nueva ronda: medio», «X quitó N de vida», aciertos, eliminaciones, prórroga…) van dentro del chat de sala, intercalados por hora y en gris, en vez de una lista aparte. Durante la partida los espectadores ven el chat en solo lectura. En COOP, el registro de la partida sigue en la zona de cripticos y además va al chat lateral (últimas 80 líneas).
 - Gana siempre la mayoría. En empate se sortea entre las más votadas (antes decidía el voto de quien iba perdiendo). Sin votos: medio.
 
 ### Fixed
