@@ -1,7 +1,7 @@
 // Sala COOP dentro del Durable Object: explicación previa, motor (`shared/coop/engine.ts`), asignación de
 // cripticos sin repetir y vista recortada por jugador. Sin E/S: el DO persiste, difunde y programa la alarma.
 import { LEVELS, WRONG_ANSWER_COOLDOWN_MS, type CoopLevel, type CoopTier } from '../shared/coop/balance';
-import { createCoopGame, nextDeadline, reduceCoop, type CoopAction } from '../shared/coop/engine';
+import { createCoopGame, nextDeadline, pickBosses, reduceCoop, type CoopAction } from '../shared/coop/engine';
 import type { CoopEvent } from '../shared/coop/events';
 import {
   COOP_BRIEFING_MS,
@@ -284,6 +284,7 @@ export function coopView(room: CoopRoomState, uid: string, events: CoopEvent[], 
     title: room.title,
     level: room.level,
     players: room.players,
+    bosses: pickBosses(room.seed, room.level),
     briefing: room.briefing,
     game: game ? { ...game, seed: 0 } : null,
     mine: { cryptics, cooldownUntil: room.cooldownUntil[uid] ?? 0 },

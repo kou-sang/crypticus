@@ -16,6 +16,19 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.3.0',
+    date: '2026-11-10',
+    title: 'Modo COOP',
+    highlight: true,
+    news: [
+      'De 4 a 8 jugadores contra 4 jefes bíblicos en 22 minutos (nivel AT). Solo en PC o laptop.',
+      'Cada uno elige un personaje con una pasiva y una activa: no se repiten.',
+      'Rondas normales para atacar y ganar oro, rondas difíciles en grupo que abren la tienda.',
+      'Cada jefe tiene sus habilidades: ofertas de PHARAONIS, armadura de GOLIATH, letras desfasadas de SERPENTIS y más.',
+      'COOP tiene su propio Elo.',
+    ],
+  },
+  {
     version: '1.2.2',
     date: '2026-11-08',
     title: 'Revancha a tu ritmo',

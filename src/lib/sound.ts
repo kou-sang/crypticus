@@ -18,7 +18,11 @@ export type Cue =
   | 'lowHealth'
   | 'danger'
   | 'combo'
-  | 'go'; // Arranque de la partida (fin del 3-2-1).
+  | 'go' // Arranque de la partida (fin del 3-2-1).
+  // COOP
+  | 'gold' // Monedas.
+  | 'power' // Activa una habilidad.
+  | 'revive'; // Vuelve a la vida.
 
 export type UiCue = 'click' | 'tab' | 'open' | 'close' | 'toggle' | 'type' | 'erase' | 'submit';
 
@@ -26,6 +30,9 @@ const CUE_GROUP: Record<Cue | UiCue, SoundGroup> = {
   success: 'answers',
   wrong: 'answers',
   combo: 'answers',
+  gold: 'answers',
+  power: 'rivals',
+  revive: 'rivals',
   rival: 'rivals',
   hit: 'rivals',
   heal: 'rivals',
@@ -427,6 +434,12 @@ const NORMAL: Pack = {
     thud(b, 60, 0.2, 0.7, 0.18);
   },
   combo: (b) => [C6, 1318.5, 1568].forEach((f, i) => marimba(b, f, i * 0.05, 0.16, 0.22)),
+  gold: (b) => [1568, 2093].forEach((f, i) => marimba(b, vary(f, 0.02), i * 0.06, 0.14, 0.18)),
+  power: (b) => {
+    noise(b, { dur: 0.25, color: 'pink', f: 600, fTo: 3000, q: 0.8, gain: 0.12, attack: 0.1, wet: 0.2 });
+    [G5, C6].forEach((f, i) => marimba(b, f, 0.12 + i * 0.07, 0.18, 0.35));
+  },
+  revive: (b) => [C5, G5, C6, E5 * 2].forEach((f, i) => marimba(b, f, i * 0.09, 0.2, 0.6)),
   victory: (b) => {
     [C5, E5, G5].forEach((f, i) => marimba(b, f, i * 0.12, 0.28, 0.5));
     [C6, E5 * 2, G5 * 2].forEach((f) => marimba(b, f, 0.42, 0.18, 1.1));
@@ -503,6 +516,19 @@ const CRYPT: Pack = {
     thud(b, 58, 0.22, 0.8, 0.3);
   },
   combo: (b) => [659, 784, 988].forEach((f, i) => bell(b, f, i * 0.07, 0.09, 1.1)),
+  gold: (b) => {
+    // Monedas que caen sobre piedra.
+    for (let i = 0; i < 3; i++) tone(b, { f: vary(2400, 0.1), at: i * 0.06, dur: 0.12, type: 'triangle', gain: 0.07, wet: 0.5 });
+  },
+  power: (b) => {
+    stoneSlide(b, 0.3, 0, 0.3, 300, 900);
+    bell(b, 587, 0.1, 0.14, 1.6);
+  },
+  revive: (b) => {
+    bell(b, 392, 0, 0.16, 2.2);
+    bell(b, 587, 0.18, 0.14, 2.4);
+    bell(b, 784, 0.36, 0.12, 2.6);
+  },
   victory: (b) => {
     // Fanfarria de metales + campanas.
     const brass = (f: number, at: number, dur: number) => {
@@ -578,6 +604,15 @@ const CYBER: Pack = {
     tone(b, { f: 55, at: 0.22, dur: 0.18, type: 'sine', gain: 0.7, wet: 0.1 });
   },
   combo: (b) => [0, 0.06, 0.12].forEach((at, i) => laser(b, 900 + i * 500, 2600 + i * 600, 0.07, at, 0.1)),
+  gold: (b) => [2637, 3136].forEach((f, i) => blip(b, f, i * 0.05, 0.1, 0.06)),
+  power: (b) => {
+    saber(b, 0.35, true, 0, 0.14);
+    laser(b, 600, 2400, 0.18, 0.08, 0.1);
+  },
+  revive: (b) => {
+    tone(b, { f: 200, slide: 1600, dur: 0.7, type: 'triangle', gain: 0.12, wet: 0.4 });
+    [C6, 1568, 2093].forEach((f, i) => blip(b, f, 0.4 + i * 0.07, 0.12, 0.1));
+  },
   victory: (b) => {
     [C5, E5, G5, C6, G5, C6 * 1.5].forEach((f, i) => tone(b, { f, at: i * 0.09, dur: 0.22, type: 'sawtooth', gain: 0.09, lowpass: 3200, wet: 0.35 }));
     saber(b, 0.6, true, 0.5, 0.12);

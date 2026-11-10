@@ -14,6 +14,7 @@ export function AnswerGrid({
   locked,
   celebrate,
   wrong,
+  transform,
 }: {
   enumeration: string;
   letters: string[];
@@ -22,6 +23,8 @@ export function AnswerGrid({
   locked: boolean; // Resuelto: no se edita.
   celebrate: boolean;
   wrong: boolean;
+  /** COOP (SERPENTIS): convierte cada letra tipeada antes de escribirla (desfase). */
+  transform?: (letter: string) => string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [cursor, setCursor] = useState(() => Math.max(0, letters.findIndex((l) => !l)));
@@ -29,8 +32,8 @@ export function AnswerGrid({
   const total = letters.length;
 
   // Los manejadores del input compartido leen siempre el último estado.
-  const latest = useRef({ letters, cursor, locked, total, onLetters, onSubmit });
-  latest.current = { letters, cursor, locked, total, onLetters, onSubmit };
+  const latest = useRef({ letters, cursor, locked, total, onLetters, onSubmit, transform });
+  latest.current = { letters, cursor, locked, total, onLetters, onSubmit, transform };
 
   /** Lleva el criptico al centro de lo que se ve (con el teclado abierto, arriba del teclado). */
   const center = () => {
@@ -47,7 +50,7 @@ export function AnswerGrid({
       for (const char of chars) {
         const letter = toCellLetter(char);
         if (!letter) continue;
-        next[position] = letter;
+        next[position] = latest.current.transform ? latest.current.transform(letter) : letter;
         if (position < size - 1) position += 1;
       }
       emit(next);

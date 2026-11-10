@@ -13,8 +13,8 @@ import type {
 } from './types';
 import { PARTY_MAX as COOP_MAX_PLAYERS, PARTY_MIN as COOP_MIN_PLAYERS } from './coop/balance';
 
-/** COOP visible y jugable. Se activa cuando esté la pantalla de partida (PR 3 de COOP). */
-export const COOP_ENABLED = false;
+/** COOP visible y jugable (desde v1.3). En `false`, el servidor rechaza crear salas COOP y la UI lo muestra «Pronto». */
+export const COOP_ENABLED = true;
 
 export const DEFAULT_CONFIG: CompetitionConfig = {
   mode: 'timed',

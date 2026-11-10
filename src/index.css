@@ -215,3 +215,53 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .damage-flash { animation-duration: 1ms; }
 }
+
+/* ---------- COOP ---------- */
+/* Halo detrás de las siluetas negras: en temas oscuros es la luz que las recorta. */
+.coop-halo { background: radial-gradient(closest-side, var(--coop-glow, rgba(0, 0, 0, 0.05)), transparent); }
+[data-skin='crypt'] { --coop-glow: rgba(255, 186, 110, 0.55); }
+[data-skin='cyber'] { --coop-glow: rgba(26, 208, 234, 0.5); }
+
+/* Números de daño y curación: suben y se desvanecen. El tamaño lo fija el componente (12–18 px). */
+@keyframes coop-float {
+  0% { transform: translate(-50%, 0) scale(0.8); opacity: 0; }
+  12% { transform: translate(-50%, -6px) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, -48px) scale(1); opacity: 0; }
+}
+.coop-float { animation: coop-float 1300ms ease-out forwards; pointer-events: none; }
+
+@keyframes coop-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px) rotate(-1deg); }
+  40% { transform: translateX(5px) rotate(1deg); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+.coop-shake { animation: coop-shake 420ms ease-out; }
+
+@keyframes coop-glow {
+  0% { filter: drop-shadow(0 0 0 transparent); }
+  40% { filter: drop-shadow(0 0 10px var(--ok)); }
+  100% { filter: drop-shadow(0 0 0 transparent); }
+}
+.coop-heal-glow { animation: coop-glow 700ms ease-out; }
+
+@keyframes coop-banner {
+  0% { transform: translate(-50%, -120%); opacity: 0; }
+  12%, 85% { transform: translate(-50%, 0); opacity: 1; }
+  100% { transform: translate(-50%, -120%); opacity: 0; }
+}
+.coop-banner { animation: coop-banner 3200ms ease-in-out forwards; }
+
+@keyframes coop-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.coop-enter { animation: coop-enter 260ms ease-out both; }
+
+/* Manchas de los piojos de PHARAONIS sobre la zona de cripticos. */
+.coop-lice { position: absolute; border-radius: 9999px; background: rgba(0, 0, 0, 0.5); pointer-events: none; animation: coop-enter 300ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .coop-float, .coop-shake, .coop-heal-glow, .coop-banner, .coop-enter { animation-duration: 1ms; }
+}

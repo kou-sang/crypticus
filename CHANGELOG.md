@@ -4,9 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-10
+
 ### Added
 
-- COOP (oculto hasta el PR 3, `COOP_ENABLED`): motor en `shared/coop`, sala con elección de personaje (sin repetir), explicación previa salteable, Durable Object con asignación de cripticos sin repetir, enunciados enviados con cada ronda y resultado con Elo contra el rating del nivel.
+- **Modo COOP** (nivel AT; NT «Pronto»): de 4 a 8 jugadores contra 4 jefes en 22 minutos, solo en PC o laptop.
+  - Motor determinista en `shared/coop` (rondas normales y difíciles, tienda, votaciones, 7 jefes, 11 personajes y 16 objetos).
+  - Sala con elección de personaje y explicación previa salteable (cómo se juega, jefes y personajes).
+  - Pantalla completa según los bocetos: arena con el jefe al centro y los jugadores alrededor, zona de cripticos, panel propio con objetos y habilidades, y ventana de tienda.
+  - Siluetas propias de jefes, personajes y objetos; números de daño y curación proporcionales; avisos de muerte y resurrección; sonidos nuevos por tema (oro, habilidad, resurrección).
+  - Elo COOP contra el rating del nivel (AT 1500).
+  - Simulador de balance: `npx tsx scripts/simulate-coop.ts`.
 
 ### Removed
 
@@ -14,7 +22,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ### Deploy
 
-- `npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json --secrets-only`: los secretos ahora incluyen enunciado y enumeración (COOP los manda con cada ronda). Reglas de Firestore nuevas (`coopCharacters`).
+- Reglas de Firestore (`coopCharacters`) y secretos con enunciado: `import-cryptics.ts --secrets-only` (ver DEPLOY 6.3).
 
 ## [1.2.2] - 2026-11-08
 
