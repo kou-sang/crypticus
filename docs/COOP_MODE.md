@@ -79,6 +79,6 @@ Con los números del manual v2, los bots no ganan nunca. Bot «normal»: resuelv
 Causas medidas (30 partidas de 4 jugadores):
 
 - **La ronda difícil casi nunca se supera** (8 de 119): hay que resolver un difícil o muy difícil en 30 s (21 s contra el jefe Expert), y tienen que lograrlo **todos**. Cada fallo golpea a toda la party: es la mayor fuente de muertes. Además, casi nunca se abre la tienda.
-- **El daño de los jugadores es bajo** frente a la vida de los jefes: 30 por criptico (60 por jugador por ronda normal completa), contra 630 del jefe Easy con 4 jugadores. Hacen falta ~7 rondas perfectas solo para el primero.
+- **El daño de los jugadores es bajo** frente a la vida de los jefes: 30 por criptico (60 por jugador por ronda normal completa), contra 630 del jefe Easy con 4 jugadores. Hacen falta ~3–4 rondas perfectas solo para el primero.
 
 El modelo de los bots es una estimación: los tiempos reales de resolución deciden. Ajustes a evaluar en `balance.ts`: ronda difícil de 60 s, ataque base 45–60 o vida de los jefes −30 %, y daño base de los jefes 30 (+10 por categoría).
