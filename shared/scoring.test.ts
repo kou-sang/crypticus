@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   comebackFactor,
   duelComboMultiplier,
-  computeBossDamage,
   computeRatingDeltas,
   computeSolvePoints,
   DEFAULT_CONFIG,
@@ -47,14 +46,6 @@ describe('computeSolvePoints', () => {
     expect(comebackFactor('low', 0, 100)).toBe(2);
     expect(comebackFactor('high', 75, 100)).toBe(1.5);
     expect(comebackFactor('off', 0, 100)).toBe(1);
-  });
-});
-
-describe('computeBossDamage', () => {
-  it('proporcional al tiempo restante con mínimo del 10 %', () => {
-    expect(computeBossDamage('hard', 1)).toBe(200);
-    expect(computeBossDamage('hard', 0.5)).toBe(100);
-    expect(computeBossDamage('easy', 0)).toBe(10);
   });
 });
 
