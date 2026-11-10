@@ -75,6 +75,8 @@ export const SHOP_MS = 45_000;
 export const SHOP_BASE_OPTIONS = 2;
 export const INVENTORY_SLOTS = 4;
 export const DECISION_MS = 15_000;
+/** Votación de rendición: dura 30 s de partida; pasa solo con el «sí» de todos los que siguen en la partida. */
+export const SURRENDER_VOTE_MS = 30_000;
 
 // --- Jugadores -----------------------------------------------------------------------------------------
 

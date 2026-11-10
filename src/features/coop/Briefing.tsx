@@ -7,7 +7,6 @@ import { CHARACTERS } from '../../../shared/coop/catalog/characters';
 import type { CoopClientAction, CoopReply, CoopView } from '../../../shared/coop/protocol';
 import { Button } from '../../components/ui';
 import { cx } from '../../lib/utils';
-import { BossSilhouette, CharacterSilhouette } from './silhouettes';
 
 const CATEGORY = ['Easy', 'Medium', 'Difficult', 'Expert', 'Nightmare'] as const;
 const LEVEL_CATEGORY_INDEX = { easy: 0, medium: 1, difficult: 2, expert: 3, nightmare: 4 } as const;
@@ -47,18 +46,16 @@ export const Briefing = memo(function Briefing({
   const left = Math.max(0, Math.ceil((briefing.endsAt - now) / 1000));
   const level = LEVELS[view.level];
 
-  const markReady = () => {
-    // Pantalla completa: se pide con el gesto del jugador (los navegadores lo exigen).
-    document.documentElement.requestFullscreen?.().catch(() => undefined);
-    void act({ kind: 'ready' });
-  };
+  // La pantalla completa la pide CoopLive con el gesto del jugador.
+  const markReady = () => void act({ kind: 'ready' });
 
+  // Solo el contenido de la pestaña se desplaza: título, party y botones quedan siempre a la vista.
   return (
-    <div className="mx-auto flex h-full max-w-5xl flex-col gap-4 overflow-y-auto p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <div className="mx-auto flex h-full max-w-5xl flex-col gap-3 px-6 pb-4 pt-2">
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted">COOP · Nivel {view.level}</p>
-          <h1 className="font-display text-4xl">{view.title}</h1>
+          <h1 className="truncate font-display text-3xl">{view.title}</h1>
         </div>
         <div className="text-right">
           <p className="font-mono text-sm">Empieza en {left} s</p>
@@ -69,13 +66,12 @@ export const Briefing = memo(function Briefing({
       </header>
 
       {/* Tarjetas de carga de la party. */}
-      <ul className="grid grid-cols-4 gap-2 xl:grid-cols-8">
+      <ul className="grid shrink-0 grid-cols-4 gap-2 xl:grid-cols-8">
         {view.players.map((player) => {
           const isReady = briefing.ready.includes(player.uid);
           return (
-            <li key={player.uid} className={cx('coop-enter flex flex-col items-center gap-1 border-2 p-2 text-center', isReady ? 'border-ink' : 'border-line')}>
-              <span className="coop-halo">{player.character && <CharacterSilhouette id={player.character} className="size-14" />}</span>
-              <span className="font-display text-sm uppercase leading-tight">{player.character ? CHARACTERS[player.character].name : ''}</span>
+            <li key={player.uid} className={cx('coop-enter flex min-w-0 flex-col items-center gap-0.5 border-2 px-2 py-1.5 text-center', isReady ? 'border-ink' : 'border-line')}>
+              <span className="max-w-full truncate font-display text-base uppercase leading-tight">{player.character ? CHARACTERS[player.character].name : ''}</span>
               <span className={cx('max-w-full truncate text-xs', player.uid === meId ? 'font-bold text-accent' : 'text-muted')}>{player.name}</span>
               <span className={cx('text-[10px] font-semibold uppercase tracking-widest', isReady ? 'text-ok' : 'text-muted')}>
                 {isReady ? 'Listo' : player.uid === meId && !loaded ? 'Cargando…' : 'Leyendo'}
@@ -85,7 +81,7 @@ export const Briefing = memo(function Briefing({
         })}
       </ul>
 
-      <nav role="tablist" className="flex border border-ink">
+      <nav role="tablist" className="flex shrink-0 border border-ink">
         {STEPS.map(([id, label]) => (
           <button
             key={id}
@@ -99,7 +95,7 @@ export const Briefing = memo(function Briefing({
         ))}
       </nav>
 
-      <div key={step} className="coop-enter min-h-0 flex-1">
+      <div key={step} className="coop-enter min-h-0 flex-1 overflow-y-auto pr-1">
         {step === 'rules' && (
           <div className="space-y-3 text-base leading-relaxed">
             <p>
@@ -130,10 +126,7 @@ export const Briefing = memo(function Briefing({
         {step === 'bosses' && (
           <ol className="grid gap-3 md:grid-cols-2">
             {view.bosses.map((id, index) => (
-              <li key={id} className="flex gap-3 border border-ink p-3">
-                <span className="coop-halo shrink-0 self-start">
-                  <BossSilhouette id={id} className="size-20" />
-                </span>
+              <li key={id} className="border border-ink p-3">
                 <div className="space-y-1 text-sm">
                   <p className="font-display text-xl">
                     {index + 1}. {BOSSES[id].name}{' '}
@@ -155,10 +148,7 @@ export const Briefing = memo(function Briefing({
         {step === 'party' && (
           <ul className="grid gap-3 md:grid-cols-2">
             {view.players.flatMap((player) => (player.character ? [{ ...player, character: player.character }] : [])).map((player) => (
-              <li key={player.uid} className="flex gap-3 border border-ink p-3 text-sm">
-                <span className="coop-halo shrink-0 self-start">
-                  <CharacterSilhouette id={player.character} className="size-14" />
-                </span>
+              <li key={player.uid} className="border border-ink p-3 text-sm">
                 <div className="space-y-1">
                   <p>
                     <span className="font-display text-lg">{CHARACTERS[player.character].name}</span>{' '}
@@ -177,7 +167,7 @@ export const Briefing = memo(function Briefing({
         )}
       </div>
 
-      <footer className="flex flex-wrap items-center justify-end gap-3">
+      <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-line pt-3">
         {step !== 'party' && (
           <Button variant="secondary" onClick={() => setStep(step === 'rules' ? 'bosses' : 'party')}>
             Siguiente

@@ -182,7 +182,7 @@
 
 /* ---------- Pergamino: paneles de contenido, ventanas, ajustes y avisos ---------- */
 
-[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel, .rival-toast) {
+[data-skin='crypt'] :is(.page, .coop-screen, .modal-panel, .settings-panel, .rival-toast) {
   --paper: #c3ab7d;
   --paper-2: #b29766;
   --ink: #2a1c0e;
@@ -218,11 +218,11 @@
   border-style: solid;
   padding: clamp(16px, 3vw, 34px) clamp(14px, 3vw, 34px);
 }
-[data-skin='crypt'] :is(.page, .modal-panel) :is(h1, h2) {
+[data-skin='crypt'] :is(.page, .coop-screen, .modal-panel) :is(h1, h2) {
   text-shadow: 0 1px 0 rgba(255, 240, 205, 0.35);
 }
 /* Tarjetas y secciones dentro del pergamino: un tono más oscuro, sin otra textura encima. */
-[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) .surface {
+[data-skin='crypt'] :is(.page, .coop-screen, .modal-panel, .settings-panel) .surface {
   background: rgba(120, 85, 40, 0.12);
   border-color: #8a6e46;
 }
@@ -391,20 +391,20 @@
  * Pestañas y opciones sobre el pergamino (Públicas/Amigos, Global/Amigos, modos, chips): con borde de tinta
  * y un fondo más oscuro para que se distingan del papel; la elegida, en cuero oscuro con letra clara.
  */
-[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) :is(.seg-tab, [role='tab'], [role='radio'], [aria-pressed]):not(.btn) {
+[data-skin='crypt'] :is(.page, .coop-screen, .modal-panel, .settings-panel) :is(.seg-tab, [role='tab'], [role='radio'], [aria-pressed]):not(.btn) {
   border-color: #6f5432;
 }
-[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) :is(.seg-tab, [role='tab'], [role='radio'], [aria-pressed]):not(.btn):not(.bg-ink) {
+[data-skin='crypt'] :is(.page, .coop-screen, .modal-panel, .settings-panel) :is(.seg-tab, [role='tab'], [role='radio'], [aria-pressed]):not(.btn):not(.bg-ink) {
   background-color: rgba(110, 75, 35, 0.16);
   color: #3a2814;
 }
-[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) .bg-ink {
+[data-skin='crypt'] :is(.page, .coop-screen, .modal-panel, .settings-panel) .bg-ink {
   background: linear-gradient(#4d3520, #2e1f10);
   color: #f3e6c8;
   box-shadow: inset 0 1px 0 rgba(255, 230, 190, 0.15), 0 1px 2px rgba(40, 20, 5, 0.5);
 }
 /* Dentro de un relleno de cuero (elegido), los textos secundarios heredan la letra clara en vez de la tinta del papel. */
-[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) .bg-ink :is(.text-ink, .text-muted, .text-accent, .text-ok) {
+[data-skin='crypt'] :is(.page, .coop-screen, .modal-panel, .settings-panel) .bg-ink :is(.text-ink, .text-muted, .text-accent, .text-ok) {
   color: inherit;
 }
-[data-skin='crypt'] :is(.page, .modal-panel, .settings-panel) .bg-ink .text-muted { opacity: 0.75; }
+[data-skin='crypt'] :is(.page, .coop-screen, .modal-panel, .settings-panel) .bg-ink .text-muted { opacity: 0.75; }

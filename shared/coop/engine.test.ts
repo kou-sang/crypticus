@@ -262,3 +262,37 @@ describe('jefes', () => {
     expect(state.phase).toBe('defeat');
   });
 });
+
+describe('rendición', () => {
+  it('pasa solo con el sí de todos; un «no» retira el voto pero no cierra la votación', () => {
+    let { state, now } = startGame('leviathan');
+    state = act(state, { type: 'surrender', playerId: 'p0', accept: true }, now).state;
+    expect(state.surrender?.yes).toEqual(['p0']);
+    state = act(state, { type: 'surrender', playerId: 'p1', accept: false }, now).state;
+    expect(state.surrender).not.toBeNull();
+    state = act(state, { type: 'surrender', playerId: 'p1', accept: true }, now).state;
+    state = act(state, { type: 'surrender', playerId: 'p2', accept: true }, now).state;
+    expect(state.result).toBeNull();
+    const last = act(state, { type: 'surrender', playerId: 'p3', accept: true }, now);
+    expect(last.state.result).toMatchObject({ won: false, surrendered: true });
+    expect(last.state.phase).toBe('defeat');
+    expect(ofType(last.events, 'surrenderEnd')[0]?.passed).toBe(true);
+  });
+
+  it('vence a los 30 s sin unanimidad y no se abre con un «no»', () => {
+    let { state, now } = startGame('leviathan');
+    expect(reduceCoop(state, { type: 'surrender', playerId: 'p0', accept: false }, now).rejected).not.toBeNull();
+    state = act(state, { type: 'surrender', playerId: 'p0', accept: true }, now).state;
+    const expired = reduceCoop(state, { type: 'tick' }, now + 30_000);
+    expect(expired.state.surrender).toBeNull();
+    expect(expired.state.result).toBeNull();
+    expect(ofType(expired.events, 'surrenderEnd')[0]?.passed).toBe(false);
+  });
+
+  it('quien sale deja de contar: el resto puede completar la unanimidad', () => {
+    let { state, now } = startGame('leviathan');
+    for (const id of ['p0', 'p1', 'p2']) state = act(state, { type: 'surrender', playerId: id, accept: true }, now).state;
+    const after = act(state, { type: 'leave', playerId: 'p3' }, now);
+    expect(after.state.result).toMatchObject({ won: false, surrendered: true });
+  });
+});

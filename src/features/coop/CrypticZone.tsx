@@ -12,7 +12,6 @@ import { playCue } from '../../lib/sound';
 import { cx, errorMessage } from '../../lib/utils';
 import { AnswerGrid } from '../play/AnswerGrid';
 import { useCryptics } from '../play/useCryptics';
-import { BossSilhouette } from './silhouettes';
 import type { LiceStain, LogLine } from './useCoopFx';
 
 const TIER_LABELS: Record<CoopCrypticView['tier'], string> = {
@@ -144,7 +143,7 @@ function RoundCryptics({
   const enumeration = current ? (current.enumeration ?? (state.modifiers.hideCells ? null : (fallback?.enumeration ?? null))) : null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {me.status === 'dead' && (
         <p className="text-sm text-muted">Estás fuera de combate: resolver tu criptico cura 20 de vida al aliado con menos vida.</p>
       )}
@@ -161,8 +160,8 @@ function RoundCryptics({
         )}
       </p>
       {current && clue ? (
-        <div key={current.crypticId} className="coop-enter space-y-3">
-          <p className="font-display text-xl leading-snug">
+        <div key={current.crypticId} className="coop-enter space-y-2">
+          <p className="break-words font-display text-lg leading-snug">
             {clue} {enumeration && <span className="font-mono text-base text-muted">{enumeration}</span>}
           </p>
           {current.hints.map((hint, index) => (
@@ -257,7 +256,7 @@ export function CrypticZone({
   const gt = gameTime(state, now);
   return (
     <section aria-label="Zona de cripticos" className="surface relative flex h-full min-h-0 flex-col overflow-hidden border-2 border-ink">
-      <header className="flex items-baseline justify-between gap-2 border-b border-ink px-4 py-2">
+      <header className="flex shrink-0 items-baseline justify-between gap-2 border-b border-ink px-4 py-1.5">
         <h2 className="text-[11px] font-semibold uppercase tracking-widest">Zona criptico</h2>
         {state.phase === 'round' && state.roundEndsGt !== null && (
           <span className={cx('font-mono text-lg font-bold tabular-nums', state.roundEndsGt - gt < 10_000 && 'text-accent')}>
@@ -267,14 +266,9 @@ export function CrypticZone({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {state.phase === 'bossIntro' && boss && (
-          <div className="coop-enter flex gap-4">
-            <span className="coop-halo shrink-0">
-              <BossSilhouette id={boss.id} className="size-20" />
-            </span>
-            <div>
-              <p className="font-display text-2xl">Se acerca {BOSSES[boss.id].name}</p>
-              <p className="mt-1 text-sm">{BOSSES[boss.id].story}</p>
-            </div>
+          <div className="coop-enter">
+            <p className="font-display text-2xl">Se acerca {BOSSES[boss.id].name}</p>
+            <p className="mt-1 text-sm leading-snug">{BOSSES[boss.id].story}</p>
           </div>
         )}
         {state.phase === 'round' && me && <RoundCryptics state={state} me={me} cryptics={cryptics} act={act} />}
@@ -292,7 +286,7 @@ export function CrypticZone({
         )}
         {state.result && <p className="font-display text-3xl">{state.result.won ? '¡Victoria!' : 'Derrota'}</p>}
       </div>
-      <ol aria-label="Registro" className="max-h-28 shrink-0 space-y-0.5 overflow-y-auto border-t border-line px-4 py-2 text-xs text-muted">
+      <ol aria-label="Registro" className="max-h-20 shrink-0 space-y-0.5 overflow-y-auto border-t border-line px-4 py-1.5 text-[11px] leading-snug text-muted">
         {log.map((line) => (
           <li key={line.id} className="coop-enter">
             {line.text}

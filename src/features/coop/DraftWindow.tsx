@@ -44,7 +44,7 @@ export const DraftWindow = memo(function DraftWindow({
   };
 
   return (
-    <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 px-6 pb-4 pt-2">
       <header className="flex items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted">COOP · Nivel {view.level}</p>

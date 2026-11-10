@@ -33,4 +33,6 @@ export type CoopEvent =
   | { type: 'itemUsed'; gt: number; playerId: string; itemId: ItemId; targetId: string | null }
   | { type: 'hintRevealed'; gt: number; playerId: string; slot: number; level: number }
   | { type: 'shopSwap'; gt: number; playerId: string; targetId: string }
-  | { type: 'gameOver'; gt: number; won: boolean };
+  | { type: 'surrenderVote'; gt: number; playerId: string; accept: boolean; yes: number; needed: number; endsGt: number }
+  | { type: 'surrenderEnd'; gt: number; passed: boolean }
+  | { type: 'gameOver'; gt: number; won: boolean; surrendered?: boolean };

@@ -496,6 +496,7 @@ export class CompetitionRoom extends DurableObject<Env> {
         level: coop.level,
         won,
         endedGt: game.result.endedGt,
+        ...(game.result.surrendered ? { surrendered: true } : {}),
         rounds: game.roundNumber,
         bossesDefeated,
         bosses: game.bosses.map((b) => ({

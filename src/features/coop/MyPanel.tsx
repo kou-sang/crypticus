@@ -62,27 +62,27 @@ export const MyPanel = memo(function MyPanel({
   const slots: Array<ItemInstance | null> = [...me.inventory, ...Array<null>(Math.max(0, INVENTORY_SLOTS - me.inventory.length)).fill(null)];
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_14rem] gap-3">
-      <section aria-label="Tu personaje" className="surface flex min-h-0 flex-col gap-3 border-2 border-ink p-3">
-        <p className="border border-ink px-3 py-1.5 text-sm font-semibold">
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_minmax(12rem,15rem)] gap-3">
+      <section aria-label="Tu personaje" className="surface flex min-h-0 flex-col gap-2 overflow-hidden border-2 border-ink p-2.5">
+        <p className="shrink-0 truncate border border-ink px-3 py-1 text-sm font-semibold">
           {me.name} — <span className="uppercase">{character.name}</span>
           {me.status !== 'alive' && <span className="ml-2 text-accent">{me.status === 'dead' ? 'Caído' : 'Saliste'}</span>}
         </p>
-        <div className="grid grid-cols-[minmax(0,1.4fr)_1fr_1fr] items-center gap-3 border border-ink px-3 py-2 text-sm">
+        <div className="grid shrink-0 grid-cols-[minmax(0,1.4fr)_auto_auto] items-center gap-4 border border-ink px-3 py-1.5 text-sm">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Vida</p>
             <HpBar hp={me.hp} max={maxHp(state, me)} className="h-4" />
           </div>
           <div title={DAMAGE_TYPE_LABEL(me.damageType)}>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Daño actual</p>
-            <p className="font-mono text-lg font-bold">{Math.round(attackPower(state, me, gt, boss?.id === 'goliath'))}</p>
+            <p className="font-mono text-base font-bold leading-tight">{Math.round(attackPower(state, me, gt, boss?.id === 'goliath'))}</p>
           </div>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Oro</p>
-            <p className="font-mono text-lg font-bold">{me.gold}</p>
+            <p className="font-mono text-base font-bold leading-tight">{me.gold}</p>
           </div>
         </div>
-        <p className="text-xs text-muted">
+        <p className="shrink-0 truncate text-xs text-muted">
           {DAMAGE_TYPE_LABEL(me.damageType)} · Armadura {Math.round(armor(me, gt))} · Pistas {me.hints}
         </p>
         <ul className="grid min-h-0 flex-1 grid-cols-4 gap-2">
@@ -94,12 +94,12 @@ export const MyPanel = memo(function MyPanel({
                   disabled={!USABLE.has(item.itemId) || !canAct || (item.itemId === 'davidHarp' && !me.harpReady)}
                   onClick={() => run({ kind: 'item', itemUid: item.uid, ...(item.itemId === 'davidHarp' && targetId ? { targetId } : {}) })}
                   title={ITEMS[item.itemId].description}
-                  className="flex h-full w-full flex-col items-center justify-center gap-1 border border-ink p-2 text-center text-[11px] font-semibold leading-tight enabled:hover:bg-paper-2 disabled:cursor-default"
+                  className="flex h-full w-full flex-col items-center justify-center gap-0.5 overflow-hidden border border-ink p-1.5 text-center text-[11px] font-semibold leading-tight enabled:hover:bg-paper-2 disabled:cursor-default"
                 >
-                  <span className="coop-halo">
-                    <ItemSilhouette id={item.itemId} className="size-9" />
+                  <span className="coop-halo shrink-0">
+                    <ItemSilhouette id={item.itemId} className="size-7" />
                   </span>
-                  {itemName(item)}
+                  <span className="line-clamp-2">{itemName(item)}</span>
                   {USABLE.has(item.itemId) && <span className="text-[10px] font-normal text-muted">{item.itemId === 'davidHarp' ? (me.harpReady ? 'Usar' : 'Recargando') : 'Usar'}</span>}
                 </button>
               ) : (
@@ -110,13 +110,13 @@ export const MyPanel = memo(function MyPanel({
         </ul>
       </section>
 
-      <section aria-label="Habilidades" className="surface flex min-h-0 flex-col gap-2 overflow-y-auto border-2 border-ink p-3 text-sm">
+      <section aria-label="Habilidades" className="surface flex min-h-0 flex-col gap-2 overflow-y-auto border-2 border-ink p-2.5 text-xs">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Pasiva</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">Pasiva</p>
           <p className="leading-snug">{character.passive}</p>
         </div>
         <div className="flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">
             Activa · {me.charges === null ? 'sin límite' : `${me.charges}/${character.maxCharges} cargas`}
           </p>
           <p className="leading-snug">{character.active}</p>
