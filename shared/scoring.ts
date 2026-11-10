@@ -192,6 +192,7 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
   if (config.game === 'coop') {
     if (!COOP_ENABLED) errors.push('El modo COOP estará disponible próximamente.');
     if (config.coop?.level !== 'AT') errors.push('El nivel NT todavía no está disponible.');
+    if (config.coop?.stage !== undefined && ![1, 2, 3].includes(config.coop.stage)) errors.push('El subnivel debe ser 1, 2 o 3.');
     if (maxPlayers < COOP_MIN_PLAYERS || maxPlayers > COOP_MAX_PLAYERS) {
       errors.push(`COOP se juega de ${COOP_MIN_PLAYERS} a ${COOP_MAX_PLAYERS} jugadores.`);
     }

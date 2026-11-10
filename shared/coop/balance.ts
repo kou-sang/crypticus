@@ -6,6 +6,20 @@ export const BOSS_CATEGORIES: readonly BossCategory[] = ['easy', 'medium', 'diff
 
 export type CoopLevel = 'AT' | 'NT';
 
+/**
+ * Subnivel de dificultad (AT1, AT2, AT3). Escala las estadísticas base de los jefes: vida y daño base.
+ * El 2 es la dificultad original del manual; las salas anteriores (sin subnivel) son 2.
+ */
+export type CoopStage = 1 | 2 | 3;
+export const COOP_STAGES: readonly CoopStage[] = [1, 2, 3];
+export const DEFAULT_COOP_STAGE: CoopStage = 2;
+export const STAGE_FACTOR: Record<CoopStage, number> = { 1: 2 / 3, 2: 1, 3: 4 / 3 };
+/** Rating del rival (Elo COOP) según el subnivel: más difícil, más Elo por ganar. */
+export const STAGE_RATING_OFFSET: Record<CoopStage, number> = { 1: -150, 2: 0, 3: 150 };
+
+export const normalizeStage = (value: unknown): CoopStage => (value === 1 || value === 2 || value === 3 ? value : DEFAULT_COOP_STAGE);
+export const coopLevelLabel = (level: CoopLevel, stage: CoopStage | undefined): string => `${level}${stage ?? DEFAULT_COOP_STAGE}`;
+
 /** Dificultad de un criptico de COOP. «veryHard2/3»: muy difícil de 2 o 3 palabras (los de desempate). */
 export type CoopTier = 'easy' | 'medium' | 'hard' | 'veryHard2' | 'veryHard3';
 

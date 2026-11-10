@@ -1,7 +1,7 @@
 // Simulador de balance del modo COOP: juega partidas completas con bots y resume victorias, tiempo y rondas por jefe.
 // No toca Firestore ni el Worker: usa el mismo motor puro que el servidor.
-// Uso: npx tsx scripts/simulate-coop.ts [--games 200] [--party 4,6,8] [--skill normal|weak|strong] [--seed 1]
-import { LEVELS, type CoopTier } from '../shared/coop/balance';
+// Uso: npx tsx scripts/simulate-coop.ts [--games 200] [--party 4,6,8] [--skill normal|weak|strong] [--stage 1|2|3] [--seed 1]
+import { LEVELS, normalizeStage, type CoopStage, type CoopTier } from '../shared/coop/balance';
 import { AT_CHARACTER_IDS, type CharacterId } from '../shared/coop/catalog/characters';
 import { createCoopGame, nextDeadline, offerPrice, reduceCoop, type CoopAction } from '../shared/coop/engine';
 import type { CoopEvent } from '../shared/coop/events';
@@ -44,12 +44,12 @@ interface GameSummary {
   shops: number;
 }
 
-function simulateGame(partySize: number, skill: Skill, seed: number): GameSummary {
+function simulateGame(partySize: number, skill: Skill, seed: number, stage: CoopStage): GameSummary {
   const random = botRandom(seed * 7919 + partySize);
   const characters = [...AT_CHARACTER_IDS].sort(() => random() - 0.5).slice(0, partySize) as CharacterId[];
   const players = characters.map((character, i) => ({ id: `p${i}`, name: `Bot ${i}`, character }));
   let now = 1_000_000;
-  const created = createCoopGame({ seed, level: 'AT', players, now });
+  const created = createCoopGame({ seed, level: 'AT', stage, players, now });
   let state = created.state;
   /** Respuestas programadas: [wall, acción]. */
   let queue: Array<{ at: number; action: CoopAction }> = [];
@@ -140,7 +140,7 @@ function simulateGame(partySize: number, skill: Skill, seed: number): GameSummar
   };
 }
 
-function parseArgs(): { games: number; party: number[]; skill: Skill; seed: number } {
+function parseArgs(): { games: number; party: number[]; skill: Skill; seed: number; stage: CoopStage } {
   const args = process.argv.slice(2);
   const get = (name: string) => {
     const index = args.indexOf(`--${name}`);
@@ -153,16 +153,17 @@ function parseArgs(): { games: number; party: number[]; skill: Skill; seed: numb
     party: (get('party') ?? '4,5,6,7,8').split(',').map(Number),
     skill,
     seed: Number(get('seed') ?? 1),
+    stage: normalizeStage(Number(get('stage') ?? 2)),
   };
 }
 
 function main(): void {
-  const { games, party, skill, seed } = parseArgs();
+  const { games, party, skill, seed, stage } = parseArgs();
   const average = (values: number[]) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0);
-  console.log(`COOP nivel AT · ${games} partidas por tamaño · bots ${skill} · ${LEVELS.AT.totalMs / 60_000} min`);
+  console.log(`COOP nivel AT${stage} · ${games} partidas por tamaño · bots ${skill} · ${LEVELS.AT.totalMs / 60_000} min`);
   console.log('Jugadores | Victorias | Min. usados | Jefes caídos | Rondas por jefe (1°/2°/3°/4°) | Muertes | Tiendas');
   for (const size of party) {
-    const results = Array.from({ length: games }, (_, i) => simulateGame(size, skill, seed + i));
+    const results = Array.from({ length: games }, (_, i) => simulateGame(size, skill, seed + i, stage));
     const perBoss = [0, 1, 2, 3].map((index) => average(results.flatMap((r) => (r.roundsPerBoss[index] !== undefined ? [r.roundsPerBoss[index]!] : []))));
     console.log(
       [

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
+import { coopLevelLabel } from '../../../shared/coop/balance';
 import { gameTime } from '../../../shared/coop/engine';
 import type { CoopClientAction, CoopReply } from '../../../shared/coop/protocol';
 import type { CoopState } from '../../../shared/coop/state';
@@ -289,7 +290,7 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
               <SurrenderControl game={game} meId={profile.uid} now={now} act={act} />
             </div>
             <p className="text-sm font-semibold uppercase tracking-widest">
-              COOP {game.level} · Jefe {Math.min(game.bossIndex + 1, game.bosses.length)}/{game.bosses.length}
+              COOP {coopLevelLabel(game.level, game.stage)} · Jefe {Math.min(game.bossIndex + 1, game.bosses.length)}/{game.bosses.length}
               {game.roundNumber > 0 && ` · Ronda ${game.roundNumber}${game.roundKind === 'hard' ? ' (difícil)' : ''}`}
             </p>
             <div className="flex items-center justify-end gap-3">

@@ -1,6 +1,7 @@
 // Normalización de configuración y datos de sala. La usa el Worker al crear, editar e iniciar
 // (lo que llega del cliente o de Firestore nunca se usa sin pasar por aquí) y el cliente para copiar reglas.
 import { DEFAULT_CONFIG, validateConfig } from './scoring';
+import { normalizeStage } from './coop/balance';
 import type {
   ComebackLevel,
   CompetitionConfig,
@@ -66,7 +67,7 @@ export function normalizeConfig(raw: Raw): CompetitionConfig {
       ? { royale: { baseSec: int(royale.baseSec, 120), incrementSec: int(royale.incrementSec, 0), skips: int(royale.skips, 0) } }
       : {}),
     ...(surrender ? { surrender: { enabled: surrender.enabled === true, maxUses: int(surrender.maxUses, 1) } } : {}),
-    ...(game === 'coop' ? { coop: { level: oneOf(coop?.level, COOP_LEVELS, 'AT') } } : {}),
+    ...(game === 'coop' ? { coop: { level: oneOf(coop?.level, COOP_LEVELS, 'AT'), stage: normalizeStage(coop?.stage) } } : {}),
   };
 }
 

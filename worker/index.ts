@@ -142,6 +142,7 @@ async function startCoop(
       competitionId,
       title: competition.title ?? '',
       level: config.coop?.level ?? 'AT',
+      stage: config.coop?.stage ?? 2,
       players: coopSeats(participants, profiles),
       pools,
       seed,

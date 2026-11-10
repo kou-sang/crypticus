@@ -1,6 +1,6 @@
 // Estado de una partida COOP. Serializable (JSON): lo guarda el Durable Object y se difunde recortado.
 // Tiempos: `gt` = tiempo de partida en ms (se detiene en la presentación de cada jefe); `wall` = Date.now().
-import type { BossCategory, CoopLevel, CoopTier } from './balance';
+import type { BossCategory, CoopLevel, CoopStage, CoopTier } from './balance';
 import type { BossId, PharaonisEffect } from './catalog/bosses';
 import type { CharacterId } from './catalog/characters';
 import type { DamageType, ItemId, WeaponVariant } from './catalog/items';
@@ -147,6 +147,8 @@ export interface CoopState {
   version: 1;
   seed: number;
   level: CoopLevel;
+  /** Opcional: las partidas anteriores a los subniveles son AT2. */
+  stage?: CoopStage;
   totalMs: number;
   partySize: number;
   phase: CoopPhase;

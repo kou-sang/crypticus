@@ -1,6 +1,8 @@
 import { Link } from 'react-router';
 import type { Competition } from '../../../shared/types';
 import { COMEBACK_LABELS, DUEL_DAMAGE_LABELS } from '../../../shared/scoring';
+
+const STAGE_LABEL: Record<1 | 2 | 3, string> = { 1: 'Jefes −1/3', 2: 'Dificultad original', 3: 'Jefes +1/3' };
 import { formatTimeControl } from '../../../shared/gameModes';
 import { Badge } from '../../components/ui';
 import { formatRelative } from '../../lib/utils';
@@ -29,14 +31,14 @@ export function describeMode(c: ModeFields): string {
   if (c.game === 'royale' && c.royale) return `Royale ${formatTimeControl(c.royale.baseSec, c.royale.incrementSec)}`;
   if (c.game === 'duel' && c.duel) return `Duel ${c.duel.teams ? '2 vs 2' : '1 vs 1'} · ${c.duel.hp} de vida`;
   if (c.game === 'race') return `Race a ${c.targetCount}`;
-  if (c.game === 'coop') return `COOP ${c.coop?.level ?? 'AT'}`;
+  if (c.game === 'coop') return `COOP ${c.coop?.level ?? 'AT'}${c.coop?.stage ?? 2}`;
   return 'Partida'; // Salas anteriores a los modos (v0.6).
 }
 
 /** Etiquetas cortas de los modificadores activos. */
 export function describeModifiers(c: ModeFields): string[] {
   if (c.game === 'royale') return ['Progresiva', 'Último en pie', c.royale?.skips ? `Saltear ×${c.royale.skips}` : 'Sin saltear'];
-  if (c.game === 'coop') return ['4 a 8 jugadores', c.coop?.level === 'NT' ? '7 jefes · 33 min' : '4 jefes · 22 min', 'Solo PC'];
+  if (c.game === 'coop') return ['4 a 8 jugadores', c.coop?.level === 'NT' ? '7 jefes · 33 min' : '4 jefes · 22 min', STAGE_LABEL[c.coop?.stage ?? 2], 'Solo PC'];
   if (c.game === 'duel') {
     const tags = [`Daño por ${DUEL_DAMAGE_LABELS[c.duel?.damage ?? 'difficulty'].title.toLowerCase()}`];
     if (c.duel?.combo !== false) tags.push('Combo');

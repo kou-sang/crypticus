@@ -1,6 +1,15 @@
 // Sala COOP dentro del Durable Object: selección de personajes, carga/explicación previa, motor (`shared/coop/engine.ts`), asignación de
 // cripticos sin repetir y vista recortada por jugador. Sin E/S: el DO persiste, difunde y programa la alarma.
-import { LEVELS, WRONG_ANSWER_COOLDOWN_MS, type CoopLevel, type CoopTier } from '../shared/coop/balance';
+import {
+  DEFAULT_COOP_STAGE,
+  LEVELS,
+  STAGE_RATING_OFFSET,
+  WRONG_ANSWER_COOLDOWN_MS,
+  normalizeStage,
+  type CoopLevel,
+  type CoopStage,
+  type CoopTier,
+} from '../shared/coop/balance';
 import { createCoopGame, nextDeadline, pickBosses, reduceCoop, type CoopAction } from '../shared/coop/engine';
 import type { CoopEvent } from '../shared/coop/events';
 import { AT_CHARACTER_IDS, CHARACTERS, type CharacterId } from '../shared/coop/catalog/characters';
@@ -25,6 +34,8 @@ export interface CoopStartInput {
   competitionId: string;
   title: string;
   level: CoopLevel;
+  /** AT1/AT2/AT3 (por defecto 2). */
+  stage?: CoopStage;
   players: CoopSeat[];
   /** Por jugador: ids por dificultad, ordenados por SU historial (los que nunca vio, primero). */
   pools: Record<string, PlayerPools>;
@@ -44,6 +55,8 @@ export interface CoopRoomState {
   competitionId: string;
   title: string;
   level: CoopLevel;
+  /** Opcional: salas anteriores a los subniveles son AT2. */
+  stage?: CoopStage;
   /** Personajes vacíos ('') hasta que termina la selección. */
   players: CoopPlayerSetup[];
   seed: number;
@@ -85,6 +98,7 @@ export function createCoopRoom(input: CoopStartInput): CoopRoomState {
     competitionId: input.competitionId,
     title: input.title,
     level: input.level,
+    stage: normalizeStage(input.stage),
     players: input.players.map((p) => ({ ...p, character: '' as CharacterId })),
     seed: input.seed >>> 0,
     draft: { endsAt: input.now + COOP_DRAFT_MS, picks: {}, locked: [] },
@@ -200,6 +214,7 @@ function startGame(room: CoopRoomState, now: number): CoopEvent[] {
   const created = createCoopGame({
     seed: room.seed,
     level: room.level,
+    stage: room.stage ?? DEFAULT_COOP_STAGE,
     players: room.players.map((p) => ({ id: p.uid, name: p.name, character: p.character })),
     now,
   });
@@ -413,6 +428,7 @@ export function coopView(room: CoopRoomState, uid: string, events: CoopEvent[], 
     competitionId: room.competitionId,
     title: room.title,
     level: room.level,
+    stage: room.stage ?? DEFAULT_COOP_STAGE,
     players: room.players.map((p) => (p.character ? p : { uid: p.uid, name: p.name })),
     draft: room.draft,
     bosses: pickBosses(room.seed, room.level),
@@ -444,6 +460,11 @@ export function coopSolutions(room: CoopRoomState, uid: string): Solution[] {
 // --- Elo COOP: cada jugador contra el rating fijo del nivel --------------------------------------------
 
 const COOP_K = 24;
+
+/** Rating del «rival» en el Elo COOP: el del nivel, ajustado por el subnivel. */
+export function coopLevelRating(level: CoopLevel, stage: CoopStage | undefined): number {
+  return LEVELS[level].rating + STAGE_RATING_OFFSET[stage ?? DEFAULT_COOP_STAGE];
+}
 
 export function coopRatingDelta(rating: number, levelRating: number, won: boolean): number {
   const expected = 1 / (1 + 10 ** ((levelRating - rating) / 400));

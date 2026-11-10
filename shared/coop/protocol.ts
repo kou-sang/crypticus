@@ -1,5 +1,5 @@
 // Protocolo WebSocket del modo COOP (mismo socket que el resto de los modos, mensajes propios).
-import type { CoopLevel, CoopTier } from './balance';
+import type { CoopLevel, CoopStage, CoopTier } from './balance';
 import type { BossId } from './catalog/bosses';
 import type { CharacterId } from './catalog/characters';
 import type { CoopEvent } from './events';
@@ -64,6 +64,8 @@ export interface CoopView {
   competitionId: string;
   title: string;
   level: CoopLevel;
+  /** AT1/AT2/AT3. */
+  stage: CoopStage;
   /** Durante la selección, `character` puede faltar (ver `draft.picks`). */
   players: Array<CoopSeat & { character?: CharacterId }>;
   draft: CoopDraftView | null;
@@ -85,6 +87,8 @@ export const COOP_DRAFT_MS = 60_000;
 /** Resumen guardado en `competitions/{id}.coopResult` al terminar (lo lee la pantalla de resultados). */
 export interface CoopResultSummary {
   level: CoopLevel;
+  /** Ausente en resultados anteriores a los subniveles (= 2). */
+  stage?: CoopStage;
   won: boolean;
   endedGt: number;
   /** La party se rindió por votación unánime. */

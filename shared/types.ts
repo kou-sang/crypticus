@@ -22,6 +22,8 @@ export const GAME_MODES: readonly GameMode[] = ['race', 'royale', 'duel', 'coop'
 /** COOP: nivel elegido en la sala. */
 export interface CoopConfig {
   level: 'AT' | 'NT';
+  /** Subnivel 1–3 (AT1, AT2, AT3): escala vida y daño base de los jefes. Ausente en salas anteriores: 2. */
+  stage?: 1 | 2 | 3;
 }
 
 export type DuelDamage = 'difficulty' | 'speed';
@@ -216,5 +218,5 @@ export interface HistoryEntry {
   /** Royale: control de tiempo jugado (desde v1.2). */
   royale?: { baseSec: number; incrementSec: number };
   /** COOP: nivel, personaje y jefes derrotados. */
-  coop?: { level: 'AT' | 'NT'; character: string; bossesDefeated: number };
+  coop?: { level: 'AT' | 'NT'; stage?: 1 | 2 | 3; character: string; bossesDefeated: number };
 }

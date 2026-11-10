@@ -1,6 +1,7 @@
 // Selección de personajes al iniciar (estilo «champion select»): cada uno elige y confirma; no se repiten.
 // Al vencer el tiempo, quien no eligió recibe un personaje libre al azar.
 import { memo, useState } from 'react';
+import { coopLevelLabel } from '../../../shared/coop/balance';
 import { AT_CHARACTER_IDS, CHARACTERS, type CharacterId } from '../../../shared/coop/catalog/characters';
 import type { CoopClientAction, CoopReply, CoopView } from '../../../shared/coop/protocol';
 import { Button } from '../../components/ui';
@@ -47,7 +48,7 @@ export const DraftWindow = memo(function DraftWindow({
     <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 px-6 pb-4 pt-2">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted">COOP · Nivel {view.level}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted">COOP · Nivel {coopLevelLabel(view.level, view.stage)}</p>
           <h1 className="font-display text-4xl">Elige tu personaje</h1>
         </div>
         <p className={cx('font-mono text-4xl font-bold tabular-nums', left <= 10 && 'text-accent')}>{left}</p>

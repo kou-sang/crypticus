@@ -71,11 +71,15 @@ describe('buildConfig', () => {
 
   it('COOP: nivel AT para 4 a 8; NT bloqueado; deshabilitado hasta COOP_ENABLED', () => {
     const built = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'coop' });
-    expect(built.config.coop).toEqual({ level: 'AT' });
+    expect(built.config.coop).toEqual({ level: 'AT', stage: 2 });
+    expect(built.title).toBe('COOP AT2');
+    const at3 = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'coop', coop: { level: 'AT', stage: 3 } });
+    expect(at3.config.coop).toEqual({ level: 'AT', stage: 3 });
+    expect(validateConfig(at3.config, at3.maxPlayers).includes('El subnivel debe ser 1, 2 o 3.')).toBe(false);
     expect(built.maxPlayers).toBe(8);
     const errors = validateConfig(built.config, built.maxPlayers);
     expect(errors.includes('El modo COOP estará disponible próximamente.')).toBe(!COOP_ENABLED);
-    const nt = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'coop', coop: { level: 'NT' } });
+    const nt = buildConfig({ ...DEFAULT_MODE_SETTINGS, game: 'coop', coop: { level: 'NT', stage: 2 } });
     expect(validateConfig(nt.config, nt.maxPlayers)).toContain('El nivel NT todavía no está disponible.');
   });
 });

@@ -1,5 +1,6 @@
 // Resultados de una partida COOP: resumen, estadísticas por jugador y por jefe, y Elo de cada uno.
 import { useEffect, useMemo } from 'react';
+import { coopLevelLabel } from '../../../shared/coop/balance';
 import { BOSSES } from '../../../shared/coop/catalog/bosses';
 import { CHARACTERS } from '../../../shared/coop/catalog/characters';
 import type { CoopResultSummary } from '../../../shared/coop/protocol';
@@ -43,7 +44,7 @@ export function CoopResults({ result, meId }: { result: CoopResultSummary; meId:
     <div className="space-y-8">
       <div className="border-2 border-ink p-6 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-          COOP {result.level} · {result.bossesDefeated}/{result.bosses.length} jefes · {result.rounds} rondas · {minutes(result.endedGt)}
+          COOP {coopLevelLabel(result.level, result.stage)} · {result.bossesDefeated}/{result.bosses.length} jefes · {result.rounds} rondas · {minutes(result.endedGt)}
         </p>
         <p className="mt-2 font-display text-4xl">
           {result.won ? (
