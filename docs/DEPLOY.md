@@ -297,7 +297,7 @@ npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json
 npm run deploy
 ```
 
-- Las reglas nuevas dejan que cada jugador elija su personaje en la sala.
+- Las reglas incluyen los índices de «Tus salas pendientes» (ya existentes) y el resto de la v1.2.
 - `--secrets-only` agrega el enunciado y la enumeración a los secretos: el servidor los manda con cada ronda, sin lecturas a Firestore. Sin este paso, COOP igual funciona, pero lee los enunciados de Firestore.
 
 ### Novedades en Inicio

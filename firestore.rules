@@ -91,17 +91,6 @@ service cloud.firestore {
         && next().teams.diff(comp().get('teams', {})).affectedKeys().hasOnly([request.auth.uid])
         && next().teams[request.auth.uid] in [0, 1];
 
-      // COOP: cada jugador elige su personaje en la sala (solo su propia entrada). La unicidad la valida
-      // el Worker al iniciar; la UI no deja elegir uno ya tomado.
-      allow update: if signedIn()
-        && comp().status == 'lobby'
-        && comp().get('game', '') == 'coop'
-        && request.auth.uid in comp().participantIds
-        && onlyChanged(['coopCharacters'])
-        && next().coopCharacters.diff(comp().get('coopCharacters', {})).affectedKeys().hasOnly([request.auth.uid])
-        && next().coopCharacters[request.auth.uid] in ['enoch', 'mathusala', 'tubalcain', 'debbora', 'gedeon', 'samson',
-             'urias', 'nathan', 'hiram', 'naaman', 'eliseus'];
-
       // Revancha: un invitado la rechaza agregándose a declinedIds.
       allow update: if signedIn()
         && comp().status == 'lobby'

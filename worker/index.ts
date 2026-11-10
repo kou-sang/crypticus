@@ -12,8 +12,7 @@ import { validateConfig } from '../shared/scoring';
 import { normalizeConfig } from '../shared/config';
 import { handleCreate, handleUpdate } from './rooms';
 import { PARTY_MAX, PARTY_MIN, type CoopTier } from '../shared/coop/balance';
-import { CHARACTERS, type CharacterId } from '../shared/coop/catalog/characters';
-import type { CoopPlayerSetup } from '../shared/coop/protocol';
+import type { CoopSeat } from '../shared/coop/protocol';
 
 export { CompetitionRoom } from './competitionRoom';
 
@@ -99,20 +98,14 @@ async function coopPools(firestore: FirestoreRest, uids: string[]): Promise<Reco
   return pools;
 }
 
-/** COOP: jugadores con su personaje (elegido en la sala, sin repetir). */
-function coopPlayers(competition: Competition, participants: Array<Participant & { id: string }>, names: Map<string, { displayName?: string }>): CoopPlayerSetup[] {
+/** COOP: de 4 a 8 jugadores, en orden de llegada. El personaje se elige después de «Iniciar» (en el DO). */
+function coopSeats(participants: Array<Participant & { id: string }>, names: Map<string, { displayName?: string }>): CoopSeat[] {
   if (participants.length < PARTY_MIN || participants.length > PARTY_MAX) {
     throw new AppError(409, 'bad_players', `COOP se juega de ${PARTY_MIN} a ${PARTY_MAX} jugadores.`);
   }
-  const chosen = competition.coopCharacters ?? {};
-  const players = [...participants]
+  return [...participants]
     .sort((a, b) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0))
-    .map((p) => ({ uid: p.id, name: names.get(p.id)?.displayName ?? p.displayName, character: chosen[p.id] as CharacterId }));
-  const missing = players.filter((p) => !p.character || !(p.character in CHARACTERS));
-  if (missing.length > 0) throw new AppError(409, 'no_character', `Falta elegir personaje: ${missing.map((p) => p.name).join(', ')}.`);
-  const repeated = players.filter((p, i) => players.findIndex((o) => o.character === p.character) !== i);
-  if (repeated.length > 0) throw new AppError(409, 'repeated_character', `${CHARACTERS[repeated[0]!.character].name} está elegido dos veces.`);
-  return players;
+    .map((p) => ({ uid: p.id, name: names.get(p.id)?.displayName ?? p.displayName }));
 }
 
 async function startCoop(
@@ -137,7 +130,7 @@ async function startCoop(
       competitionId,
       title: competition.title ?? '',
       level: config.coop?.level ?? 'AT',
-      players: coopPlayers(competition, participants, profiles),
+      players: coopSeats(participants, profiles),
       pools,
       seed,
       now: Date.now(),

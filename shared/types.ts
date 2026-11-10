@@ -131,7 +131,6 @@ export interface Competition extends CompetitionConfig {
   invitedNames?: Record<string, string>; // Sala de revancha: nombres de los invitados (para mostrar quién falta).
   declinedIds?: string[]; // Sala de revancha: invitados que la rechazaron.
   teams?: Record<string, 0 | 1>; // Duel 2 vs 2: equipo elegido por cada jugador en la sala.
-  coopCharacters?: Record<string, string>; // COOP: personaje elegido por cada jugador (ver shared/coop/catalog).
 }
 
 export interface Participant {

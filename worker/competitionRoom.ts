@@ -53,7 +53,7 @@ import {
   type CoopStartInput,
 } from './coopRoom';
 import type { CoopEvent } from '../shared/coop/events';
-import { COOP_BRIEFING_MS, type CoopClientAction, type CoopResultSummary } from '../shared/coop/protocol';
+import { COOP_BRIEFING_MS, COOP_DRAFT_MS, type CoopClientAction, type CoopResultSummary } from '../shared/coop/protocol';
 import { LEVELS } from '../shared/coop/balance';
 
 export interface StartInput {
@@ -194,8 +194,8 @@ export class CompetitionRoom extends DurableObject<Env> {
     } else if (this.coop.competitionId !== input.competitionId) {
       throw new Error('Sala inconsistente.');
     }
-    // Fin estimado (para las listas): explicación + tiempo total + presentaciones de jefes.
-    const endsAt = this.coop.createdAt + COOP_BRIEFING_MS + LEVELS[this.coop.level].totalMs + 60_000;
+    // Fin estimado (para las listas): selección + carga + tiempo total + presentaciones de jefes.
+    const endsAt = this.coop.createdAt + COOP_DRAFT_MS + COOP_BRIEFING_MS + LEVELS[this.coop.level].totalMs + 60_000;
     return { startedAt: this.coop.createdAt, endsAt };
   }
 

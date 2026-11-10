@@ -22,7 +22,7 @@ export const RELEASES: readonly Release[] = [
     highlight: true,
     news: [
       'De 4 a 8 jugadores contra 4 jefes bíblicos en 22 minutos (nivel AT). Solo en PC o laptop.',
-      'Cada uno elige un personaje con una pasiva y una activa: no se repiten.',
+      'Al iniciar, cada uno elige su personaje en una ventana de selección (no se repiten), y luego carga la partida.',
       'Rondas normales para atacar y ganar oro, rondas difíciles en grupo que abren la tienda.',
       'Cada jefe tiene sus habilidades: ofertas de PHARAONIS, armadura de GOLIATH, letras desfasadas de SERPENTIS y más.',
       'COOP tiene su propio Elo, en el Perfil y en el Ranking, y resultados con las estadísticas de cada jugador y de cada jefe.',

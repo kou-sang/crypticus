@@ -1,11 +1,16 @@
-// Sala COOP dentro del Durable Object: explicación previa, motor (`shared/coop/engine.ts`), asignación de
+// Sala COOP dentro del Durable Object: selección de personajes, carga/explicación previa, motor (`shared/coop/engine.ts`), asignación de
 // cripticos sin repetir y vista recortada por jugador. Sin E/S: el DO persiste, difunde y programa la alarma.
 import { LEVELS, WRONG_ANSWER_COOLDOWN_MS, type CoopLevel, type CoopTier } from '../shared/coop/balance';
 import { createCoopGame, nextDeadline, pickBosses, reduceCoop, type CoopAction } from '../shared/coop/engine';
 import type { CoopEvent } from '../shared/coop/events';
+import { AT_CHARACTER_IDS, CHARACTERS, type CharacterId } from '../shared/coop/catalog/characters';
+import { pickIndex } from '../shared/coop/rng';
 import {
   COOP_BRIEFING_MS,
+  COOP_DRAFT_MS,
   type CoopClientAction,
+  type CoopDraftView,
+  type CoopSeat,
   type CoopCrypticView,
   type CoopPlayerSetup,
   type CoopReply,
@@ -20,7 +25,7 @@ export interface CoopStartInput {
   competitionId: string;
   title: string;
   level: CoopLevel;
-  players: CoopPlayerSetup[];
+  players: CoopSeat[];
   /** Ids por dificultad, ordenados (los que nadie vio, primero). */
   pools: Record<CoopTier, string[]>;
   seed: number;
@@ -32,8 +37,12 @@ export interface CoopRoomState {
   competitionId: string;
   title: string;
   level: CoopLevel;
+  /** Personajes vacíos ('') hasta que termina la selección. */
   players: CoopPlayerSetup[];
   seed: number;
+  draft: CoopDraftView | null;
+  /** Quienes salieron antes de empezar: quedan fuera desde el primer instante de la partida. */
+  leftEarly: string[];
   briefing: { endsAt: number; ready: string[] } | null;
   game: CoopState | null;
   pools: Record<CoopTier, string[]>;
@@ -63,9 +72,11 @@ export function createCoopRoom(input: CoopStartInput): CoopRoomState {
     competitionId: input.competitionId,
     title: input.title,
     level: input.level,
-    players: input.players,
+    players: input.players.map((p) => ({ ...p, character: '' as CharacterId })),
     seed: input.seed >>> 0,
-    briefing: { endsAt: input.now + COOP_BRIEFING_MS, ready: [] },
+    draft: { endsAt: input.now + COOP_DRAFT_MS, picks: {}, locked: [] },
+    leftEarly: [],
+    briefing: null,
     game: null,
     pools: input.pools,
     cursors: { easy: 0, medium: 0, hard: 0, veryHard2: 0, veryHard3: 0 },
@@ -83,6 +94,7 @@ export function coopFinished(room: CoopRoomState): boolean {
 
 /** Próximo instante con algo programado (para la alarma del DO). */
 export function coopDeadline(room: CoopRoomState): number | null {
+  if (room.draft) return room.draft.endsAt;
   if (room.briefing) return room.briefing.endsAt;
   return room.game ? nextDeadline(room.game) : null;
 }
@@ -112,6 +124,24 @@ function absorb(room: CoopRoomState, events: CoopEvent[]): void {
   }
 }
 
+/** Cierra la selección: quien no eligió recibe un personaje libre al azar (por semilla). Abre la carga. */
+function endDraft(room: CoopRoomState, now: number): void {
+  const draft = room.draft;
+  if (!draft) return;
+  const taken = new Set(Object.values(draft.picks));
+  room.players = room.players.map((player, index) => {
+    let character = draft.picks[player.uid];
+    if (!character) {
+      const free = AT_CHARACTER_IDS.filter((id) => !taken.has(id));
+      character = free[pickIndex(room.seed, ['draft', index], free.length)]!;
+      taken.add(character);
+    }
+    return { ...player, character };
+  });
+  room.draft = null;
+  room.briefing = { endsAt: now + COOP_BRIEFING_MS, ready: room.leftEarly.filter((uid) => room.players.some((p) => p.uid === uid)) };
+}
+
 function startGame(room: CoopRoomState, now: number): CoopEvent[] {
   room.briefing = null;
   const created = createCoopGame({
@@ -122,12 +152,23 @@ function startGame(room: CoopRoomState, now: number): CoopEvent[] {
   });
   room.game = created.state;
   absorb(room, created.events);
-  return created.events;
+  const events = [...created.events];
+  for (const uid of room.leftEarly ?? []) {
+    const result = reduceCoop(room.game, { type: 'leave', playerId: uid }, now);
+    room.game = result.state;
+    absorb(room, result.events);
+    events.push(...result.events);
+  }
+  return events;
 }
 
 /** Avanza el reloj (fin de la explicación, rondas, tienda…). */
 export function advanceCoop(room: CoopRoomState, now: number): CoopEvent[] {
   const events: CoopEvent[] = [];
+  if (room.draft) {
+    if (now < room.draft.endsAt) return events;
+    endDraft(room, room.draft.endsAt);
+  }
   if (room.briefing) {
     if (now < room.briefing.endsAt) return events;
     events.push(...startGame(room, room.briefing.endsAt));
@@ -195,7 +236,28 @@ async function runAction(
   events: CoopEvent[],
 ): Promise<CoopOutcome> {
 
+  if (action.kind === 'pick' || action.kind === 'lock') {
+    const draft = room.draft;
+    if (!draft) throw new GameError('no_draft', 'La selección de personajes terminó.');
+    if (draft.locked.includes(uid)) throw new GameError('locked', 'Ya confirmaste tu personaje.');
+    if (action.kind === 'pick') {
+      const character = action.character;
+      if (!(character in CHARACTERS)) throw new GameError('bad_character', 'Personaje desconocido.');
+      const owner = Object.entries(draft.picks).find(([other, pick]) => pick === character && other !== uid);
+      if (owner) throw new GameError('taken', `${CHARACTERS[character].name} ya fue elegido.`);
+      draft.picks[uid] = character;
+    } else {
+      if (!draft.picks[uid]) throw new GameError('no_pick', 'Elige un personaje antes de confirmar.');
+      draft.locked.push(uid);
+    }
+    // Todos confirmaron (quienes salieron no cuentan): termina la selección.
+    const active = room.players.filter((p) => !room.leftEarly.includes(p.uid));
+    if (active.every((p) => draft.locked.includes(p.uid))) endDraft(room, now);
+    return { reply: { ok: true }, events };
+  }
+
   if (action.kind === 'ready') {
+    if (room.draft) throw new GameError('in_draft', 'Primero elige personaje.');
     if (room.briefing && !room.briefing.ready.includes(uid)) room.briefing.ready.push(uid);
     if (room.briefing && room.players.every((p) => room.briefing!.ready.includes(p.uid))) events.push(...startGame(room, now));
     return { reply: { ok: true }, events };
@@ -252,9 +314,13 @@ async function runAction(
       );
       break;
     case 'leave':
-      if (room.briefing) {
-        // Salir durante la explicación: cuenta como abandono desde el primer instante.
-        events.push(...startGame(room, now));
+      if (!room.game) {
+        // Antes de empezar: queda fuera desde el primer instante (no adelanta la partida).
+        if (!room.leftEarly.includes(uid)) room.leftEarly.push(uid);
+        if (room.briefing && !room.briefing.ready.includes(uid)) room.briefing.ready.push(uid);
+        if (room.draft && room.players.every((p) => room.leftEarly.includes(p.uid) || room.draft!.locked.includes(p.uid))) endDraft(room, now);
+        if (room.briefing && room.players.every((p) => room.briefing!.ready.includes(p.uid))) events.push(...startGame(room, now));
+        break;
       }
       events.push(...applyEngine(room, { type: 'leave', playerId: uid }, now, events));
       break;
@@ -288,7 +354,8 @@ export function coopView(room: CoopRoomState, uid: string, events: CoopEvent[], 
     competitionId: room.competitionId,
     title: room.title,
     level: room.level,
-    players: room.players,
+    players: room.players.map((p) => (p.character ? p : { uid: p.uid, name: p.name })),
+    draft: room.draft,
     bosses: pickBosses(room.seed, room.level),
     briefing: room.briefing,
     game: game ? { ...game, seed: 0 } : null,

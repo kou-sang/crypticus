@@ -1,5 +1,6 @@
-// Antes de la partida: explicación breve (salteable), presentación de los jefes y de los personajes.
-import { memo, useState } from 'react';
+// Pantalla de carga (estilo LoL): tarjetas de la party con su estado, y mientras tanto la explicación
+// (salteable), los jefes y los personajes. Empieza cuando todos están listos o vence el tiempo.
+import { memo, useEffect, useState } from 'react';
 import { LEVELS } from '../../../shared/coop/balance';
 import { BOSSES } from '../../../shared/coop/catalog/bosses';
 import { CHARACTERS } from '../../../shared/coop/catalog/characters';
@@ -30,6 +31,17 @@ export const Briefing = memo(function Briefing({
   act: (action: CoopClientAction) => Promise<CoopReply>;
 }) {
   const [step, setStep] = useState<Step>('rules');
+  // Carga de recursos (fuentes del tema y sonido) antes de habilitar «Listo».
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const fonts = document.fonts?.ready ?? Promise.resolve();
+    const minimum = new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    void Promise.all([fonts, minimum]).finally(() => !cancelled && setLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const briefing = view.briefing!;
   const ready = briefing.ready.includes(meId);
   const left = Math.max(0, Math.ceil((briefing.endsAt - now) / 1000));
@@ -55,6 +67,23 @@ export const Briefing = memo(function Briefing({
           </p>
         </div>
       </header>
+
+      {/* Tarjetas de carga de la party. */}
+      <ul className="grid grid-cols-4 gap-2 xl:grid-cols-8">
+        {view.players.map((player) => {
+          const isReady = briefing.ready.includes(player.uid);
+          return (
+            <li key={player.uid} className={cx('coop-enter flex flex-col items-center gap-1 border-2 p-2 text-center', isReady ? 'border-ink' : 'border-line')}>
+              <span className="coop-halo">{player.character && <CharacterSilhouette id={player.character} className="size-14" />}</span>
+              <span className="font-display text-sm uppercase leading-tight">{player.character ? CHARACTERS[player.character].name : ''}</span>
+              <span className={cx('max-w-full truncate text-xs', player.uid === meId ? 'font-bold text-accent' : 'text-muted')}>{player.name}</span>
+              <span className={cx('text-[10px] font-semibold uppercase tracking-widest', isReady ? 'text-ok' : 'text-muted')}>
+                {isReady ? 'Listo' : player.uid === meId && !loaded ? 'Cargando…' : 'Leyendo'}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
 
       <nav role="tablist" className="flex border border-ink">
         {STEPS.map(([id, label]) => (
@@ -125,7 +154,7 @@ export const Briefing = memo(function Briefing({
         )}
         {step === 'party' && (
           <ul className="grid gap-3 md:grid-cols-2">
-            {view.players.map((player) => (
+            {view.players.flatMap((player) => (player.character ? [{ ...player, character: player.character }] : [])).map((player) => (
               <li key={player.uid} className="flex gap-3 border border-ink p-3 text-sm">
                 <span className="coop-halo shrink-0 self-start">
                   <CharacterSilhouette id={player.character} className="size-14" />
@@ -154,8 +183,8 @@ export const Briefing = memo(function Briefing({
             Siguiente
           </Button>
         )}
-        <Button disabled={ready} onClick={markReady}>
-          {ready ? 'Listo · esperando al resto' : 'Saltar y estar listo'}
+        <Button disabled={ready || !loaded} onClick={markReady}>
+          {ready ? 'Listo · esperando al resto' : loaded ? 'Saltar y estar listo' : 'Cargando…'}
         </Button>
       </footer>
     </div>
