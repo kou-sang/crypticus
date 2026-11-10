@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-10
+
+### Changed
+
+- COOP: los cripticos se reparten por jugador. Cada uno recibe primero los que **él** nunca vio, según su propio historial (lo que vieron sus aliados no cuenta). En una misma ronda se evita repetir entre aliados si hay alternativa.
+- COOP: el servidor solo envía el criptico en pantalla; el siguiente de la ronda viaja oculto hasta resolver el anterior.
+
+### Fixed
+
+- COOP: al terminar se mostraban los cripticos de todos, incluso los que nadie llegó a ver. Ahora «Tus cripticos» muestra solo los que vio cada jugador, con su propio ✓/✗, y solo esos cuentan como vistos para no repetírselos.
+
 ## [1.4.0] - 2026-11-10
 
 ### Added

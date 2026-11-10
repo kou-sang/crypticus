@@ -44,7 +44,17 @@ type FinishedCompetition = Competition & {
 };
 
 /** Repaso: cada criptico con su respuesta y su explicación. Es lo que permite comprobar que la pista es justa. */
-function SolutionsList({ competitionId, meId, names }: { competitionId: string; meId: string; names: Map<string, string> }) {
+function SolutionsList({
+  competitionId,
+  meId,
+  names,
+  emptyText = 'No se jugó ningún criptico.',
+}: {
+  competitionId: string;
+  meId: string;
+  names: Map<string, string>;
+  emptyText?: string;
+}) {
   const [solutions, setSolutions] = useState<Solution[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -62,7 +72,7 @@ function SolutionsList({ competitionId, meId, names }: { competitionId: string; 
 
   if (error) return <ErrorBanner error={error} />;
   if (!solutions) return <Spinner />;
-  if (solutions.length === 0) return <p className="text-sm text-muted">No se jugó ningún criptico.</p>;
+  if (solutions.length === 0) return <p className="text-sm text-muted">{emptyText}</p>;
   return (
     <ol className="divide-y divide-line border-y border-line">
       {solutions.map((solution, index) => {
@@ -121,13 +131,15 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
 function CoopResultsView({ competition, result, meId }: { competition: FinishedCompetition; result: CoopResultSummary; meId: string }) {
   const { profile } = useSession();
   const names = Object.fromEntries(result.players.map((p) => [p.uid, p.displayName]));
+  // Cada uno ve solo los cripticos que le tocaron (el servidor ya filtra): el ✓/✗ es solo el propio.
+  const onlyMe = new Map([[meId, names[meId] ?? 'Tú']]);
   return (
     <div className="space-y-8">
       <CoopResults result={result} meId={meId} />
       {competition.participantIds.includes(meId) && (
         <section>
-          <h2 className="mb-3 font-display text-2xl">Soluciones</h2>
-          <SolutionsList competitionId={competition.id} meId={meId} names={new Map(Object.entries(names))} />
+          <h2 className="mb-3 font-display text-2xl">Tus cripticos</h2>
+          <SolutionsList competitionId={competition.id} meId={meId} names={onlyMe} emptyText="No llegaste a ver ningún criptico." />
         </section>
       )}
       {competition.participantIds.includes(meId) && <RematchPanel target={{ competition, names }} profile={profile} />}

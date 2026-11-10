@@ -124,7 +124,8 @@ function RoundCryptics({
   act: (action: CoopClientAction) => Promise<CoopReply>;
 }) {
   // Secretos anteriores a COOP no traen el enunciado: se lee de Firestore.
-  const missing = useMemo(() => cryptics.filter((c) => !c.clue).map((c) => c.crypticId), [cryptics]);
+  // Los cripticos que aún no tocan viajan sin id: no se piden.
+  const missing = useMemo(() => cryptics.filter((c) => c.crypticId && !c.clue).map((c) => c.crypticId), [cryptics]);
   const { cryptics: fetched } = useCryptics(missing);
   const [explanation, setExplanation] = useState<string | null>(null);
   const [hintError, setHintError] = useState<string | null>(null);

@@ -11,8 +11,9 @@ import { answerWords, catalogByTier, catalogTiebreak, crypticKind } from './secr
 import { validateConfig } from '../shared/scoring';
 import { normalizeConfig } from '../shared/config';
 import { handleCreate, handleUpdate } from './rooms';
-import { PARTY_MAX, PARTY_MIN, type CoopTier } from '../shared/coop/balance';
+import { PARTY_MAX, PARTY_MIN } from '../shared/coop/balance';
 import type { CoopSeat } from '../shared/coop/protocol';
+import { COOP_POOL_LIMIT, type PlayerPools } from './coopRoom';
 
 export { CompetitionRoom } from './competitionRoom';
 
@@ -82,20 +83,31 @@ async function selectUnseen(
  * COOP: todo el catálogo por dificultad, con los que nadie de la sala vio primero. El DO los reparte por ronda
  * sin repetir. Los de desempate son los «muy difíciles», separados por cantidad de palabras.
  */
-async function coopPools(firestore: FirestoreRest, uids: string[]): Promise<Record<CoopTier, string[]>> {
+/**
+ * Cripticos de cada jugador por dificultad, ordenados por SU historial: primero los que nunca vio, después
+ * los vistos hace más tiempo. Lo que vieron sus aliados no cuenta. Se guardan los primeros COOP_POOL_LIMIT.
+ */
+async function coopPools(firestore: FirestoreRest, uids: string[]): Promise<Record<string, PlayerPools>> {
   const seenDocs = await firestore.batchGet<{ seen?: Record<string, number> }>(uids.map((uid) => `userSeen/${uid}`));
-  const lastSeen = mergeLastSeen([...seenDocs.values()].map((d) => d.seen));
   const regular = catalogByTier();
+  if (regular.easy.length + regular.medium.length + regular.hard.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
   const tiebreak = Object.values(catalogTiebreak()).flat();
-  const pools: Record<CoopTier, string[]> = {
-    easy: byFreshness(regular.easy, lastSeen),
-    medium: byFreshness(regular.medium, lastSeen),
-    hard: byFreshness(regular.hard, lastSeen),
-    veryHard2: byFreshness(tiebreak.filter((id) => answerWords(id) <= 2), lastSeen),
-    veryHard3: byFreshness(tiebreak.filter((id) => answerWords(id) >= 3), lastSeen),
-  };
-  if (pools.easy.length + pools.medium.length + pools.hard.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
-  return pools;
+  const veryHard2 = tiebreak.filter((id) => answerWords(id) <= 2);
+  const veryHard3 = tiebreak.filter((id) => answerWords(id) >= 3);
+  return Object.fromEntries(
+    uids.map((uid) => {
+      const lastSeen = mergeLastSeen([seenDocs.get(uid)?.seen]);
+      const top = (ids: string[]) => byFreshness(ids, lastSeen).slice(0, COOP_POOL_LIMIT);
+      const pools: PlayerPools = {
+        easy: top(regular.easy),
+        medium: top(regular.medium),
+        hard: top(regular.hard),
+        veryHard2: top(veryHard2),
+        veryHard3: top(veryHard3),
+      };
+      return [uid, pools];
+    }),
+  );
 }
 
 /** COOP: de 4 a 8 jugadores, en orden de llegada. El personaje se elige después de «Iniciar» (en el DO). */
