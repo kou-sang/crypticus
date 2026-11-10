@@ -6,10 +6,16 @@ Especificación: manual «Crypticus: modo COOP» (v2) y las respuestas del 10/11
 
 | PR | Contenido | Estado |
 | --- | --- | --- |
-| 1 | Motor puro (`shared/coop`), catálogos, simulador y tests | Este PR |
-| 2 | Durable Object, sala (nivel, personajes, introducción, presentación de jefes), selección de cripticos | Pendiente |
-| 3 | Pantalla de partida y tienda (bocetos), animaciones y sonidos por tema | Pendiente |
-| 4 | Resultados, estadísticas por jugador y por jefe, Elo COOP | Pendiente |
+| [#28](https://github.com/kou-sang/crypticus/pull/28) | Motor puro (`shared/coop`), catálogos, simulador y tests | ✅ En `main` |
+| [#29](https://github.com/kou-sang/crypticus/pull/29) | Durable Object, sala (nivel, personajes), explicación previa, selección de cripticos | ✅ En `main` |
+| [#30](https://github.com/kou-sang/crypticus/pull/30) | Pantalla de partida y tienda (bocetos), animaciones y sonidos por tema; COOP habilitado | ✅ En `main` |
+| [#31](https://github.com/kou-sang/crypticus/pull/31) | Resultados, estadísticas por jugador y por jefe, soluciones, Elo COOP en Perfil y Ranking | ✅ En `main` |
+
+Todo forma parte de la v1.3.0, **sin desplegar**. Falta:
+
+- **Balance:** con los números actuales los bots no ganan (ver «Balance»). Ajustar `balance.ts` antes de desplegar, o desplegar con `COOP_ENABLED = false`.
+- **Prueba real:** jugar una partida completa en el navegador (no se pudo probar en este entorno).
+- **Nivel NT:** sus jefes y personajes (por ahora se muestra «Pronto»).
 
 ## Archivos
 
