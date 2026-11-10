@@ -60,7 +60,7 @@ function RoundsFlow({
   const current = cryptics.get(round.crypticId);
 
   return (
-    <div className="grid gap-8 md:grid-cols-[1fr_220px]">
+    <div>
       <section className="min-w-0 space-y-6">
         {state.config.duel && (
           <>
@@ -70,7 +70,11 @@ function RoundsFlow({
         )}
         {waiting ? (
           <div className="space-y-4">
-            {round.opensAt != null && <NextCountdown opensAt={round.opensAt} offsetMs={offsetMs} />}
+            {round.opensAt != null && (
+              <NextCountdown opensAt={round.opensAt} offsetMs={offsetMs} label={round.voting ? 'Votación · cierra en' : undefined} />
+            )}
+            {/* Todos terminaron: se vota la dificultad del próximo (gana la mayoría). */}
+            {round.voting && state.config.difficultyVote && <DifficultyVote state={state} uid={uid} actions={actions} />}
             {previous && <PreviousRound key={previous.crypticId} solution={previous} state={state} uid={uid} />}
           </div>
         ) : current ? (
@@ -96,9 +100,6 @@ function RoundsFlow({
           <Spinner />
         )}
       </section>
-      <aside className="space-y-6">
-        {state.config.difficultyVote && <DifficultyVote state={state} uid={uid} actions={actions} />}
-      </aside>
     </div>
   );
 }

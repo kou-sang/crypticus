@@ -4,6 +4,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-10
+
+### Changed
+
+- Race Hardcore, votación de dificultad: ya no se vota durante el criptico. Cuando todos terminan (o cierra la cuenta atrás) se abre una votación de 7 s (`DIFFICULTY_VOTE_MS`) mientras se muestra la solución anterior; al cerrar se sortea el criptico de la dificultad ganadora y abre en el acto. Reemplaza la pausa entre rondas (se usa la mayor de las dos).
+- Sala: los avisos de la partida («Nueva ronda: medio», «X quitó N de vida», aciertos, eliminaciones, prórroga…) van dentro del chat de sala, intercalados por hora y en gris, en vez de una lista aparte. Durante la partida los espectadores ven el chat en solo lectura. En COOP, el registro de la partida sigue en la zona de cripticos y además va al chat lateral (últimas 80 líneas).
+- Gana siempre la mayoría. En empate se sortea entre las más votadas (antes decidía el voto de quien iba perdiendo). Sin votos: medio.
+
+### Fixed
+
+- Al resolver un criptico (sobre todo en Royale, que pasa al siguiente sin pausa) la página bajaba sola: cada grilla nueva se centraba en pantalla. Ahora solo se desplaza si las casillas no se ven enteras (por ejemplo, tapadas por el teclado del celular).
+- Chat de sala: alto fijo con barra de desplazamiento siempre visible (antes empezaba con el alto de un renglón y crecía con los mensajes).
+
 ## [1.7.0] - 2026-11-10
 
 ### Added

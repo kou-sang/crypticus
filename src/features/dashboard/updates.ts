@@ -16,6 +16,20 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.8.0',
+    date: '2026-11-10',
+    title: 'Arreglos de Royale, chat y votación de dificultad',
+    highlight: false,
+    news: [
+      'Race Hardcore: la dificultad del próximo criptico se vota cuando todos terminan, durante 7 s. Gana la mayoría; si empatan, se sortea entre las más votadas.',
+      'Los avisos de la partida (rondas nuevas, daño, aciertos…) ahora aparecen dentro del chat de la sala.',
+    ],
+    fixes: [
+      'La pantalla ya no baja sola al resolver un criptico en Royale.',
+      'El chat de la sala tiene un alto fijo y barra para desplazarse.',
+    ],
+  },
+  {
     version: '1.7.0',
     date: '2026-11-10',
     title: 'COOP: chat, estados y oro por criptico',

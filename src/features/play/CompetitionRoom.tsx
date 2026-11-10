@@ -19,7 +19,7 @@ import { ChatPanel } from '../chat/ChatPanel';
 import { DeviceNotice } from './DeviceNotice';
 import { FaintOverlay } from './FaintOverlay';
 import { RivalToasts } from './RivalToasts';
-import { EventFeed } from './EventFeed';
+import { gameEventLines } from './EventFeed';
 import { LobbyView } from './LobbyView';
 import { PlayView } from './PlayView';
 import { ResultsView } from './ResultsView';
@@ -60,6 +60,8 @@ export default function CompetitionRoom() {
     [live, lobbyParticipants.data],
   );
   const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId }), [competitionId]);
+  // Avisos de la partida para el chat (se recalculan solo cuando cambian los eventos).
+  const systemLines = useMemo(() => (live ? gameEventLines(live) : undefined), [live]);
 
   // Partida en curso para el resto de la app (barra inferior oculta, confirmación al salir, aviso al cerrar).
   const playingNow =
@@ -201,14 +203,14 @@ export default function CompetitionRoom() {
               />
             </section>
           )}
-          {live && <EventFeed state={live} />}
           {live?.status === 'live' && !ended && live.participants[profile.uid] && (
             <EndVote state={live} uid={profile.uid} actions={game.actions} />
           )}
-          {isParticipant && (
+          {/* Chat con los avisos de la partida intercalados (antes iban en una lista aparte). Los espectadores lo leen. */}
+          {(isParticipant || live) && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Chat de sala</h3>
-              <ChatPanel target={chatTarget} compact />
+              <ChatPanel target={chatTarget} compact readOnly={!isParticipant} systemLines={systemLines} />
             </section>
           )}
         </aside>

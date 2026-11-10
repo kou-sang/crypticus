@@ -240,6 +240,11 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
   const chat = useChatDrawer();
   const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId: competition.id }), [competition.id]);
   const chatRef = useRef<HTMLElement>(null);
+  // El registro de la partida también va al chat, intercalado por hora (hora del servidor, como los mensajes).
+  const systemLines = useMemo(
+    () => fx.history.map((line) => ({ key: `coop-${line.id}`, at: line.at + clockOffsetMs, text: line.text })),
+    [fx.history, clockOffsetMs],
+  );
   // Al abrir el chat, el foco va a su campo de texto (al cerrarlo, la grilla vuelve con el próximo clic).
   useEffect(() => {
     if (chat.open) chatRef.current?.querySelector('input')?.focus();
@@ -404,7 +409,7 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
             ✕
           </button>
         </div>
-        <ChatPanel target={chatTarget} fill onActivity={chat.onActivity} className="min-h-0 flex-1 border-0" />
+        <ChatPanel target={chatTarget} fill systemLines={systemLines} onActivity={chat.onActivity} className="min-h-0 flex-1 border-0" />
       </aside>
     </div>,
     document.body,

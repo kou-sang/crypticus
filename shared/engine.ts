@@ -38,7 +38,12 @@ export interface RoundState {
   crypticId: string;
   tier: Difficulty;
   startedAt: number;
-  votes: Record<string, Difficulty>; // Voto de dificultad para la SIGUIENTE ronda.
+  votes: Record<string, Difficulty>; // Votos de dificultad de ESTA ronda (solo mientras `voting`).
+  /**
+   * Votación de dificultad abierta (Race Hardcore): la ronda anterior ya cerró, todos votan durante
+   * DIFFICULTY_VOTE_MS y recién entonces se sortea el criptico (hasta ahí `crypticId` es '').
+   */
+  voting?: boolean;
   solvedBy: string[]; // Orden de acierto en esta ronda.
   closesAt: number | null; // Cuenta atrás activa tras el primer acierto.
   opensAt?: number; // Intervalo entre cripticos: no se puede responder (ni se muestra) antes.
@@ -63,6 +68,8 @@ export interface TiebreakState {
 
 /** Aviso antes de abrir el primer criptico de desempate y pausa entre uno y otro. */
 export const TIEBREAK_INTRO_MS = 3_000;
+/** Duración de la votación de dificultad entre rondas. */
+export const DIFFICULTY_VOTE_MS = 7_000;
 /** Tiempo para cada criptico de desempate. */
 export const TIEBREAK_TIME_MS = 90_000;
 
@@ -382,7 +389,9 @@ function isPlayable(state: LiveState, participant: Participant, crypticId: strin
   if (state.config.flow === 'rounds') {
     const round = state.round;
     return (
-      round?.crypticId === crypticId &&
+      round != null &&
+      !round.voting &&
+      round.crypticId === crypticId &&
       now >= (round.opensAt ?? 0) &&
       !participant.solvedIds.includes(crypticId) &&
       !(round.surrenderedBy ?? []).includes(participant.uid)
@@ -573,6 +582,10 @@ export function applyDifficultyVote(state: LiveState, input: { uid: string; tier
   if (state.config.flow !== 'rounds' || !state.config.difficultyVote || !state.round) {
     throw new GameError('vote_disabled', 'La votación de dificultad no está activa.');
   }
+  // Solo entre rondas: se vota cuando todos terminaron el criptico anterior.
+  if (!state.round.voting || input.now >= (state.round.opensAt ?? 0)) {
+    throw new GameError('vote_closed', 'La votación se abre cuando todos terminan el criptico.');
+  }
   if (!DIFFICULTIES.includes(input.tier)) throw new GameError('bad_tier', 'Dificultad inválida.');
   state.round.votes = { ...state.round.votes, [input.uid]: input.tier };
 }
@@ -682,26 +695,19 @@ export function toggleEndVote(state: LiveState, input: { uid: string; now: numbe
 // ---------- Rondas ----------
 
 /**
- * Dificultad elegida por votación. Empate: gana el voto del jugador peor posicionado
- * (mecánica de remontada). Sin votos: medio.
+ * Dificultad elegida por votación: gana la mayoría. Empate entre las más votadas: sorteo entre ellas.
+ * Sin votos: `null` (el llamador usa medio).
  */
-export function resolveVote(votes: Record<string, Difficulty>, ranked: RankedParticipant[]): Difficulty | null {
-  const entries = Object.entries(votes);
+export function resolveVote(votes: Record<string, Difficulty>, random: () => number = Math.random): Difficulty | null {
+  const entries = Object.values(votes);
   if (entries.length === 0) return null;
   const counts = new Map<Difficulty, number>();
-  for (const [, tier] of entries) counts.set(tier, (counts.get(tier) ?? 0) + 1);
+  for (const tier of entries) counts.set(tier, (counts.get(tier) ?? 0) + 1);
   const max = Math.max(...counts.values());
-  const tied = [...counts.entries()].filter(([, count]) => count === max).map(([tier]) => tier);
+  // Orden fijo (fácil → difícil) para que el sorteo no dependa del orden de llegada de los votos.
+  const tied = DIFFICULTIES.filter((tier) => counts.get(tier) === max);
   if (tied.length === 1) return tied[0]!;
-
-  const rankOf = new Map(ranked.map((p) => [p.uid, p.rank]));
-  let best: { tier: Difficulty; rank: number } | null = null;
-  for (const [uid, tier] of entries) {
-    if (!tied.includes(tier)) continue;
-    const rank = rankOf.get(uid) ?? 0;
-    if (!best || rank > best.rank) best = { tier, rank };
-  }
-  return best?.tier ?? tied[0]!;
+  return tied[Math.min(tied.length - 1, Math.floor(random() * tied.length))]!;
 }
 
 function drawFromPool(state: LiveState, preferred: Difficulty, random: () => number): { id: string; tier: Difficulty } | null {
@@ -765,13 +771,49 @@ function onRoundSolved(state: LiveState, uid: string, now: number, random: () =>
 
 function advanceRound(state: LiveState, now: number, random: () => number): void {
   if (!state.round) return;
-  let preferred: Difficulty;
   if (state.config.difficultyVote) {
-    preferred = resolveVote(state.round.votes, rankState(state)) ?? 'medium';
-  } else {
-    preferred = DIFFICULTIES[Math.floor(random() * DIFFICULTIES.length)] ?? 'medium';
+    openVote(state, now);
+    return;
   }
+  const preferred = DIFFICULTIES[Math.floor(random() * DIFFICULTIES.length)] ?? 'medium';
   openRound(state, preferred, now, random);
+}
+
+/** Cierra la ronda y abre la votación de dificultad de la siguiente (también muestra la solución anterior). */
+function openVote(state: LiveState, now: number): void {
+  const previous = state.round!;
+  // Sin cripticos por sortear no hay nada que votar: la partida termina como antes.
+  if (!DIFFICULTIES.some((tier) => state.pool[tier].some((id) => !state.usedIds.includes(id)))) {
+    state.round = null;
+    return;
+  }
+  const opensAt = now + Math.max(DIFFICULTY_VOTE_MS, (state.config.intervalSec ?? 0) * 1000);
+  state.round = {
+    index: previous.index + 1,
+    crypticId: '',
+    tier: 'medium',
+    startedAt: opensAt,
+    votes: {},
+    solvedBy: [],
+    closesAt: null,
+    opensAt,
+    voting: true,
+  };
+}
+
+/** Fin de la votación: gana la mayoría y se sortea el criptico de esa dificultad. Abre en el acto. */
+function closeVote(state: LiveState, now: number, random: () => number): void {
+  const round = state.round!;
+  const preferred = resolveVote(round.votes, random) ?? 'medium';
+  const drawn = drawFromPool(state, preferred, random);
+  if (!drawn) {
+    state.round = null;
+    return;
+  }
+  state.usedIds = [...state.usedIds, drawn.id];
+  const opensAt = Math.max(round.opensAt ?? now, now);
+  state.round = { ...round, crypticId: drawn.id, tier: drawn.tier, startedAt: opensAt, opensAt, voting: false };
+  pushEvent(state, { at: now, kind: 'round', crypticId: drawn.id, tier: drawn.tier });
 }
 
 // ---------- Fin de partida ----------
@@ -780,6 +822,7 @@ function advanceRound(state: LiveState, now: number, random: () => number): void
 export function tick(state: LiveState, now: number, random: () => number = Math.random): { finished: boolean } {
   if (state.status !== 'live') return { finished: state.status === 'finished' };
   if (state.tiebreak) return tickTiebreak(state, now);
+  if (state.round?.voting && now >= (state.round.opensAt ?? 0)) closeVote(state, now, random);
   if (state.round?.closesAt != null && now >= state.round.closesAt) advanceRound(state, now, random);
   if (state.config.royale) eliminateExpired(state, now);
   return { finished: evaluate(state, now).finished };
