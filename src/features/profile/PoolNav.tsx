@@ -1,5 +1,5 @@
 // Selector de modo del perfil, al estilo Lichess: columna a la izquierda en PC y fila deslizable en móvil.
-// Royale se abre en sus categorías de tiempo; COOP aparece deshabilitado hasta tener su panel (PR 4 de COOP).
+// Royale se abre en sus categorías de tiempo; COOP tiene su propio Elo (contra el rating del nivel).
 import { memo } from 'react';
 import { GAME_LABELS } from '../../../shared/scoring';
 import { ROYALE_CATEGORIES, ROYALE_CATEGORY_LABELS, type RatingPool } from '../../../shared/ratingPools';
@@ -27,6 +27,7 @@ const ITEMS: Item[] = [
     nested: true,
   })),
   { pool: 'duel', glyph: MODE_GLYPH.duel, title: GAME_LABELS.duel.title },
+  { pool: 'coop', glyph: MODE_GLYPH.coop, title: GAME_LABELS.coop.title },
 ];
 
 function PoolButton({ item, user, active, onSelect }: { item: Item; user: UserProfile; active: boolean; onSelect: (pool: RatingPool) => void }) {
@@ -90,18 +91,6 @@ export const PoolNav = memo(function PoolNav({
             <PoolButton item={item} user={user} active={item.pool === selected} onSelect={onSelect} />
           </div>
         ))}
-        <p
-          aria-disabled
-          className="flex shrink-0 items-center gap-3 border border-dashed border-line px-3 py-2 text-muted lg:border-0 lg:border-t lg:border-solid"
-        >
-          <span aria-hidden className="w-5 text-center text-lg">
-            ♛
-          </span>
-          <span>
-            <span className="block whitespace-nowrap text-[11px] font-semibold uppercase tracking-widest">{GAME_LABELS.coop.title}</span>
-            <span className="block text-xs">Pronto</span>
-          </span>
-        </p>
       </div>
     </nav>
   );

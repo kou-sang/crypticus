@@ -3,7 +3,8 @@ import type { CoopLevel, CoopTier } from './balance';
 import type { BossId } from './catalog/bosses';
 import type { CharacterId } from './catalog/characters';
 import type { CoopEvent } from './events';
-import type { CoopState } from './state';
+import type { BossCategory } from './balance';
+import type { CoopState, PlayerStats, PlayerStatus } from './state';
 
 /** Acciones del jugador. El servidor las valida y las traduce al motor. */
 export type CoopClientAction =
@@ -60,3 +61,31 @@ export interface CoopView {
 }
 
 export const COOP_BRIEFING_MS = 90_000;
+
+/** Resumen guardado en `competitions/{id}.coopResult` al terminar (lo lee la pantalla de resultados). */
+export interface CoopResultSummary {
+  level: CoopLevel;
+  won: boolean;
+  endedGt: number;
+  rounds: number;
+  bossesDefeated: number;
+  bosses: Array<{
+    id: BossId;
+    category: BossCategory;
+    maxHp: number;
+    hp: number;
+    defeatedGt: number | null;
+    rounds: number;
+    damageTaken: number;
+    damageDealt: number;
+  }>;
+  players: Array<
+    PlayerStats & {
+      uid: string;
+      displayName: string;
+      character: CharacterId;
+      status: PlayerStatus;
+      ratingDelta: number;
+    }
+  >;
+}

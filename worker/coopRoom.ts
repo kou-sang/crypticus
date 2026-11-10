@@ -14,6 +14,7 @@ import {
 import type { CoopState } from '../shared/coop/state';
 import { GameError } from '../shared/engine';
 import { getCrypticSecret } from './secrets';
+import type { Solution } from '../shared/protocol';
 
 export interface CoopStartInput {
   competitionId: string;
@@ -41,6 +42,8 @@ export interface CoopRoomState {
   assigned: Record<string, string[]>;
   played: string[];
   cooldownUntil: Record<string, number>;
+  /** Quién resolvió cada criptico (soluciones al terminar). Opcional: salas creadas antes de v1.3.1. */
+  solvedBy?: Record<string, string[]>;
   createdAt: number;
 }
 
@@ -69,6 +72,7 @@ export function createCoopRoom(input: CoopStartInput): CoopRoomState {
     assigned: {},
     played: [],
     cooldownUntil: {},
+    solvedBy: {},
     createdAt: input.now,
   };
 }
@@ -219,6 +223,7 @@ async function runAction(
         throw new GameError('round_over', 'La ronda ya terminó.');
       }
       events.push(...applyEngine(room, { type: 'solve', playerId: uid, slot }, now, events));
+      room.solvedBy = { ...room.solvedBy, [crypticId]: [...(room.solvedBy?.[crypticId] ?? []), uid] };
       return { reply: { ok: true, correct: true, explanation: getCrypticSecret(crypticId)?.explanation ?? null }, events };
     }
     case 'hint':
@@ -291,6 +296,14 @@ export function coopView(room: CoopRoomState, uid: string, events: CoopEvent[], 
     events,
     serverTime: now,
   };
+}
+
+/** Soluciones de la partida terminada: cada criptico jugado con su respuesta y quién lo resolvió. */
+export function coopSolutions(room: CoopRoomState): Solution[] {
+  return [...new Set(room.played)].map((crypticId) => {
+    const secret = getCrypticSecret(crypticId);
+    return { crypticId, answer: secret?.answer ?? null, explanation: secret?.explanation ?? null, solvedBy: room.solvedBy?.[crypticId] ?? [] };
+  });
 }
 
 // --- Elo COOP: cada jugador contra el rating fijo del nivel --------------------------------------------

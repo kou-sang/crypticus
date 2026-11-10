@@ -25,7 +25,7 @@ export const RELEASES: readonly Release[] = [
       'Cada uno elige un personaje con una pasiva y una activa: no se repiten.',
       'Rondas normales para atacar y ganar oro, rondas difíciles en grupo que abren la tienda.',
       'Cada jefe tiene sus habilidades: ofertas de PHARAONIS, armadura de GOLIATH, letras desfasadas de SERPENTIS y más.',
-      'COOP tiene su propio Elo.',
+      'COOP tiene su propio Elo, en el Perfil y en el Ranking, y resultados con las estadísticas de cada jugador y de cada jefe.',
     ],
   },
   {

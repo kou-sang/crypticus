@@ -10,6 +10,8 @@ import { cx, errorMessage } from '../../lib/utils';
 import { ErrorBanner, Spinner } from '../../components/ui';
 import { ClueText } from './CluePanel';
 import { useCryptics } from './useCryptics';
+import { CoopResults } from '../coop/CoopResults';
+import type { CoopResultSummary } from '../../../shared/coop/protocol';
 
 interface Standing {
   uid: string;
@@ -28,6 +30,8 @@ const REASONS: Record<string, string> = {
   winByTwo: 'Ventaja de dos alcanzada.',
   exhausted: 'No quedan cripticos.',
   voted: 'Terminada por votación.',
+  coopVictory: 'Todos los jefes cayeron.',
+  coopDefeat: 'Los jefes resistieron.',
   lastStanding: 'Último en pie.',
   knockout: 'Nocaut: un bando se quedó sin vida.',
   tiebreak: 'Definido en la muerte súbita de desempate.',
@@ -36,6 +40,7 @@ const REASONS: Record<string, string> = {
 type FinishedCompetition = Competition & {
   finalStandings?: Standing[];
   endReason?: string;
+  coopResult?: CoopResultSummary;
 };
 
 /** Repaso: cada criptico con su respuesta y su explicación. Es lo que permite comprobar que la pista es justa. */
@@ -108,6 +113,29 @@ function SolutionsList({ competitionId, meId, names }: { competitionId: string; 
 }
 
 export function ResultsView({ competition, meId }: { competition: FinishedCompetition; meId: string }) {
+  if (competition.coopResult) return <CoopResultsView competition={competition} result={competition.coopResult} meId={meId} />;
+  return <CompetitiveResults competition={competition} meId={meId} />;
+}
+
+/** COOP: estadísticas propias, soluciones y revancha. */
+function CoopResultsView({ competition, result, meId }: { competition: FinishedCompetition; result: CoopResultSummary; meId: string }) {
+  const { profile } = useSession();
+  const names = Object.fromEntries(result.players.map((p) => [p.uid, p.displayName]));
+  return (
+    <div className="space-y-8">
+      <CoopResults result={result} meId={meId} />
+      {competition.participantIds.includes(meId) && (
+        <section>
+          <h2 className="mb-3 font-display text-2xl">Soluciones</h2>
+          <SolutionsList competitionId={competition.id} meId={meId} names={new Map(Object.entries(names))} />
+        </section>
+      )}
+      {competition.participantIds.includes(meId) && <RematchPanel target={{ competition, names }} profile={profile} />}
+    </div>
+  );
+}
+
+function CompetitiveResults({ competition, meId }: { competition: FinishedCompetition; meId: string }) {
   const standings = competition.finalStandings ?? [];
   const winner = standings.find((s) => s.uid === competition.winnerId);
   // 2 vs 2: gana el equipo del ganador.

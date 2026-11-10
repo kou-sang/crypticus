@@ -46,13 +46,14 @@ import {
   coopDeadline,
   coopFinished,
   coopRatingDelta,
+  coopSolutions,
   coopView,
   createCoopRoom,
   type CoopRoomState,
   type CoopStartInput,
 } from './coopRoom';
 import type { CoopEvent } from '../shared/coop/events';
-import { COOP_BRIEFING_MS, type CoopClientAction } from '../shared/coop/protocol';
+import { COOP_BRIEFING_MS, type CoopClientAction, type CoopResultSummary } from '../shared/coop/protocol';
 import { LEVELS } from '../shared/coop/balance';
 
 export interface StartInput {
@@ -200,6 +201,11 @@ export class CompetitionRoom extends DurableObject<Env> {
 
   /** Soluciones de una partida terminada, solo para sus participantes. */
   async solutions(uid: string): Promise<Solution[]> {
+    if (this.coop) {
+      if (!this.coop.players.some((p) => p.uid === uid)) throw new Error('not_participant');
+      if (!coopFinished(this.coop)) throw new Error('not_finished');
+      return coopSolutions(this.coop);
+    }
     const state = this.state;
     if (!state) throw new Error('not_found');
     if (!state.participants[uid]) throw new Error('not_participant');
@@ -486,7 +492,7 @@ export class CompetitionRoom extends DurableObject<Env> {
       const winnerOf = (uid: string) => won && game.players.find((p) => p.id === uid)?.status !== 'left';
       const deltas = Object.fromEntries(uids.map((uid) => [uid, coopRatingDelta(ratings[uid]!, levelRating, winnerOf(uid))]));
       const bossesDefeated = game.bosses.filter((b) => b.defeatedGt !== null).length;
-      const summary = {
+      const summary: CoopResultSummary = {
         level: coop.level,
         won,
         endedGt: game.result.endedGt,

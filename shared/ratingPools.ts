@@ -7,7 +7,7 @@ export const ROYALE_CATEGORIES: readonly RoyaleCategory[] = ['hyperbullet', 'bul
 
 export type RoyalePool = `royale_${RoyaleCategory}`;
 export type RatingPool = 'race' | RoyalePool | 'duel' | 'coop';
-export const RATING_POOLS: readonly RatingPool[] = ['race', 'royale_hyperbullet', 'royale_bullet', 'royale_rapid', 'duel'];
+export const RATING_POOLS: readonly RatingPool[] = ['race', 'royale_hyperbullet', 'royale_bullet', 'royale_rapid', 'duel', 'coop'];
 
 /** Límite superior (inclusive) del tiempo inicial de cada categoría; lo que supera a Bullet es Rapid. */
 const CATEGORY_MAX_BASE_SEC: Record<Exclude<RoyaleCategory, 'rapid'>, number> = { hyperbullet: 60, bullet: 120 };
