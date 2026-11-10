@@ -1,17 +1,24 @@
-// Partida COOP en vivo: explicación previa y partida. Versión funcional mínima (PR 2/4): valida el circuito
-// servidor ↔ cliente. El PR 3 la reemplaza por la pantalla de los bocetos (círculo, zona de cripticos, tienda).
-import { useEffect, useState, type FormEvent } from 'react';
-import { BOSSES } from '../../../shared/coop/catalog/bosses';
-import { CHARACTERS } from '../../../shared/coop/catalog/characters';
-import { ITEMS } from '../../../shared/coop/catalog/items';
-import { currentBoss, gameTime, offerPrice } from '../../../shared/coop/engine';
-import type { CoopClientAction } from '../../../shared/coop/protocol';
+// Partida COOP en vivo, en pantalla completa (boceto): arena arriba; zona de cripticos, panel propio y
+// habilidades abajo; tienda en una ventana. Antes de empezar, la explicación y la presentación de jefes.
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { gameTime } from '../../../shared/coop/engine';
 import type { Competition, UserProfile } from '../../../shared/types';
-import { Button, EmptyState, ErrorBanner, PageLoader } from '../../components/ui';
+import { EmptyState, PageLoader } from '../../components/ui';
 import { useCoopChannel } from '../../hooks/useCoopChannel';
-import { canPlayCoop, errorMessage } from '../../lib/utils';
+import { setPlaying } from '../../lib/playing';
+import { playCue } from '../../lib/sound';
+import { canPlayCoop, cx } from '../../lib/utils';
+import { Arena } from './Arena';
+import { Briefing } from './Briefing';
+import { CrypticZone } from './CrypticZone';
+import { MyPanel } from './MyPanel';
+import { PlayerDetails } from './PlayerDetails';
+import { ShopWindow } from './ShopWindow';
+import { useCoopFx } from './useCoopFx';
 
-function useServerNow(offsetMs: number, everyMs = 500): number {
+/** Hora del servidor, refrescada cada `everyMs` (los relojes de la pantalla). */
+function useServerNow(offsetMs: number, everyMs = 250): number {
   const [now, setNow] = useState(() => Date.now() + offsetMs);
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now() + offsetMs), everyMs);
@@ -20,150 +27,156 @@ function useServerNow(offsetMs: number, everyMs = 500): number {
   return now;
 }
 
-const seconds = (ms: number) => `${Math.max(0, Math.ceil(ms / 1000))} s`;
+const clock = (ms: number) => {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+};
+
+/** «Volver» con doble confirmación: salir deja al jugador fuera de combate y cuenta como derrota. */
+function LeaveButton({ onLeave }: { onLeave: () => void }) {
+  const [stage, setStage] = useState<0 | 1 | 2>(0);
+  return (
+    <div className="flex items-center gap-2" onMouseLeave={() => setStage(0)}>
+      <button type="button" onClick={() => setStage(stage === 0 ? 1 : 0)} className="border-2 border-ink px-3 py-1 text-sm font-semibold uppercase">
+        Volver
+      </button>
+      {stage === 1 && (
+        <button type="button" onClick={() => setStage(2)} className="coop-enter border border-accent px-3 py-1 text-sm">
+          ¿Salir de la partida?
+        </button>
+      )}
+      {stage === 2 && (
+        <button type="button" onClick={onLeave} className="coop-enter border-2 border-accent bg-accent px-3 py-1 text-sm font-semibold text-paper">
+          Sí: quedo fuera y pierdo Elo
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function CoopLive({ competition, profile }: { competition: Competition; profile: UserProfile }) {
+  const navigate = useNavigate();
   const allowed = canPlayCoop();
-  const { view, connection, clockOffsetMs, act } = useCoopChannel(competition.id, allowed);
+  const { view, connection, clockOffsetMs, act, onEvents } = useCoopChannel(competition.id, allowed);
   const now = useServerNow(clockOffsetMs);
-  const [error, setError] = useState<string | null>(null);
-  const [guess, setGuess] = useState<Record<number, string>>({});
+  const game = view?.game ?? null;
+  const fx = useCoopFx(onEvents, game, profile.uid);
+  const [details, setDetails] = useState<string | null>(null);
+  const [shopOpen, setShopOpen] = useState(false);
+  const lowTimeRound = useRef(0);
+
+  const me = game?.players.find((p) => p.id === profile.uid) ?? null;
+  const shopNumber = game?.phase === 'shop' ? game.shop?.number : undefined;
+
+  // Partida en curso para el resto de la app: confirmación al cerrar la pestaña.
+  const live = game !== null && !game.result;
+  useEffect(() => {
+    setPlaying(live);
+    if (!live) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [live]);
+  useEffect(() => () => setPlaying(false), []);
+
+  // La tienda se abre sola al empezar (los caídos no tienen tienda).
+  useEffect(() => {
+    if (shopNumber !== undefined && me?.status === 'alive') setShopOpen(true);
+    if (shopNumber === undefined) setShopOpen(false);
+  }, [shopNumber, me?.status]);
+
+  // Aviso de poco tiempo: una vez por ronda, a los 10 s.
+  const roundLeft = game && game.phase === 'round' && game.roundEndsGt !== null ? game.roundEndsGt - gameTime(game, now) : null;
+  useEffect(() => {
+    if (!game || roundLeft === null || roundLeft > 10_000 || lowTimeRound.current === game.roundNumber) return;
+    lowTimeRound.current = game.roundNumber;
+    playCue('lowTime');
+  }, [game, roundLeft]);
 
   if (!allowed) return <EmptyState title="COOP es solo para PC o laptop">Abre esta sala desde una computadora.</EmptyState>;
   if (!view) return <PageLoader />;
 
-  const send = async (action: CoopClientAction) => {
-    setError(null);
-    try {
-      const reply = await act(action);
-      if (reply.correct === false) setError('No es correcto.');
-    } catch (err) {
-      setError(errorMessage(err));
-    }
+  const leave = () => {
+    act({ kind: 'leave' })
+      .catch(() => undefined)
+      .finally(() => {
+        document.exitFullscreen?.().catch(() => undefined);
+        navigate('/jugar');
+      });
   };
 
-  if (view.briefing) {
-    const ready = view.briefing.ready.includes(profile.uid);
-    return (
-      <div className="mx-auto max-w-3xl space-y-4">
-        <h1 className="font-display text-3xl">COOP {view.level}</h1>
-        <p>
-          Derroten a los jefes antes de que se acabe el tiempo. En cada ronda normal resuelve tus 2 cripticos para atacar y ganar oro; si no,
-          el jefe te golpea. En las rondas difíciles todos deben resolver el suyo: si lo logran, atacan y se abre la tienda.
-        </p>
-        <p className="text-sm text-muted">
-          Empieza en {seconds(view.briefing.endsAt - now)} o cuando todos estén listos ({view.briefing.ready.length}/{view.players.length}).
-        </p>
-        <Button disabled={ready} onClick={() => void send({ kind: 'ready' })}>
-          {ready ? 'Listo' : 'Estoy listo'}
-        </Button>
-        <ErrorBanner error={error} />
-      </div>
-    );
-  }
-
-  const game = view.game;
-  if (!game) return <PageLoader />;
-  const gt = gameTime(game, now);
-  const boss = currentBoss(game);
-  const me = game.players.find((p) => p.id === profile.uid);
-
   return (
-    <div className="space-y-4">
-      <p className="font-mono text-xs text-muted">
-        {connection !== 'open' ? 'Reconectando… · ' : ''}Tiempo restante {seconds(game.totalMs - gt)} · Ronda {game.roundNumber} ({game.roundKind ?? '—'}) ·
-        Fase {game.phase}
-      </p>
-      {boss && (
-        <p className="font-display text-2xl">
-          {BOSSES[boss.id].name} · {boss.hp}/{boss.maxHp} HP{boss.haman.rex ? ` · REX ASSUERUS ${boss.haman.rex.hp}` : ''}
-        </p>
-      )}
-      <ul className="grid gap-1 text-sm sm:grid-cols-2">
-        {game.players.map((p) => (
-          <li key={p.id} className={p.id === profile.uid ? 'font-semibold' : ''}>
-            {p.name} · {CHARACTERS[p.character].name} · {p.status === 'alive' ? `${p.hp} HP` : p.status} · {p.gold} oro
-          </li>
-        ))}
-      </ul>
-
-      {game.phase === 'round' && game.roundEndsGt !== null && <p>Termina en {seconds(game.roundEndsGt - gt)}</p>}
-      {view.mine.cryptics.map((cryptic) => (
-        <form
-          key={cryptic.slot}
-          className="border border-line p-3"
-          onSubmit={(event: FormEvent) => {
-            event.preventDefault();
-            void send({ kind: 'answer', slot: cryptic.slot, guess: guess[cryptic.slot] ?? '' });
-          }}
-        >
-          <p>
-            {cryptic.clue ?? cryptic.crypticId} {cryptic.enumeration ?? ''} <span className="text-xs text-muted">({cryptic.tier})</span>
-          </p>
-          {cryptic.hints.map((hint) => (
-            <p key={hint} className="text-sm text-muted">
-              Pista: {hint}
-            </p>
-          ))}
-          {cryptic.solved ? (
-            <p className="text-ok">✓ Resuelto</p>
-          ) : (
-            <div className="mt-2 flex gap-2">
-              <input
-                className="border border-line bg-paper px-2 py-1"
-                value={guess[cryptic.slot] ?? ''}
-                onChange={(e) => setGuess((g) => ({ ...g, [cryptic.slot]: e.target.value }))}
-              />
-              <Button type="submit">Responder</Button>
-            </div>
+    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-paper text-ink">
+      {/* Avisos grandes arriba de todo (muerte, resurrección, resultado). */}
+      {fx.banners.map((banner, index) => (
+        <p
+          key={banner.id}
+          role="status"
+          className={cx(
+            'coop-banner fixed left-1/2 z-50 border-2 px-8 py-3 font-display text-3xl font-semibold shadow-lg',
+            banner.tone === 'death' && 'border-accent bg-paper text-accent',
+            banner.tone === 'revive' && 'border-ok bg-paper text-ok',
+            banner.tone === 'result' && 'border-ink bg-ink text-paper',
+            banner.tone === 'boss' && 'border-ink bg-paper',
           )}
-        </form>
+          style={{ top: 16 + index * 72 }}
+        >
+          {banner.text}
+        </p>
       ))}
 
-      {me && me.status === 'alive' && (
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => void send({ kind: 'hint' })}>
-            Pista ({me.hints})
-          </Button>
-          <Button variant="secondary" onClick={() => void send({ kind: 'active' })}>
-            Activa ({me.charges ?? '∞'})
-          </Button>
-          {me.inventory.map((item) => (
-            <Button key={item.uid} variant="ghost" onClick={() => void send({ kind: 'item', itemUid: item.uid })}>
-              {ITEMS[item.itemId].name}
-            </Button>
-          ))}
-        </div>
-      )}
+      {view.briefing ? (
+        <Briefing view={view} meId={profile.uid} now={now} act={act} />
+      ) : !game ? (
+        <PageLoader />
+      ) : (
+        <>
+          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-ink px-4 py-2">
+            <LeaveButton onLeave={leave} />
+            <p className="text-sm font-semibold uppercase tracking-widest">
+              COOP {game.level} · Jefe {Math.min(game.bossIndex + 1, game.bosses.length)}/{game.bosses.length}
+              {game.roundNumber > 0 && ` · Ronda ${game.roundNumber} ${game.roundKind === 'hard' ? '(difícil)' : ''}`}
+            </p>
+            <p className="flex items-center gap-3 font-mono text-lg font-bold tabular-nums">
+              {connection !== 'open' && <span className="text-xs font-normal text-accent">Reconectando…</span>}
+              <span className={cx(game.totalMs - gameTime(game, now) < 60_000 && 'text-accent')}>
+                {clock(game.totalMs - gameTime(game, now))}
+              </span>
+            </p>
+          </header>
 
-      {game.phase === 'decision' && game.decisions[0] && (
-        <div className="flex gap-2">
-          <span>Oferta de PHARAONIS ({game.decisions[0].kind})</span>
-          <Button onClick={() => void send({ kind: 'vote', decisionId: game.decisions[0]!.id, accept: true })}>Aceptar</Button>
-          <Button variant="secondary" onClick={() => void send({ kind: 'vote', decisionId: game.decisions[0]!.id, accept: false })}>
-            Rechazar
-          </Button>
-        </div>
-      )}
-
-      {game.phase === 'shop' && game.shop && me && (
-        <div className="space-y-2 border border-ink p-3">
-          <p>Tienda · cierra en {seconds(game.shop.endsGt - gt)}</p>
-          {(game.shop.offers[me.id] ?? []).map((offer) => (
-            <div key={offer.id} className="flex items-center gap-2">
-              <span>{offer.itemId ? ITEMS[offer.itemId].name : offer.kind}</span>
-              <span className="font-mono text-sm">{offerPrice(game, me, offer)} oro</span>
-              <Button variant="secondary" disabled={offer.sold} onClick={() => void send({ kind: 'buy', offerId: offer.id })}>
-                {offer.sold ? 'Comprado' : 'Comprar'}
-              </Button>
+          <main className="grid min-h-0 flex-1 grid-rows-[minmax(0,1.15fr)_minmax(0,1fr)] gap-3 p-3">
+            <Arena state={game} meId={profile.uid} floaters={fx.floaters} hits={fx.hits} heals={fx.heals} onSelect={setDetails} />
+            <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-3">
+              <CrypticZone
+                state={game}
+                me={me}
+                cryptics={view.mine.cryptics}
+                act={act}
+                now={now}
+                log={fx.log}
+                lice={fx.lice}
+                onOpenShop={() => setShopOpen(true)}
+              />
+              {me ? <MyPanel state={game} me={me} now={now} act={act} /> : <EmptyState title="Estás mirando la partida" />}
             </div>
-          ))}
-          <Button onClick={() => void send({ kind: 'shopDone' })}>Listo</Button>
-        </div>
-      )}
+          </main>
 
-      {game.result && <p className="font-display text-3xl">{game.result.won ? '¡Victoria!' : 'Derrota'}</p>}
-      <ErrorBanner error={error} />
+          {me && game.phase === 'shop' && me.status === 'alive' && (
+            <ShopWindow state={game} me={me} now={now} open={shopOpen} onClose={() => setShopOpen(false)} act={act} />
+          )}
+          <PlayerDetails state={game} playerId={details} now={now} onClose={() => setDetails(null)} />
+          {game.result && (
+            <div className="coop-enter fixed bottom-6 left-1/2 z-50 -translate-x-1/2 border-2 border-ink bg-paper px-6 py-3 text-center shadow-lg">
+              <p className="font-display text-2xl">{game.result.won ? '¡Victoria!' : 'Derrota'}</p>
+              <p className="text-sm text-muted">Calculando resultados y Elo…</p>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

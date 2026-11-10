@@ -85,6 +85,11 @@ export interface CoopResult {
 
 export class CoopSetupError extends Error {}
 
+/** Jefes de la partida: elegidos y ordenados por la semilla (se pueden mostrar antes de empezar). */
+export function pickBosses(seed: number, level: CoopLevel): BossId[] {
+  return shuffled(seed >>> 0, ['bosses'], AT_BOSS_IDS).slice(0, LEVELS[level].categories.length);
+}
+
 /** Crea la partida. Elige y ordena los jefes al azar y arranca la presentación del primero. */
 export function createCoopGame(input: { seed: number; level: CoopLevel; players: CoopPlayerSetup[]; now: number }): CoopResult {
   const level = LEVELS[input.level];
@@ -96,7 +101,7 @@ export function createCoopGame(input: { seed: number; level: CoopLevel; players:
   if (new Set(input.players.map((p) => p.id)).size !== count) throw new CoopSetupError('Jugadores repetidos.');
 
   const seed = input.seed >>> 0;
-  const bossIds = shuffled(seed, ['bosses'], AT_BOSS_IDS).slice(0, level.categories.length);
+  const bossIds = pickBosses(seed, input.level);
   const state: CoopState = {
     version: 1,
     seed,

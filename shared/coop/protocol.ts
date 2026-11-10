@@ -1,5 +1,6 @@
 // Protocolo WebSocket del modo COOP (mismo socket que el resto de los modos, mensajes propios).
 import type { CoopLevel, CoopTier } from './balance';
+import type { BossId } from './catalog/bosses';
 import type { CharacterId } from './catalog/characters';
 import type { CoopEvent } from './events';
 import type { CoopState } from './state';
@@ -46,6 +47,8 @@ export interface CoopView {
   title: string;
   level: CoopLevel;
   players: CoopPlayerSetup[];
+  /** Jefes en orden (se conocen desde la explicación previa, para presentarlos). */
+  bosses: BossId[];
   /** Explicación previa (salteable): termina al vencer o cuando todos están listos. */
   briefing: { endsAt: number; ready: string[] } | null;
   /** Estado del motor sin la semilla (con ella se podrían predecir las tiradas). */

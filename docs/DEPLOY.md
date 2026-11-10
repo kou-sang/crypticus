@@ -283,6 +283,23 @@ npx tsx --env-file=.env.local scripts/backfill-royale-pools.ts
 - Consumo: una lectura por usuario, por partida de Royale y por sala de Royale. Con la base actual queda muy por debajo de la cuota gratuita.
 - Sin el script, las partidas de Royale anteriores no aparecen en ninguna categoría, y el primer Elo de cada una arranca desde el Royale anterior.
 
+### 6.3 Pasar a v1.3 (una vez): modo COOP
+
+Después del merge, **de a un comando**:
+
+```powershell
+cd D:\EH\EH\Personal\crypticus-app
+git switch main
+git pull
+npm ci
+npx firebase-tools deploy --only firestore:rules,firestore:indexes --project crypticus-eh
+npx tsx --env-file=.env.local scripts/import-cryptics.ts data/cryptics.seed.json --secrets-only
+npm run deploy
+```
+
+- Las reglas nuevas dejan que cada jugador elija su personaje en la sala.
+- `--secrets-only` agrega el enunciado y la enumeración a los secretos: el servidor los manda con cada ronda, sin lecturas a Firestore. Sin este paso, COOP igual funciona, pero lee los enunciados de Firestore.
+
 ### Novedades en Inicio
 
 En cada versión, agrega una entrada **al principio** de `src/features/dashboard/updates.ts`, con la misma versión de `package.json` y en lenguaje común: `news` para lo nuevo y `fixes` para los arreglos. Marca `highlight: true` solo si trae algo importante para los jugadores: Inicio muestra las 3 últimas destacadas, y «Mostrar todo» abre el historial completo.
