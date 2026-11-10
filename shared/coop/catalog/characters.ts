@@ -79,8 +79,9 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
     id: 'debbora',
     name: 'Debbora',
     passive: 'Estadísticas básicas +35 %. Cada tienda ofrece recargar su activa (150 de oro + 50 por recarga comprada). Acumula pistas sin límite.',
-    active: 'Revela una pista del criptico que tiene en pantalla, sin gastar las suyas. Hasta 2 cargas.',
-    startCharges: 0,
+    active: 'Revela una pista del criptico que tiene en pantalla, sin gastar las suyas. Empieza con 1 carga; hasta 2.',
+    // Antes empezaba con 0: solo recargaba en la tienda, que casi nunca abre, y la activa no se podía usar.
+    startCharges: 1,
     maxCharges: 2,
     target: 'none',
     confirm: false,

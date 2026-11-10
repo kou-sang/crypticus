@@ -365,3 +365,15 @@ describe('oro por criptico', () => {
     expect(end.state.players[0]!.gold).toBe(16);
   });
 });
+
+describe('DEBBORA', () => {
+  it('empieza con 1 carga y su activa revela una pista sin gastar las suyas', () => {
+    const game = startGame('serpentis', ['debbora', 'mathusala', 'urias', 'eliseus']);
+    const debbora = game.state.players[0]!;
+    expect(debbora.charges).toBe(1);
+    const used = act(game.state, { type: 'useActive', playerId: 'p0' }, game.now + 1_000).state.players[0]!;
+    expect(used.assignments[0]!.hintsRevealed).toBe(1);
+    expect(used.hints).toBe(debbora.hints);
+    expect(used.charges).toBe(0);
+  });
+});

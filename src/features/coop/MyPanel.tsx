@@ -156,7 +156,7 @@ export const MyPanel = memo(function MyPanel({
           onClick={useActive}
           onBlur={() => setConfirming(false)}
         >
-          {confirming ? '¿Seguro? Confirmar' : usedThisRound ? 'Usada esta ronda' : 'Usar activa'}
+          {confirming ? '¿Seguro? Confirmar' : usedThisRound ? 'Usada esta ronda' : noCharges ? 'Sin cargas' : 'Usar activa'}
         </Button>
         {error && <p className={cx('text-xs text-accent')}>{error}</p>}
       </section>

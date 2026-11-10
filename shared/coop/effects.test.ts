@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCoopGame, reduceCoop } from './engine';
-import { statusEffects } from './effects';
+import { bossEffects, pharaonisPlagues, statusEffects } from './effects';
 
 const T0 = 1_000_000;
 
@@ -43,5 +43,21 @@ describe('statusEffects', () => {
     player.buffs.push({ source: 'eliseus', stat: 'attack', amount: 0.33, untilGt: 10_000 });
     expect(statusEffects(state, player, 4_000)[0]!.label).toBe('Ataque +33 % · 6 s');
     expect(statusEffects(state, player, 10_000)).toEqual([]);
+  });
+});
+
+describe('bossEffects', () => {
+  it('PHARAONIS: plagas activas, pendientes y la próxima', () => {
+    const state = game();
+    const boss = state.bosses[state.bossIndex]!;
+    boss.id = 'pharaonis';
+    expect(bossEffects(state, boss).map((e) => e.label)).toEqual(['Próxima: Furia al 88 %']);
+    boss.pharaonis.triggered = 3;
+    boss.pharaonis.lice = true;
+    boss.damageBonus = 0.05;
+    state.pendingPharaonis = ['lice'];
+    const labels = bossEffects(state, boss).map((e) => e.label);
+    expect(labels).toEqual(['Daño +5 %', 'Piojos', 'Piojos al cerrar la ronda', 'Próxima: Oferta individual al 52 %']);
+    expect(pharaonisPlagues(state, boss).map((p) => p.status)).toEqual(['active', 'active', 'pending', 'upcoming', 'upcoming', 'upcoming', 'upcoming']);
   });
 });

@@ -15,6 +15,7 @@ import { playCue } from '../../lib/sound';
 import { canPlayCoop, cx, errorMessage } from '../../lib/utils';
 import { ChatPanel } from '../chat/ChatPanel';
 import { Arena } from './Arena';
+import { BossDetails } from './BossDetails';
 import { Briefing } from './Briefing';
 import { DraftWindow } from './DraftWindow';
 import { CrypticZone } from './CrypticZone';
@@ -231,6 +232,8 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
   const game = view?.game ?? null;
   const fx = useCoopFx(onEvents, game, profile.uid);
   const [details, setDetails] = useState<string | null>(null);
+  const [bossOpen, setBossOpen] = useState(false);
+  const openBoss = useCallback(() => setBossOpen(true), []);
   const [shopOpen, setShopOpen] = useState(false);
   const lowTimeRound = useRef(0);
   const fullscreen = useCoopFullscreen();
@@ -301,9 +304,10 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
               banner.tone === 'result' && 'border-ink bg-ink text-paper',
               banner.tone === 'boss' && 'border-ink bg-paper',
             )}
-            style={{ top: 16 + index * 72 }}
+            style={{ top: 16 + index * 88 }}
           >
             {banner.text}
+            {banner.detail && <span className="mt-1 block max-w-xl font-sans text-sm font-normal">{banner.detail}</span>}
           </p>
         ))}
 
@@ -357,6 +361,7 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
                 pulses={fx.pulses}
                 gt={Math.floor(gameTime(game, now) / 1000) * 1000}
                 onSelect={setDetails}
+                onSelectBoss={openBoss}
               />
               <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-3">
                 <CrypticZone
@@ -377,6 +382,7 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
               <ShopWindow state={game} me={me} now={now} open={shopOpen} onClose={() => setShopOpen(false)} act={act} />
             )}
             <PlayerDetails state={game} playerId={details} now={now} onClose={() => setDetails(null)} />
+            <BossDetails state={game} open={bossOpen} onClose={() => setBossOpen(false)} />
             {game.result && (
               <div className="coop-enter fixed bottom-6 left-1/2 z-50 -translate-x-1/2 border-2 border-ink bg-paper px-6 py-3 text-center shadow-lg">
                 <p className="font-display text-2xl">{game.result.won ? '¡Victoria!' : game.result.surrendered ? 'Se rindieron' : 'Derrota'}</p>

@@ -1,9 +1,9 @@
 // Efectos de estado de un jugador en un instante (para mostrarlos): perjudiciales de los jefes y beneficios
 // temporales o permanentes. Función pura derivada del estado; no cambia reglas del motor.
-import { LEVIATHAN, PHARAONIS } from './catalog/bosses';
+import { GOLIATH, LEVIATHAN, PHARAONIS, PHARAONIS_EFFECTS, type PharaonisEffect } from './catalog/bosses';
 import { CHARACTER_PARAMS } from './catalog/characters';
 import { PERIODIC_TICK_MS } from './balance';
-import type { Buff, CoopState, PlayerState } from './state';
+import type { BossState, Buff, CoopState, PlayerState } from './state';
 
 export interface StatusEffect {
   key: string;
@@ -11,7 +11,8 @@ export interface StatusEffect {
   label: string;
   /** Explicación completa (tooltip y detalle del jugador). */
   detail: string;
-  tone: 'bad' | 'good';
+  /** `info`: aviso neutro (por ejemplo, la próxima plaga). */
+  tone: 'bad' | 'good' | 'info';
 }
 
 const pct = (value: number) => `${Math.round(value * 100)} %`;
@@ -103,6 +104,81 @@ export function statusEffects(state: CoopState, player: PlayerState, gt: number)
       detail: `Urias cayó: +${pct(player.uriasBlessing)} de ataque permanente`,
       tone: 'good',
     });
+  }
+  return effects;
+}
+
+// --- Jefe ---------------------------------------------------------------------------------------------------
+
+/** Plagas de PHARAONIS: nombre corto y qué hacen en la partida. */
+export const PHARAONIS_EFFECT_INFO: Record<PharaonisEffect, { name: string; detail: string }> = {
+  damage1: { name: 'Furia', detail: `+${pct(PHARAONIS.damageBonus)} de daño a sus golpes` },
+  groupOffer: {
+    name: 'Oferta grupal',
+    detail: `Votación: ${PHARAONIS.groupOfferGold} de oro a cada uno si la mayoría acepta, y él gana +${pct(PHARAONIS.groupOfferDamageBonus)} de daño`,
+  },
+  lice: { name: 'Piojos', detail: 'Cada golpe que recibe deja manchas sobre los cripticos hasta la ronda siguiente' },
+  individualOffer: {
+    name: 'Oferta individual',
+    detail: `Votación: ${PHARAONIS.individualOfferGold} de oro a quien acepte; él gana +${pct(PHARAONIS.individualOfferDamagePerAccept)} de daño por cada uno`,
+  },
+  burst: { name: 'Estallido', detail: `Todos pierden el ${pct(PHARAONIS.burstMaxHpShare)} de su vida máxima, una vez` },
+  poison: { name: 'Veneno', detail: `Todos pierden ${PHARAONIS.poisonDamage} de vida cada ${PERIODIC_TICK_MS / 1000} s mientras él viva` },
+  noCells: { name: 'Sin casillas', detail: 'Las respuestas se escriben en un campo libre, sin ver el largo' },
+};
+
+/** Vida (proporción) a la que se activa la plaga número `index` (desde 0): cada 12 % perdido. */
+export const pharaonisThreshold = (index: number): number => 1 - (index + 1) * PHARAONIS.thresholdShare;
+
+export type PlagueStatus = 'active' | 'pending' | 'upcoming';
+
+/**
+ * Estado de cada plaga: `active` ya actuó, `pending` se cruzó el umbral y actúa al cerrar la ronda,
+ * `upcoming` todavía no. (Las ofertas y el estallido «activos» ya ocurrieron; el resto sigue en juego.)
+ */
+export function pharaonisPlagues(state: CoopState, boss: BossState): Array<{ effect: PharaonisEffect; status: PlagueStatus; atShare: number }> {
+  const pending = boss.id === state.bosses[state.bossIndex]?.id ? state.pendingPharaonis : [];
+  return PHARAONIS_EFFECTS.map((effect, index) => ({
+    effect,
+    atShare: pharaonisThreshold(index),
+    status: pending.includes(effect) ? 'pending' : index < boss.pharaonis.triggered ? 'active' : 'upcoming',
+  }));
+}
+
+/** Efectos visibles del jefe: bonus de daño, plagas en curso y la próxima, bandas de GOLIATH. */
+export function bossEffects(state: CoopState, boss: BossState): StatusEffect[] {
+  const effects: StatusEffect[] = [];
+  if (boss.damageBonus > 0) {
+    effects.push({ key: 'damage', label: `Daño +${pct(boss.damageBonus)}`, detail: `Sus golpes hacen ${pct(boss.damageBonus)} más de daño`, tone: 'bad' });
+  }
+  if (boss.id === 'pharaonis') {
+    const plagues = pharaonisPlagues(state, boss);
+    for (const effect of ['lice', 'poison', 'noCells'] as const) {
+      if (boss.pharaonis[effect]) {
+        const info = PHARAONIS_EFFECT_INFO[effect];
+        effects.push({ key: effect, label: info.name, detail: info.detail, tone: 'bad' });
+      }
+    }
+    for (const plague of plagues.filter((p) => p.status === 'pending')) {
+      const info = PHARAONIS_EFFECT_INFO[plague.effect];
+      effects.push({ key: `pending:${plague.effect}`, label: `${info.name} al cerrar la ronda`, detail: info.detail, tone: 'bad' });
+    }
+    const next = plagues.find((p) => p.status === 'upcoming');
+    if (next) {
+      const info = PHARAONIS_EFFECT_INFO[next.effect];
+      effects.push({
+        key: 'next',
+        label: `Próxima: ${info.name} al ${Math.round(next.atShare * 100)} %`,
+        detail: `Cuando su vida baje del ${Math.round(next.atShare * 100)} %: ${info.detail}`,
+        tone: 'info',
+      });
+    }
+  }
+  if (boss.id === 'goliath' && boss.hp > 0) {
+    const share = boss.hp / boss.maxHp;
+    const band = GOLIATH.bands.find((b) => share > b.above) ?? GOLIATH.bands[GOLIATH.bands.length - 1]!;
+    if (band.armor > 0) effects.push({ key: 'armor', label: `Armadura ${band.armor}`, detail: 'Reduce el daño físico que recibe', tone: 'bad' });
+    if (band.regen > 0) effects.push({ key: 'regen', label: `Se cura ${band.regen}/5 s`, detail: `Recupera ${band.regen} de vida cada 5 s`, tone: 'bad' });
   }
   return effects;
 }

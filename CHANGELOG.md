@@ -12,6 +12,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 - COOP: efectos de estado en la información del jugador (arena, panel propio y detalle): quemadura, veneno, inhibición, soldado, resguardo de Enoch, armadura, furia, ataque, oro, fuerza, sacrificio, pila de Samson y bendición de Urias, con su duración restante (`shared/coop/effects.ts`).
 - COOP: el registro muestra cada golpe (jugador → jefe o REX, jefe → jugador, con crítico, evasión, soldado y Túnica de José) y el daño directo con su causa. Los números flotantes de daño directo llevan la causa («−7 quemadura», «−1 veneno»).
 
+- COOP: el jefe muestra sus efectos en la tarjeta (daño extra, plagas en curso, la próxima plaga y a qué % de vida; armadura y curación de GOLIATH). Clic en el jefe: detalle con habilidades y, en PHARAONIS, la lista de las 7 plagas con su estado.
+- COOP: aviso grande cuando PHARAONIS activa una plaga, con qué hace (6 s en pantalla).
+
 ### Changed
 
 - COOP, ronda normal: cada criptico resuelto es un golpe al jefe en el momento (antes, un solo golpe al resolver los 2). El daño de los jugadores por ronda se duplica; la vida de los jefes no cambia.
@@ -22,6 +25,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ### Fixed
 
+- COOP: DEBBORA no podía usar su activa: empezaba con 0 cargas y solo recargaba en la tienda, que casi nunca abre. Ahora empieza con 1 (máximo 2). El botón dice «Sin cargas» cuando no le quedan.
 - COOP: una curación (o la regeneración de GOLIATH) volvía a reproducir la sacudida de daño en la tarjeta del jugador o del jefe, y parecía daño sin causa.
 
 ## [1.6.0] - 2026-11-10

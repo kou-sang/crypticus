@@ -53,7 +53,7 @@ Falta:
 11. HAMAN: el recargo se aplica a todo lo que cuesta oro (también a las recargas). No baja aunque HAMAN muera.
 12. Cruz de Jesús: aparece como máximo una vez por partida.
 13. Tienda: las ofertas de cada jugador no se repiten entre sí. Quien ya tiene un objeto «uno por jugador» no lo ve. Los objetos únicos de la party no aparecen si alguien ya los tiene.
-14. DEBBORA: su activa revela una pista del criptico actual sin gastar su contador.
+14. DEBBORA: su activa revela una pista del criptico actual sin gastar su contador. Empieza con 1 carga (máximo 2); recarga en la tienda.
 15. Las habilidades activas se usan en ronda, tienda o votación (una vez por ronda). No se usan durante la presentación de un jefe.
 16. Flujo al iniciar: selección de personajes (60 s; al vencer, quien no eligió recibe uno libre al azar) → carga con explicación salteable (90 s o todos listos) → presentación del primer jefe. Quien sale antes de empezar queda fuera desde el primer instante.
 17. Rendición: «Rendirse» abre una votación de 30 s de partida. Votan vivos y caídos (no los que salieron). Un «no» solo retira ese voto; pasa con el sí de todos y termina en derrota (cuenta para el Elo como cualquier derrota).

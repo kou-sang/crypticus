@@ -27,8 +27,12 @@ export const RELEASES: readonly Release[] = [
       'Chat de la sala al costado durante la partida, con aviso de mensajes nuevos.',
       'Cada jugador muestra sus efectos de estado (quemado, envenenado, soldado, buffs…) con el tiempo que les queda.',
       'El registro cuenta cada golpe y la causa de cada daño.',
+      'Toca al jefe para ver sus habilidades y efectos. PHARAONIS avisa en grande cada plaga que activa y muestra cuál viene.',
     ],
-    fixes: ['Curarse ya no hace temblar la tarjeta como si recibieras daño.'],
+    fixes: [
+      'Curarse ya no hace temblar la tarjeta como si recibieras daño.',
+      'Debbora ya puede usar su habilidad: empieza con 1 carga.',
+    ],
   },
   {
     version: '1.6.0',

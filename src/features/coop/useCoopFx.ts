@@ -1,6 +1,8 @@
 // Efectos de la partida COOP a partir de los eventos del servidor: números flotantes de daño/curación,
 // sacudidas, avisos grandes (muerte y resurrección), registro de la zona de cripticos, manchas y sonidos.
 import { useEffect, useRef, useState } from 'react';
+import { PHARAONIS_EFFECTS, type PharaonisEffect } from '../../../shared/coop/catalog/bosses';
+import { PHARAONIS_EFFECT_INFO } from '../../../shared/coop/effects';
 import type { CoopEvent } from '../../../shared/coop/events';
 import type { CoopState } from '../../../shared/coop/state';
 import { playCue, playUi, type Cue } from '../../lib/sound';
@@ -19,6 +21,8 @@ export interface Floater {
 export interface Banner {
   id: number;
   text: string;
+  /** Segunda línea opcional (qué hace lo que pasó). */
+  detail?: string;
   tone: 'death' | 'revive' | 'boss' | 'result';
 }
 
@@ -42,6 +46,7 @@ export interface LiceStain {
 
 const FLOATER_MS = 1_300;
 const BANNER_MS = 3_200;
+const DETAIL_BANNER_MS = 6_000;
 const LOG_LIMIT = 12;
 
 /** Causa corta junto al número flotante (el golpe del jefe no la lleva: se ve en el registro). */
@@ -157,7 +162,16 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
             case 'bossDefeated':
               cues.add('success');
               break;
-            case 'bossAbility':
+            case 'bossAbility': {
+              // Plagas de PHARAONIS: aviso grande con qué se activó y cómo afecta (en el registro se perdía).
+              const index = event.bossId === 'pharaonis' ? PHARAONIS_EFFECTS.indexOf(event.ability as PharaonisEffect) : -1;
+              if (index >= 0) {
+                const info = PHARAONIS_EFFECT_INFO[PHARAONIS_EFFECTS[index]!];
+                nextBanners.push({ id: id(), text: `PHARAONIS · Plaga ${index + 1}: ${info.name}`, detail: `${info.detail}.`, tone: 'boss' });
+              }
+              cues.add('danger');
+              break;
+            }
             case 'secretRevealed':
               cues.add('danger');
               break;
@@ -190,8 +204,10 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
         }
         if (nextBanners.length > 0) {
           setBanners((prev) => [...prev, ...nextBanners]);
-          const ids = new Set(nextBanners.map((b) => b.id));
-          window.setTimeout(() => setBanners((prev) => prev.filter((b) => !ids.has(b.id))), BANNER_MS);
+          // Los avisos con explicación quedan más tiempo en pantalla para poder leerlos.
+          for (const banner of nextBanners) {
+            window.setTimeout(() => setBanners((prev) => prev.filter((b) => b.id !== banner.id)), banner.detail ? DETAIL_BANNER_MS : BANNER_MS);
+          }
         }
         if (lines.length > 0) setLog((prev) => [...prev, ...lines].slice(-LOG_LIMIT));
         if (stains.length > 0) setLice((prev) => [...prev, ...stains].slice(-LICE_LIMIT));

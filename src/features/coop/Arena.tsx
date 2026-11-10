@@ -4,7 +4,7 @@ import { memo } from 'react';
 import { BOSSES, SUMMONS } from '../../../shared/coop/catalog/bosses';
 import { CHARACTERS } from '../../../shared/coop/catalog/characters';
 import type { BossState, CoopState, PlayerState } from '../../../shared/coop/state';
-import { statusEffects } from '../../../shared/coop/effects';
+import { bossEffects, statusEffects, type StatusEffect } from '../../../shared/coop/effects';
 import { maxHp } from '../../../shared/coop/stats';
 import { cx } from '../../lib/utils';
 import type { Floater, FxTarget, Pulse } from './useCoopFx';
@@ -68,7 +68,15 @@ function Floaters({ items }: { items: Floater[] }) {
   );
 }
 
-/** Chips de efectos de estado (perjudiciales en rojo, beneficios en verde). El detalle va en el `title`. */
+/** Clase del chip según el tono: perjudicial en rojo, beneficio en verde, aviso neutro en gris. */
+export function effectChipClass(tone: StatusEffect['tone']): string {
+  return cx(
+    'border px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide',
+    tone === 'bad' ? 'border-accent text-accent' : tone === 'good' ? 'border-ok text-ok' : 'border-line text-muted',
+  );
+}
+
+/** Chips de efectos de estado de un jugador. El detalle va en el `title`. */
 export function StatusChips({
   player,
   state,
@@ -80,19 +88,15 @@ export function StatusChips({
   gt: number;
   className?: string;
 }) {
-  const effects = statusEffects(state, player, gt);
+  return <EffectChips effects={statusEffects(state, player, gt)} className={className} />;
+}
+
+export function EffectChips({ effects, className }: { effects: StatusEffect[]; className?: string }) {
   if (effects.length === 0) return null;
   return (
     <span className={cx('flex flex-wrap gap-1', className)}>
       {effects.map((effect) => (
-        <span
-          key={effect.key}
-          title={effect.detail}
-          className={cx(
-            'border px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide',
-            effect.tone === 'bad' ? 'border-accent text-accent' : 'border-ok text-ok',
-          )}
-        >
+        <span key={effect.key} title={effect.detail} className={effectChipClass(effect.tone)}>
           {effect.label}
         </span>
       ))}
@@ -159,9 +163,12 @@ export const Arena = memo(function Arena({
   pulses,
   gt,
   onSelect,
+  onSelectBoss,
 }: {
   state: CoopState;
   meId: string;
+  /** Abre el detalle del jefe (habilidades y efectos en curso). */
+  onSelectBoss: () => void;
   /** Tiempo de partida redondeado al segundo (así la arena no se repinta en cada refresco del reloj). */
   gt: number;
   floaters: Floater[];
@@ -179,22 +186,27 @@ export const Arena = memo(function Arena({
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-4">
           <div className="relative">
             <Floaters items={at('boss')} />
-            <div
+            <button
+              type="button"
               key={`b${pulses.boss?.n ?? 0}`}
+              onClick={onSelectBoss}
+              title="Ver habilidades y efectos del jefe"
+              aria-label={`${BOSSES[boss.id].name}: ver habilidades y efectos`}
               className={cx(
-                'flex w-72 flex-col items-center gap-1 border-2 border-ink bg-paper px-4 py-3 text-center',
+                'flex w-72 flex-col items-center gap-1 border-2 border-ink bg-paper px-4 py-3 text-center hover:bg-paper-2',
                 pulses.boss?.kind === 'hit' && 'coop-shake',
                 pulses.boss?.kind === 'heal' && 'coop-heal-glow',
                 boss.hp <= 0 && 'opacity-40',
               )}
             >
-              <p className="font-display text-2xl font-semibold uppercase leading-none">{BOSSES[boss.id].name}</p>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+              <span className="block font-display text-2xl font-semibold uppercase leading-none">{BOSSES[boss.id].name}</span>
+              <span className="block text-[11px] font-semibold uppercase tracking-widest text-muted">
                 {CATEGORY_LABELS[boss.category]}
                 {BOSSES[boss.id].tag ? ` · ${BOSSES[boss.id].tag}` : ''}
-              </p>
+              </span>
               <HpBar hp={boss.hp} max={boss.maxHp} tone="accent" className="mt-1 h-5" />
-            </div>
+              <EffectChips effects={bossEffects(state, boss)} className="justify-center" />
+            </button>
           </div>
           {rex && (
             <div className="relative">

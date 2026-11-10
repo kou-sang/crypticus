@@ -8,7 +8,7 @@ import type { CoopState } from '../../../shared/coop/state';
 import { armor, attackPower, maxHp } from '../../../shared/coop/stats';
 import { Modal } from '../../components/Modal';
 import { cx } from '../../lib/utils';
-import { HpBar } from './Arena';
+import { HpBar, effectChipClass } from './Arena';
 import { itemName } from './MyPanel';
 import { ItemSilhouette } from './silhouettes';
 
@@ -49,12 +49,7 @@ export const PlayerDetails = memo(function PlayerDetails({
               <ul className="space-y-1">
                 {effects.map((effect) => (
                   <li key={effect.key} className="flex items-baseline gap-2">
-                    <span
-                      className={cx(
-                        'shrink-0 border px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide',
-                        effect.tone === 'bad' ? 'border-accent text-accent' : 'border-ok text-ok',
-                      )}
-                    >
+                    <span className={cx('shrink-0', effectChipClass(effect.tone))}>
                       {effect.label}
                     </span>
                     <span className="text-xs">{effect.detail}.</span>
