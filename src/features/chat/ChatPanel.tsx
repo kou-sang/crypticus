@@ -73,7 +73,11 @@ export const ChatPanel = memo(function ChatPanel({
 
   return (
     <div className={cx('flex min-h-0 flex-col border border-line', className)}>
-      <div ref={scrollRef} className={cx('flex-1 space-y-2 overflow-y-auto p-3', fill ? 'min-h-0' : compact ? 'max-h-72' : 'min-h-[50dvh]')}>
+      {/* Alto fijo con barra de desplazamiento (antes `compact` crecía desde un renglón según los mensajes). */}
+      <div
+        ref={scrollRef}
+        className={cx('flex-1 space-y-2 overflow-y-scroll p-3 [scrollbar-gutter:stable]', fill ? 'min-h-0' : compact ? 'h-72' : 'h-[50dvh]')}
+      >
         {live.error && <ErrorBanner error="No tienes acceso a este chat." />}
         {messages.length === 0 && !live.loading && <p className="py-8 text-center text-sm text-muted">Sin mensajes todavía.</p>}
         {messages.map((message, index) => {

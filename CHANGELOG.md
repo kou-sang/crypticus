@@ -4,6 +4,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-10
+
+### Fixed
+
+- Al resolver un criptico (sobre todo en Royale, que pasa al siguiente sin pausa) la página bajaba sola: cada grilla nueva se centraba en pantalla. Ahora solo se desplaza si las casillas no se ven enteras (por ejemplo, tapadas por el teclado del celular).
+- Chat de sala: alto fijo con barra de desplazamiento siempre visible (antes empezaba con el alto de un renglón y crecía con los mensajes).
+
 ## [1.7.0] - 2026-11-10
 
 ### Added

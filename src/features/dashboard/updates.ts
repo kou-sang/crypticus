@@ -16,6 +16,17 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.7.1',
+    date: '2026-11-10',
+    title: 'Arreglos de pantalla y chat',
+    highlight: false,
+    news: [],
+    fixes: [
+      'La pantalla ya no baja sola al resolver un criptico en Royale.',
+      'El chat de la sala tiene un alto fijo y barra para desplazarse.',
+    ],
+  },
+  {
     version: '1.7.0',
     date: '2026-11-10',
     title: 'COOP: chat, estados y oro por criptico',

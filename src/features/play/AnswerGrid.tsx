@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { cx } from '../../lib/utils';
 import { enumerationGroups, toCellLetter } from './playUtils';
-import { attachKeyboard, centerInView, focusKeyboard, isKeyboardFocused, isTypingElsewhere } from './keyboardInput';
+import { attachKeyboard, centerInView, focusKeyboard, isFullyInView, isKeyboardFocused, isTypingElsewhere } from './keyboardInput';
 
 export function AnswerGrid({
   enumeration,
@@ -35,10 +35,15 @@ export function AnswerGrid({
   const latest = useRef({ letters, cursor, locked, total, onLetters, onSubmit, transform });
   latest.current = { letters, cursor, locked, total, onLetters, onSubmit, transform };
 
-  /** Lleva el criptico al centro de lo que se ve (con el teclado abierto, arriba del teclado). */
+  /**
+   * Lleva el criptico al centro de lo que se ve (con el teclado abierto, arriba del teclado). Si las casillas ya se
+   * ven enteras, no mueve nada: antes, cada criptico nuevo (Royale los encadena) desplazaba la página.
+   */
   const center = () => {
-    const panel = formRef.current?.closest<HTMLElement>('[data-clue-panel]') ?? formRef.current;
-    if (panel) centerInView(panel);
+    const form = formRef.current;
+    if (!form || isFullyInView(form)) return;
+    const panel = form.closest<HTMLElement>('[data-clue-panel]') ?? form;
+    centerInView(panel);
   };
 
   useEffect(() => {

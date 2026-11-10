@@ -151,6 +151,21 @@ export function releaseKeyboard(): void {
 }
 
 /**
+ * ¿El elemento se ve entero en la parte visible de la pantalla (descontando el teclado y la barra fija de arriba)?
+ */
+export function isFullyInView(target: HTMLElement, topInset = 56): boolean {
+  try {
+    const viewport = window.visualViewport;
+    const visibleTop = viewport?.offsetTop ?? 0;
+    const visibleHeight = viewport?.height ?? window.innerHeight;
+    const rect = target.getBoundingClientRect();
+    return rect.top >= visibleTop + topInset && rect.bottom <= visibleTop + visibleHeight;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Centra un elemento en la parte visible de la pantalla (descontando el teclado).
  * En iOS el teclado no achica la ventana: se usa visualViewport para saber cuánto se ve.
  */
