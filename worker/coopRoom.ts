@@ -313,6 +313,9 @@ async function runAction(
         ...applyEngine(room, { type: 'vote', playerId: uid, decisionId: String(action.decisionId), accept: action.accept === true }, now, events),
       );
       break;
+    case 'surrender':
+      events.push(...applyEngine(room, { type: 'surrender', playerId: uid, accept: action.accept === true }, now, events));
+      break;
     case 'leave':
       if (!room.game) {
         // Antes de empezar: queda fuera desde el primer instante (no adelanta la partida).

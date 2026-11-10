@@ -134,6 +134,13 @@ export interface DecisionState {
   votes: Record<string, boolean>;
 }
 
+/** Votación de rendición abierta: quiénes dijeron que sí (un «no» no la cierra, solo quita ese voto). */
+export interface SurrenderVote {
+  startedBy: string;
+  endsGt: number;
+  yes: string[];
+}
+
 export type FlowStep = 'decisions' | 'shop' | 'bossIntro' | 'round';
 
 export interface CoopState {
@@ -165,7 +172,9 @@ export interface CoopState {
   pendingPharaonis: PharaonisEffect[];
   decisions: DecisionState[];
   flow: FlowStep[];
-  result: { won: boolean; endedGt: number } | null;
+  /** Opcional: los estados guardados antes de la rendición no lo traen. */
+  surrender?: SurrenderVote | null;
+  result: { won: boolean; endedGt: number; surrendered?: boolean } | null;
 }
 
 export const emptyStats = (): PlayerStats => ({

@@ -71,8 +71,15 @@ export function describeEvent(event: CoopEvent, state: CoopState | null): string
       return `${nameOf(state, event.playerId)} volvió a la vida.`;
     case 'shopSwap':
       return `${nameOf(state, event.playerId)} intercambió su tienda con ${nameOf(state, event.targetId)}.`;
+    case 'surrenderVote':
+      if (event.accept && event.yes === 1) return `${nameOf(state, event.playerId)} propone rendirse (${event.yes}/${event.needed}).`;
+      return event.accept
+        ? `${nameOf(state, event.playerId)} vota rendirse (${event.yes}/${event.needed}).`
+        : `${nameOf(state, event.playerId)} no quiere rendirse (${event.yes}/${event.needed}).`;
+    case 'surrenderEnd':
+      return event.passed ? 'La party se rindió por unanimidad.' : 'Venció la votación de rendición: siguen jugando.';
     case 'gameOver':
-      return event.won ? '¡Victoria! Todos los jefes cayeron.' : 'Derrota.';
+      return event.won ? '¡Victoria! Todos los jefes cayeron.' : event.surrendered ? 'Derrota por rendición.' : 'Derrota.';
     default:
       return null;
   }

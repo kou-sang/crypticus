@@ -50,6 +50,8 @@ export function CoopResults({ result, meId }: { result: CoopResultSummary; meId:
             <>
               ¡<em className="text-accent">Victoria</em>!
             </>
+          ) : result.surrendered ? (
+            'Derrota por rendición'
           ) : (
             'Derrota'
           )}

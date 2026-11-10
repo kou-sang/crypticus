@@ -11,7 +11,7 @@ import { Modal } from '../../components/Modal';
 import { Button } from '../../components/ui';
 import { cx, errorMessage } from '../../lib/utils';
 import { itemName } from './MyPanel';
-import { CharacterSilhouette, ItemSilhouette } from './silhouettes';
+import { ItemSilhouette } from './silhouettes';
 
 function offerTitle(offer: ShopOffer): string {
   if (offer.kind === 'rechargeUrias') return `Recargar activa de ${CHARACTERS.urias.name}`;
@@ -112,9 +112,11 @@ export const ShopWindow = memo(function ShopWindow({
           return (
             <li key={offer.id} className={cx('coop-enter flex flex-col gap-2 border-2 border-ink p-3', offer.sold && 'opacity-50')}>
               <p className="font-display text-lg leading-tight">{offerTitle(offer)}</p>
-              <span className="coop-halo mx-auto">
-                {item ? <ItemSilhouette id={item.id} className="size-20" /> : <CharacterSilhouette id={me.character} className="size-20" />}
-              </span>
+              {item && (
+                <span className="coop-halo mx-auto">
+                  <ItemSilhouette id={item.id} className="size-12" />
+                </span>
+              )}
               <details className="text-sm">
                 <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-muted">Efecto</summary>
                 <p className="mt-1 leading-snug">{offerDescription(offer)}</p>

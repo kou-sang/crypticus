@@ -19,6 +19,8 @@ export type CoopClientAction =
   | { kind: 'swap'; targetId: string }
   | { kind: 'shopDone' }
   | { kind: 'vote'; decisionId: string; accept: boolean }
+  /** Rendición: «sí» abre o suma; «no» retira el voto propio (no cierra la votación). */
+  | { kind: 'surrender'; accept: boolean }
   | { kind: 'leave' };
 
 export interface CoopReply {
@@ -85,6 +87,8 @@ export interface CoopResultSummary {
   level: CoopLevel;
   won: boolean;
   endedGt: number;
+  /** La party se rindió por votación unánime. */
+  surrendered?: boolean;
   rounds: number;
   bossesDefeated: number;
   bosses: Array<{

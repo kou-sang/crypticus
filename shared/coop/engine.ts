@@ -19,6 +19,7 @@ import {
   REVIVE_HP_SHARE,
   SHOP_BASE_OPTIONS,
   SHOP_MS,
+  SURRENDER_VOTE_MS,
   armorReduction,
   bossBaseDamage,
   partyFactor,
@@ -74,6 +75,7 @@ export type CoopAction =
   | { type: 'shopSwap'; playerId: string; targetId: string }
   | { type: 'shopDone'; playerId: string }
   | { type: 'vote'; playerId: string; decisionId: string; accept: boolean }
+  | { type: 'surrender'; playerId: string; accept: boolean }
   | { type: 'leave'; playerId: string };
 
 export interface CoopResult {
@@ -128,6 +130,7 @@ export function createCoopGame(input: { seed: number; level: CoopLevel; players:
     pendingPharaonis: [],
     decisions: [],
     flow: [],
+    surrender: null,
     result: null,
   };
   for (const player of state.players) player.hp = maxHp(state, player);
@@ -169,6 +172,7 @@ export function nextDeadline(state: CoopState): number | null {
   if (state.phase === 'round' && state.roundEndsGt !== null) candidates.push(state.roundEndsGt);
   if (state.phase === 'shop' && state.shop) candidates.push(state.shop.endsGt);
   if (state.phase === 'decision' && state.decisions[0]) candidates.push(state.decisions[0].endsGt);
+  if (state.surrender) candidates.push(state.surrender.endsGt);
   return toWall(Math.min(...candidates));
 }
 
@@ -294,6 +298,7 @@ function advance(ctx: Ctx, now: number): void {
     if (state.phase === 'round' && state.roundEndsGt !== null) deadlines.push({ at: state.roundEndsGt, run: () => endRound(ctx) });
     if (state.phase === 'shop' && state.shop) deadlines.push({ at: state.shop.endsGt, run: () => closeShop(ctx) });
     if (state.phase === 'decision' && state.decisions[0]) deadlines.push({ at: state.decisions[0].endsGt, run: () => resolveDecision(ctx) });
+    if (state.surrender) deadlines.push({ at: state.surrender.endsGt, run: () => closeSurrender(ctx, false) });
     deadlines.push({ at: state.nextTickGt, run: () => periodicTick(ctx) });
     deadlines.push({ at: state.totalMs, run: () => finish(ctx, false) });
     // Empates: fin de ronda/tienda/votación antes que el tick y que el fin del tiempo total.
@@ -378,17 +383,18 @@ function startNextStep(ctx: Ctx): void {
   }
 }
 
-function finish(ctx: Ctx, won: boolean): void {
+function finish(ctx: Ctx, won: boolean, surrendered = false): void {
   const { state } = ctx;
   if (isOver(state)) return;
   const gt = Math.min(gtOf(ctx), state.totalMs);
   pauseClock(ctx);
   state.clock.baseGt = gt;
   state.phase = won ? 'victory' : 'defeat';
-  state.result = { won, endedGt: gt };
+  state.result = surrendered ? { won, endedGt: gt, surrendered } : { won, endedGt: gt };
   state.roundEndsGt = null;
   state.shop = null;
-  ctx.events.push({ type: 'gameOver', gt, won });
+  state.surrender = null;
+  ctx.events.push(surrendered ? { type: 'gameOver', gt, won, surrendered } : { type: 'gameOver', gt, won });
 }
 
 function checkWipe(ctx: Ctx): boolean {
@@ -1108,6 +1114,8 @@ function applyAction(ctx: Ctx, action: Exclude<CoopAction, { type: 'tick' }>): v
       return shopDone(ctx, player);
     case 'vote':
       return vote(ctx, player, action.decisionId, action.accept);
+    case 'surrender':
+      return surrenderVote(ctx, player, action.accept);
     case 'leave':
       return leave(ctx, player);
   }
@@ -1301,6 +1309,52 @@ function vote(ctx: Ctx, player: PlayerState, decisionId: string, accept: boolean
   if (alivePlayers(state).every((p) => p.id in decision.votes)) resolveDecision(ctx);
 }
 
+// --- Rendición --------------------------------------------------------------------------------------------
+
+/** Votan todos los que siguen en la partida (vivos y caídos); los que salieron no cuentan. */
+const surrenderVoters = (state: CoopState) => state.players.filter((p) => p.status !== 'left');
+
+/**
+ * «Sí» abre la votación (o suma el voto); «no» solo retira el voto propio: la votación sigue abierta hasta que
+ * vence (30 s) o todos dicen que sí. Con unanimidad la partida termina en derrota.
+ */
+function surrenderVote(ctx: Ctx, player: PlayerState, accept: boolean): void {
+  const { state } = ctx;
+  if (player.status === 'left') reject('Saliste de la partida.');
+  const gt = gtOf(ctx);
+  if (!state.surrender) {
+    if (!accept) reject('No hay una votación de rendición abierta.');
+    state.surrender = { startedBy: player.id, endsGt: gt + SURRENDER_VOTE_MS, yes: [] };
+  }
+  const vote = state.surrender;
+  vote.yes = vote.yes.filter((id) => id !== player.id);
+  if (accept) vote.yes.push(player.id);
+  ctx.events.push({
+    type: 'surrenderVote',
+    gt,
+    playerId: player.id,
+    accept,
+    yes: vote.yes.length,
+    needed: surrenderVoters(state).length,
+    endsGt: vote.endsGt,
+  });
+  checkSurrender(ctx);
+}
+
+function checkSurrender(ctx: Ctx): void {
+  const vote = ctx.state.surrender;
+  if (!vote) return;
+  const voters = surrenderVoters(ctx.state);
+  if (voters.length > 0 && voters.every((p) => vote.yes.includes(p.id))) closeSurrender(ctx, true);
+}
+
+function closeSurrender(ctx: Ctx, passed: boolean): void {
+  if (!ctx.state.surrender) return;
+  ctx.state.surrender = null;
+  ctx.events.push({ type: 'surrenderEnd', gt: gtOf(ctx), passed });
+  if (passed) finish(ctx, false, true);
+}
+
 function leave(ctx: Ctx, player: PlayerState): void {
   const { state } = ctx;
   if (player.status === 'left') return;
@@ -1310,6 +1364,9 @@ function leave(ctx: Ctx, player: PlayerState): void {
   player.assignments = [];
   ctx.events.push({ type: 'death', gt: gtOf(ctx), playerId: player.id });
   if (checkWipe(ctx)) return;
+  // Sin su voto, la rendición puede quedar unánime.
+  checkSurrender(ctx);
+  if (isOver(state)) return;
   // Si era el último pendiente, la ronda/tienda/votación puede terminar ya.
   if (state.phase === 'round') {
     const participants = roundParticipants(state);

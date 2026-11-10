@@ -149,8 +149,11 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
             case 'roundStart':
               setLice([]); // Las manchas duran hasta la ronda siguiente.
               break;
+            case 'surrenderVote':
+              if (event.accept && event.yes === 1) cues.add('danger');
+              break;
             case 'gameOver':
-              nextBanners.push({ id: id(), text: event.won ? '¡Victoria!' : 'Derrota', tone: 'result' });
+              nextBanners.push({ id: id(), text: event.won ? '¡Victoria!' : event.surrendered ? 'Se rindieron' : 'Derrota', tone: 'result' });
               cues.add(event.won ? 'victory' : 'defeat');
               break;
           }

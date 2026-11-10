@@ -16,6 +16,18 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.4.0',
+    date: '2026-11-10',
+    title: 'COOP: arreglos y rendición',
+    highlight: false,
+    news: [
+      'COOP se pone en pantalla completa al empezar.',
+      'Se puede votar rendirse: hace falta que todos digan que sí.',
+      'Jefe y jugadores se muestran como tarjetas claras, sin figuras, con su vida y estados como «Quemado».',
+    ],
+    fixes: ['En COOP, algunos jugadores no veían la partida al empezar.', 'En la pantalla de carga, el texto ya no tapa los botones.'],
+  },
+  {
     version: '1.3.0',
     date: '2026-11-10',
     title: 'Modo COOP',

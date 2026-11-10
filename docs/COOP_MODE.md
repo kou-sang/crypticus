@@ -10,11 +10,12 @@ Especificación: manual «Crypticus: modo COOP» (v2) y las respuestas del 10/11
 | [#29](https://github.com/kou-sang/crypticus/pull/29) | Durable Object, sala (nivel, personajes), explicación previa, selección de cripticos | ✅ En `main` |
 | [#30](https://github.com/kou-sang/crypticus/pull/30) | Pantalla de partida y tienda (bocetos), animaciones y sonidos por tema; COOP habilitado | ✅ En `main` |
 | [#31](https://github.com/kou-sang/crypticus/pull/31) | Resultados, estadísticas por jugador y por jefe, soluciones, Elo COOP en Perfil y Ranking | ✅ En `main` |
+| [#33](https://github.com/kou-sang/crypticus/pull/33) | Selección de personajes al iniciar y carga estilo LoL | ✅ En `main` |
+| v1.4.0 | Pantalla en portal (arreglo de la partida vacía), pantalla completa automática, tarjetas sin figuras, rendición por votación | Este PR |
 
-Todo forma parte de la v1.3.0, **sin desplegar**. Falta:
+Falta:
 
-- **Balance:** con los números actuales los bots no ganan (ver «Balance»). Ajustar `balance.ts` antes de desplegar, o desplegar con `COOP_ENABLED = false`.
-- **Prueba real:** jugar una partida completa en el navegador (no se pudo probar en este entorno).
+- **Balance:** con los números actuales los bots no ganan (ver «Balance»). Ajustar `balance.ts`.
 - **Nivel NT:** sus jefes y personajes (por ahora se muestra «Pronto»).
 
 ## Archivos
@@ -55,6 +56,7 @@ Todo forma parte de la v1.3.0, **sin desplegar**. Falta:
 14. DEBBORA: su activa revela una pista del criptico actual sin gastar su contador.
 15. Las habilidades activas se usan en ronda, tienda o votación (una vez por ronda). No se usan durante la presentación de un jefe.
 16. Flujo al iniciar: selección de personajes (60 s; al vencer, quien no eligió recibe uno libre al azar) → carga con explicación salteable (90 s o todos listos) → presentación del primer jefe. Quien sale antes de empezar queda fuera desde el primer instante.
+17. Rendición: «Rendirse» abre una votación de 30 s de partida. Votan vivos y caídos (no los que salieron). Un «no» solo retira ese voto; pasa con el sí de todos y termina en derrota (cuenta para el Elo como cualquier derrota).
 
 ## Balance (simulador)
 

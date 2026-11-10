@@ -8,7 +8,7 @@ import { armor, attackPower, maxHp } from '../../../shared/coop/stats';
 import { Modal } from '../../components/Modal';
 import { HpBar } from './Arena';
 import { itemName } from './MyPanel';
-import { CharacterSilhouette, ItemSilhouette } from './silhouettes';
+import { ItemSilhouette } from './silhouettes';
 
 export const PlayerDetails = memo(function PlayerDetails({
   state,
@@ -29,9 +29,6 @@ export const PlayerDetails = memo(function PlayerDetails({
       {player && character && (
         <div className="space-y-4 text-sm">
           <div className="flex items-center gap-4">
-            <span className="coop-halo shrink-0">
-              <CharacterSilhouette id={player.character} className="size-20" />
-            </span>
             <div className="flex-1 space-y-1">
               <HpBar hp={player.hp} max={maxHp(state, player)} className="h-4" />
               <p className="font-mono text-xs">
@@ -40,7 +37,7 @@ export const PlayerDetails = memo(function PlayerDetails({
                 Pistas {player.hints}
               </p>
               {player.soldierHp > 0 && <p className="text-xs">Soldado de Gedeon: {player.soldierHp} de vida.</p>}
-              {player.burns.length > 0 && <p className="text-xs">Quemaduras: {player.burns.length}.</p>}
+              {player.burns.length > 0 && <p className="text-xs">Quemado ×{player.burns.length} (LEVIATHAN): pierde vida al final de cada ronda.</p>}
             </div>
           </div>
           <div>

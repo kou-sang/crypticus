@@ -4,6 +4,23 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-10
+
+### Added
+
+- COOP: rendición por votación. «Rendirse» abre una votación de 30 s; solo pasa con el sí de todos los que siguen en la partida (un «no» no la cierra). Termina en derrota.
+- COOP: pantalla completa automática al empezar (o con el primer clic si el navegador lo exige) y botón para volver a ella.
+
+### Changed
+
+- COOP: durante la partida no hay figuras (solo en la selección). Jefe y jugadores son tarjetas con nombre, vida y estados con nombre («Quemado ×N», «Soldado», «Inhibido») en vez de emojis.
+- COOP: textos y tamaños reajustados para que entren en sus cajas; números de vida legibles sobre la barra.
+
+### Fixed
+
+- COOP: la partida se veía vacía o recortada (los demás jugadores no veían nada). La pantalla se montaba dentro de la página animada, que recortaba lo `fixed`; ahora va en un portal sobre `<body>`.
+- COOP: en la carga, el texto largo empujaba el botón y cortaba la parte de arriba; ahora solo se desplaza el contenido de la pestaña.
+
 ## [1.3.0] - 2026-11-10
 
 ### Added
