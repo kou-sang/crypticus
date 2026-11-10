@@ -16,7 +16,8 @@ interface ChatMessage {
   createdAt: Timestamp | null; // null mientras la escritura está pendiente
 }
 
-export type ChatTarget = { kind: 'chat'; chatId: string } | { kind: 'competition'; competitionId: string };
+/** `competitionId`: dueña de los mensajes (en una revancha, la primera sala). `viaId`: sala desde la que se escribe. */
+export type ChatTarget = { kind: 'chat'; chatId: string } | { kind: 'competition'; competitionId: string; viaId?: string };
 
 const MESSAGE_LIMIT = 50;
 

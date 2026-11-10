@@ -5,7 +5,7 @@ import { bearerToken, verifyFirebaseToken } from './auth';
 import { FirestoreRest, type Write } from './firestore';
 import type { Env } from './env';
 import { CONFIG_KEYS, normalizeConfig, normalizeRoom, validateRoom } from '../shared/config';
-import { generateRoomCode, roomTitle } from '../shared/roomCode';
+import { generateRoomCode, rematchRoomId, roomTitle } from '../shared/roomCode';
 import type { Competition, CompetitionConfig } from '../shared/types';
 
 const ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -50,9 +50,10 @@ const OPEN_STATUSES = ['lobby', 'live'];
  * Código de 4 letras sin repetir entre las salas abiertas (en espera o en vivo).
  * 26⁴ ≈ 457 000 combinaciones: con pocas salas abiertas casi siempre basta un intento.
  */
-async function uniqueRoomCode(firestore: FirestoreRest): Promise<string> {
+async function uniqueRoomCode(firestore: FirestoreRest, preferred?: string): Promise<string> {
   for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {
-    const code = generateRoomCode();
+    // Revancha: primero se intenta conservar el código de la sala anterior (ya terminó, así que suele estar libre).
+    const code = attempt === 0 && preferred ? preferred : generateRoomCode();
     const taken = await firestore.queryEquals<{ code: string }>(
       'competitions',
       [
@@ -82,24 +83,30 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
   const user = await verifyFirebaseToken(bearerToken(request), env.FIREBASE_PROJECT_ID);
   const body = await readBody(request);
   const firestore = new FirestoreRest(env.FIREBASE_SERVICE_ACCOUNT);
-  const [hostName, code] = await Promise.all([profileName(firestore, user.uid), uniqueRoomCode(firestore)]);
-  const { config, room } = configAndRoom(body, roomTitle(code, hostName));
-  const { invitedIds, invitedNames } = invitesFrom(body, user.uid);
 
   // Revancha: solo un jugador de la partida terminada puede proponerla.
   const rematchOf = typeof body.rematchOf === 'string' ? body.rematchOf : null;
+  let origin: (Competition & { id: string }) | null = null;
   if (rematchOf) {
-    const origin = await firestore.getDoc<Competition>(`competitions/${rematchOf}`);
+    origin = await firestore.getDoc<Competition>(`competitions/${rematchOf}`);
     if (!origin || origin.status !== 'finished' || !origin.participantIds?.includes(user.uid)) {
       throw new AppError(403, 'bad_rematch', 'Solo los jugadores de una partida terminada pueden pedir revancha.');
     }
+    // Ya hay una revancha en espera: todos van a esa misma sala (el cliente se une).
+    const existing = await openRematch(firestore, origin);
+    if (existing) return json({ ok: true, data: { id: existing, existing: true } });
   }
 
-  const id = newId();
+  const [hostName, code] = await Promise.all([profileName(firestore, user.uid), uniqueRoomCode(firestore, origin?.code)]);
+  const { config, room } = configAndRoom(body, roomTitle(code, hostName));
+  const { invitedIds, invitedNames } = invitesFrom(body, user.uid);
+
+  const id = origin ? rematchRoomId(origin) : newId();
   const now = Date.now();
   const writes: Write[] = [
     {
-      kind: 'set',
+      // Revancha: 'create' falla si otro jugador la creó un instante antes (entonces se une a esa).
+      kind: rematchOf ? 'create' : 'set',
       path: `competitions/${id}`,
       data: {
         ...config,
@@ -117,7 +124,10 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
         finishedAt: null,
         winnerId: null,
         ...(invitedIds.length > 0 ? { invitedIds, invitedNames } : {}),
-        ...(rematchOf ? { rematchOf, declinedIds: [] } : {}),
+        // El chat sigue siendo el de la primera sala de la serie de revanchas.
+        ...(rematchOf && origin
+          ? { rematchOf, declinedIds: [], chatId: origin.chatId ?? origin.id, rematchDepth: (origin.rematchDepth ?? 0) + 1 }
+          : {}),
       },
     },
     {
@@ -140,8 +150,29 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
     },
     ...(rematchOf ? [{ kind: 'update' as const, path: `competitions/${rematchOf}`, data: { rematchId: id } }] : []),
   ];
-  await firestore.commit(writes);
+  try {
+    await firestore.commit(writes);
+  } catch (error) {
+    if (!(origin && error instanceof AppError && error.code === 'already_exists')) throw error;
+    const existing = await openRematch(firestore, origin);
+    if (!existing) throw new AppError(409, 'rematch_started', 'La revancha ya empezó.');
+    return json({ ok: true, data: { id: existing, existing: true } });
+  }
   return json({ ok: true, data: { id } });
+}
+
+/** Sala de revancha en espera de una partida, o null. Si ya empezó, no se puede entrar. */
+async function openRematch(firestore: FirestoreRest, origin: Competition & { id: string }): Promise<string | null> {
+  // Salas creadas antes del id fijo: la enlazada en `rematchId`, si sigue en espera.
+  if (origin.rematchId && origin.rematchId !== rematchRoomId(origin)) {
+    const legacy = await firestore.getDoc<Competition>(`competitions/${origin.rematchId}`);
+    if (legacy?.status === 'lobby') return origin.rematchId;
+  }
+  const id = rematchRoomId(origin);
+  const room = await firestore.getDoc<Competition>(`competitions/${id}`);
+  if (!room) return null;
+  if (room.status !== 'lobby') throw new AppError(409, 'rematch_started', 'La revancha ya empezó: no se puede entrar.');
+  return id;
 }
 
 /** PATCH /api/competitions/:id — el anfitrión cambia las reglas en la sala de espera. */

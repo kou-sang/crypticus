@@ -16,6 +16,14 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.8.1',
+    date: '2026-11-10',
+    title: 'Revancha en la misma sala',
+    highlight: false,
+    news: [],
+    fixes: ['Revancha: todos vuelven a la misma sala aunque la pidan a la vez, con el mismo código y el mismo chat.'],
+  },
+  {
     version: '1.8.0',
     date: '2026-11-10',
     title: 'Arreglos de Royale, chat y votación de dificultad',

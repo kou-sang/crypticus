@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { createCompetition } from '../../lib/repo';
+import { useSession } from '../../hooks/useAuth';
 import type { RematchDraft } from '../play/RematchPanel';
 import { errorMessage } from '../../lib/utils';
 import { buildConfig } from '../../../shared/gameModes';
@@ -26,6 +27,7 @@ export default function CreateCompetitionPage() {
 
 function RematchForm({ rematch }: { rematch: RematchDraft }) {
   const navigate = useNavigate();
+  const { profile } = useSession();
   const [stored, setStored] = useState<Stored>(() => loadStored(rematch));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,6 +39,7 @@ function RematchForm({ rematch }: { rematch: RematchDraft }) {
     setError(null);
     setBusy(true);
     try {
+      // Si ya hay una revancha en espera, el servidor devuelve esa sala y se entra a ella (con sus reglas).
       const id = await createCompetition({
         ...built.config,
         visibility: stored.visibility,
@@ -45,7 +48,7 @@ function RematchForm({ rematch }: { rematch: RematchDraft }) {
         invitedIds: rematch.invitedIds,
         invitedNames: rematch.invitedNames,
         rematchOf: rematch.fromId,
-      });
+      }, profile);
       navigate(`/c/${id}`, { replace: true });
     } catch (err) {
       setError(errorMessage(err));

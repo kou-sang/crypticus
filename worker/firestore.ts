@@ -21,6 +21,8 @@ export type Write =
   // Merge de campos listados; `clear` borra además esos campos si no vienen en `data`.
   | { kind: 'update'; path: string; data: Record<string, unknown>; clear?: readonly string[] }
   | { kind: 'set'; path: string; data: Record<string, unknown> } // crea o reemplaza el documento
+  // Crea solo si no existe: si ya existe, el commit entero falla con AppError 409 'already_exists'.
+  | { kind: 'create'; path: string; data: Record<string, unknown> }
   | { kind: 'increment'; path: string; increments: Record<string, number> }
   // Agrega/actualiza claves de un campo mapa sin tocar el resto; crea el documento si no existe.
   | { kind: 'mergeMap'; path: string; field: string; entries: Record<string, number> }
@@ -76,6 +78,8 @@ export class FirestoreRest {
     if (response.status === 404) throw new AppError(404, 'not_found', 'Documento no encontrado.');
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
+      // Precondición `exists: false` violada (escritura 'create' sobre un documento existente).
+      if (response.status === 409 || detail.includes('ALREADY_EXISTS')) throw new AppError(409, 'already_exists', 'El documento ya existe.');
       throw new AppError(502, 'firestore', `Firestore ${response.status}: ${detail.slice(0, 200)}`);
     }
     return (await response.json()) as T;
@@ -161,6 +165,9 @@ export class FirestoreRest {
     const body = writes.map((write) => {
       if (write.kind === 'set') {
         return { update: { name: this.name(write.path), fields: encodeFields(write.data) } };
+      }
+      if (write.kind === 'create') {
+        return { update: { name: this.name(write.path), fields: encodeFields(write.data) }, currentDocument: { exists: false } };
       }
       if (write.kind === 'setFields') {
         const nested: Record<string, unknown> = {};

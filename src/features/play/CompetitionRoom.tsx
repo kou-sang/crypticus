@@ -59,7 +59,9 @@ export default function CompetitionRoom() {
     () => (live ? Object.values(live.participants) : lobbyParticipants.data),
     [live, lobbyParticipants.data],
   );
-  const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId }), [competitionId]);
+  // Revancha: mismo chat que la sala anterior (`chatId`), escribiendo desde esta.
+  const chatRoot = competition.data?.chatId ?? competitionId;
+  const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId: chatRoot, viaId: competitionId }), [chatRoot, competitionId]);
   // Avisos de la partida para el chat (se recalculan solo cuando cambian los eventos).
   const systemLines = useMemo(() => (live ? gameEventLines(live) : undefined), [live]);
 

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router';
 import { doc } from 'firebase/firestore';
 import type { Competition, UserProfile } from '../../../shared/types';
 import { settingsFromConfig } from '../../../shared/gameModes';
+import { rematchRoomId } from '../../../shared/roomCode';
 import { useLiveDoc } from '../../hooks/useFirestore';
 import { db } from '../../lib/firebase';
 import { configOf, declineRematch, joinCompetition, proposeRematch, rematchInvitesFor, rematchTitle, type RematchTarget } from '../../lib/repo';
@@ -52,9 +53,9 @@ export function rematchDraft(target: RematchTarget, hostUid: string): RematchDra
 export function RematchPanel({ target, profile }: { target: RematchTarget; profile: UserProfile }) {
   const navigate = useNavigate();
   const { competition } = target;
-  const proposal = useLiveDoc<Competition>(competition.rematchId ? doc(db, 'competitions', competition.rematchId) : null, [
-    competition.rematchId,
-  ]);
+  // La revancha tiene id fijo (ver `rematchRoomId`): se escucha aunque `rematchId` todavía no haya llegado.
+  const proposalId = competition.rematchId ?? rematchRoomId(competition);
+  const proposal = useLiveDoc<Competition>(doc(db, 'competitions', proposalId), [proposalId]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,7 +73,8 @@ export function RematchPanel({ target, profile }: { target: RematchTarget; profi
 
   const propose = () =>
     run('propose', async () => {
-      const id = await proposeRematch(target, profile.uid);
+      // Si otro jugador ya la creó, el servidor devuelve esa sala y se entra a ella.
+      const id = await proposeRematch(target, profile);
       navigate(`/c/${id}`);
     });
   const customize = () => navigate('/jugar/nueva', { state: { rematch: rematchDraft(target, profile.uid) } });
