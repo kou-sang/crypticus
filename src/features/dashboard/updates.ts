@@ -25,6 +25,7 @@ export const RELEASES: readonly Release[] = [
       'Los avisos de la partida (rondas nuevas, daño, aciertos…) ahora aparecen dentro del chat de la sala.',
     ],
     fixes: [
+      'Revancha: todos vuelven a la misma sala aunque la pidan a la vez, con el mismo código y el mismo chat.',
       'La pantalla ya no baja sola al resolver un criptico en Royale.',
       'El chat de la sala tiene un alto fijo y barra para desplazarse.',
     ],

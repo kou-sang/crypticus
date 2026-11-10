@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateRoomCode, normalizeRoomCode, roomTitle, ROOM_CODE_PATTERN } from './roomCode';
+import { generateRoomCode, normalizeRoomCode, rematchRoomId, roomTitle, ROOM_CODE_PATTERN } from './roomCode';
 
 describe('roomCode', () => {
   it('genera 4 letras mayúsculas', () => {
@@ -19,5 +19,13 @@ describe('roomCode', () => {
 
   it('el título es código + anfitrión', () => {
     expect(roomTitle('QWER', 'Ana')).toBe('QWER · Ana');
+  });
+});
+
+describe('rematchRoomId', () => {
+  it('es fijo por partida y corto en una serie de revanchas', () => {
+    expect(rematchRoomId({ id: 'AbCdEfGhIjKlMnOpQrSt' })).toBe('AbCdEfGhIjKlMnOpQrSt-r1');
+    expect(rematchRoomId({ id: 'AbCdEfGhIjKlMnOpQrSt-r1', chatId: 'AbCdEfGhIjKlMnOpQrSt', rematchDepth: 1 })).toBe('AbCdEfGhIjKlMnOpQrSt-r2');
+    expect(rematchRoomId({ id: 'x', chatId: 'AbCdEfGhIjKlMnOpQrSt', rematchDepth: 99 }).length).toBeLessThanOrEqual(64);
   });
 });

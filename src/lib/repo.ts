@@ -153,11 +153,20 @@ export interface CreateCompetitionInput extends CompetitionConfig {
  * Crea la sala en el servidor: valida reglas, toma el nombre del perfil y, si es revancha, la enlaza.
  * (Firestore no deja crear salas desde el cliente.)
  */
-export async function createCompetition(input: CreateCompetitionInput): Promise<string> {
+export async function createCompetition(input: CreateCompetitionInput, profile?: UserProfile): Promise<string> {
   const errors = validateConfig(input, input.maxPlayers);
   if (errors.length > 0) throw new Error(errors.join(' '));
-  const { id } = await api.create({ ...input, device: detectDevice() });
+  const { id, existing } = await api.create({ ...input, device: detectDevice() });
+  // Revancha ya creada por otro jugador: se entra a esa misma sala (nunca dos salas para una revancha).
+  if (existing && profile) await joinIfNeeded(id, profile);
   return id;
+}
+
+/** Se une a la sala si todavía no está en ella. */
+async function joinIfNeeded(competitionId: string, profile: UserProfile): Promise<void> {
+  const snap = await getDoc(doc(db, 'competitions', competitionId));
+  const ids = (snap.data() as Competition | undefined)?.participantIds ?? [];
+  if (!ids.includes(profile.uid)) await joinCompetition(competitionId, profile);
 }
 
 /** El anfitrión cambia reglas y datos de la sala mientras está en espera. */
@@ -219,8 +228,8 @@ export function rematchInput(target: RematchTarget, hostUid: string): CreateComp
 }
 
 /** Propone la revancha con las mismas reglas: el servidor crea la sala, invita a todos y la enlaza. */
-export async function proposeRematch(target: RematchTarget, hostUid: string): Promise<string> {
-  return createCompetition(rematchInput(target, hostUid));
+export async function proposeRematch(target: RematchTarget, profile: UserProfile): Promise<string> {
+  return createCompetition(rematchInput(target, profile.uid), profile);
 }
 
 export function rematchInvitesFor(target: RematchTarget, hostUid: string) {
@@ -303,7 +312,7 @@ export async function removeFriendRequest(id: string): Promise<void> {
 // ---------- Chat ----------
 
 export async function sendMessage(
-  path: { kind: 'chat'; chatId: string } | { kind: 'competition'; competitionId: string },
+  path: { kind: 'chat'; chatId: string } | { kind: 'competition'; competitionId: string; viaId?: string },
   author: UserProfile,
   text: string,
 ): Promise<void> {
@@ -318,5 +327,7 @@ export async function sendMessage(
     authorName: author.displayName,
     text: trimmed,
     createdAt: serverTimestamp(),
+    // Revancha: sala desde la que se escribe (las reglas comprueban que use este chat).
+    ...(path.kind === 'competition' && path.viaId && path.viaId !== path.competitionId ? { viaId: path.viaId } : {}),
   });
 }

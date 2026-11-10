@@ -38,7 +38,7 @@ async function request<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?:
 }
 
 export const api = {
-  create: (input: object) => request<{ id: string }>('POST', 'competitions', input),
+  create: (input: object) => request<{ id: string; existing?: boolean }>('POST', 'competitions', input),
   update: (competitionId: string, input: object) =>
     request<{ id: string }>('PATCH', `competitions/${encodeURIComponent(competitionId)}`, input),
   start: (competitionId: string) =>
