@@ -21,6 +21,7 @@ export const RELEASES: readonly Release[] = [
     title: 'COOP: chat, estados y oro por criptico',
     highlight: true,
     news: [
+      'En las rondas normales de COOP, cada criptico que resuelves golpea al jefe al instante.',
       'En COOP, cada criptico que resuelves da 15 + el número de la ronda de oro, al instante.',
       'La ronda difícil trae cripticos medios o difíciles; desde la ronda 11, difíciles o muy difíciles.',
       'Chat de la sala al costado durante la partida, con aviso de mensajes nuevos.',

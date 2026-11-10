@@ -199,8 +199,8 @@ function RoundCryptics({
       )}
       {state.roundKind === 'normal' && me.status === 'alive' && current && (
         <p className="text-xs text-muted">
-          Cada criptico da {GOLD_PER_CRYPTIC_BASE + state.roundNumber} de oro. Golpeas al jefe al resolver {cryptics.length === 1 ? 'el criptico' : `los ${cryptics.length}`}
-          {done > 0 && ` (te falta${cryptics.length - done === 1 ? '' : 'n'} ${cryptics.length - done})`}.
+          Cada criptico resuelto golpea al jefe al instante y da {GOLD_PER_CRYPTIC_BASE + state.roundNumber} de oro. Si no resuelves todos
+          antes del final, el jefe te golpea.
         </p>
       )}
       {explanation && <p className="text-xs text-muted">Anterior: {explanation}</p>}

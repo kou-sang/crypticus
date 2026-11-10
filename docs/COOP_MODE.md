@@ -40,7 +40,7 @@ Falta:
 
 ## Interpretaciones (confirmar si alguna no es así)
 
-1. Ronda normal: cada jugador golpea al jefe **en el momento** en que resuelve todos sus cripticos. Si ese golpe lo derriba, la ronda termina ahí y nadie más recibe daño. El oro (15 + número de la ronda en curso, con los bonus de oro) se cobra al resolver **cada** criptico, en cualquier ronda y aunque no se complete; solo lo cobran los vivos. Los efectos de ronda ganada llegan al cerrar la ronda. En la ronda difícil, los ataques siguen al final y en orden de asiento. El daño que sobra sobre un jefe muerto se pierde.
+1. Ronda normal: cada criptico resuelto es un golpe al jefe **en el momento** (2 golpes por ronda completa). Si un golpe lo derriba, la ronda termina ahí y nadie más recibe daño. Si no, al cerrar la ronda el jefe golpea a quien no resolvió todos. El oro (15 + número de la ronda en curso, con los bonus de oro) se cobra al resolver **cada** criptico, en cualquier ronda y aunque no se complete; solo lo cobran los vivos. Los efectos de ronda ganada llegan al cerrar la ronda. En la ronda difícil, los ataques siguen al final y en orden de asiento. El daño que sobra sobre un jefe muerto se pierde.
 2. Orden al terminar la ronda: ataques de los jugadores → efectos de PHARAONIS → quemaduras previas de LEVIATHAN → golpes del jefe → progreso de ronda ganada → inhibición de JEZABEL. Las quemaduras nuevas arden desde la ronda siguiente.
 3. Los muertos no retienen la ronda: termina cuando todos los vivos no inhibidos resolvieron. Su curación de 20 se aplica al resolver.
 4. Ronda difícil: hasta la ronda 10, 50 % medios y 50 % difíciles; desde la 11, 60 % difíciles y 40 % muy difíciles de 2 palabras (`HARD_ROUND_TIER_TABLE`; el reparto no está confirmado).
@@ -79,6 +79,6 @@ Con los números del manual v2, los bots no ganan nunca. Bot «normal»: resuelv
 Causas medidas (30 partidas de 4 jugadores):
 
 - **La ronda difícil casi nunca se supera** (8 de 119): hay que resolver un difícil o muy difícil en 30 s (21 s contra el jefe Expert), y tienen que lograrlo **todos**. Cada fallo golpea a toda la party: es la mayor fuente de muertes. Además, casi nunca se abre la tienda.
-- **El daño de los jugadores es bajo** frente a la vida de los jefes: 30 por jugador por ronda ganada, contra 630 del jefe Easy con 4 jugadores. Hacen falta ~7 rondas perfectas solo para el primero.
+- **El daño de los jugadores es bajo** frente a la vida de los jefes: 30 por criptico (60 por jugador por ronda normal completa), contra 630 del jefe Easy con 4 jugadores. Hacen falta ~7 rondas perfectas solo para el primero.
 
 El modelo de los bots es una estimación: los tiempos reales de resolución deciden. Ajustes a evaluar en `balance.ts`: ronda difícil de 60 s, ataque base 45–60 o vida de los jefes −30 %, y daño base de los jefes 30 (+10 por categoría).

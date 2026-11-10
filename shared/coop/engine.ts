@@ -1151,10 +1151,11 @@ function solve(ctx: Ctx, player: PlayerState, slot: number): void {
   }
   // Oro inmediato por criptico resuelto: 15 + número de la ronda en curso (con los bonus de oro).
   gainGold(ctx, player, GOLD_PER_CRYPTIC_BASE + state.roundNumber, 'cryptic');
-  // Ronda normal: quien resuelve todos sus cripticos golpea al jefe en el momento.
-  if (state.roundKind === 'normal' && allSolved(player)) {
+  // Ronda normal: cada criptico resuelto es un golpe al jefe en el momento.
+  // `attackedRound` marca que ya atacó en esta ronda: al cerrarla no vuelve a atacar.
+  if (state.roundKind === 'normal') {
     const boss = currentBoss(state);
-    if (boss && boss.hp > 0 && player.attackedRound !== state.roundNumber) {
+    if (boss && boss.hp > 0) {
       player.attackedRound = state.roundNumber;
       playerAttack(ctx, player, false);
     }

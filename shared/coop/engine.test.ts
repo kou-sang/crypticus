@@ -88,7 +88,7 @@ describe('ronda normal', () => {
     const boss = currentBoss(game.state)!;
     const { state, events } = solveAll(game.state, game.now + 20_000);
     expect(ofType(events, 'roundEnd')[0]!.winners).toHaveLength(4);
-    expect(currentBoss(state)!.hp).toBe(boss.maxHp - 4 * 30);
+    expect(currentBoss(state)!.hp).toBe(boss.maxHp - 4 * 2 * 30); // Un golpe por criptico.
     expect(state.players.every((p) => p.gold === 2 * 16)).toBe(true);
     expect(state.roundNumber).toBe(2);
   });
@@ -211,7 +211,7 @@ describe('personajes', () => {
     const { state, events } = solveAll(used.state, game.now + 10_000, ['p0']);
     const sacrifice = ofType(events, 'playerHit').find((h) => h.sacrifice)!;
     expect(sacrifice.amount).toBe(150);
-    expect(currentBoss(state)!.hp).toBe(boss.maxHp - 150 - 3 * 30);
+    expect(currentBoss(state)!.hp).toBe(boss.maxHp - 150 - 3 * 2 * 30);
   });
 
   it('una sola activa por ronda y sin cargas no se usa', () => {
@@ -226,7 +226,7 @@ describe('jefes', () => {
   it('PHARAONIS: al cruzar umbrales del 12 % activa efectos en orden y abre la votación', () => {
     const game = startGame('pharaonis');
     const boss = currentBoss(game.state)!;
-    boss.hp = Math.floor(boss.maxHp * 0.77); // Ya perdió 23 %: el primer umbral (12 %) se cruza con el próximo golpe.
+    boss.hp = Math.floor(boss.maxHp * 0.96); // Ya perdió 4 %: los 8 golpes de la ronda cruzan los umbrales del 12, 24 y 36 %.
     const { state, events } = solveAll(game.state, game.now + 10_000);
     const abilities = ofType(events, 'bossAbility').map((e) => e.ability);
     expect(abilities.slice(0, 2)).toEqual(['damage1', 'groupOffer']);
@@ -322,7 +322,7 @@ describe('subniveles AT1/AT2/AT3', () => {
 });
 
 describe('ronda normal: golpe inmediato', () => {
-  it('quien resuelve sus cripticos ataca en el momento y gana oro por cada criptico', () => {
+  it('cada criptico resuelto es un golpe en el momento y da oro', () => {
     const { state, now } = startGame('serpentis');
     const hp = currentBoss(state)!.hp;
     let current = state;
@@ -333,8 +333,8 @@ describe('ronda normal: golpe inmediato', () => {
       current = result.state;
       events.push(...result.events);
     });
-    expect(ofType(events, 'playerHit').filter((h) => h.playerId === 'p0')).toHaveLength(1);
-    expect(currentBoss(current)!.hp).toBeLessThan(hp);
+    expect(ofType(events, 'playerHit').filter((h) => h.playerId === 'p0')).toHaveLength(2);
+    expect(currentBoss(current)!.hp).toBe(hp - 2 * 30);
     expect(current.phase).toBe('round');
     // 15 + ronda 1 por cada criptico, en el momento de resolverlo.
     expect(ofType(events, 'gold').map((g) => g.amount)).toEqual([16, 16]);
@@ -348,24 +348,19 @@ describe('ronda normal: golpe inmediato', () => {
   it('si el golpe derriba al jefe, la ronda termina ya y nadie recibe daño', () => {
     const { state, now } = startGame('serpentis');
     currentBoss(state)!.hp = 1;
-    let current = state;
-    const events: CoopEvent[] = [];
-    current.players[0]!.assignments.forEach((_, slot) => {
-      const result = act(current, { type: 'solve', playerId: 'p0', slot }, now + 1_000);
-      current = result.state;
-      events.push(...result.events);
-    });
+    // El primer criptico ya lo derriba.
+    const { events } = act(state, { type: 'solve', playerId: 'p0', slot: 0 }, now + 1_000);
     expect(ofType(events, 'bossDefeated')).toHaveLength(1);
     expect(ofType(events, 'bossHit')).toHaveLength(0);
   });
 });
 
 describe('oro por criptico', () => {
-  it('cobra 15 + ronda por cada criptico aunque no complete la ronda', () => {
+  it('cobra 15 + ronda y golpea por cada criptico aunque no complete la ronda', () => {
     const { state, now } = startGame('serpentis');
     const first = act(state, { type: 'solve', playerId: 'p0', slot: 0 }, now + 1_000);
     expect(ofType(first.events, 'gold')).toEqual([{ type: 'gold', gt: 1_000, playerId: 'p0', amount: 16, source: 'cryptic' }]);
-    expect(ofType(first.events, 'playerHit')).toHaveLength(0); // El golpe llega con el 2/2.
+    expect(ofType(first.events, 'playerHit')).toHaveLength(1); // Golpe inmediato por criptico.
     const end = reduceCoop(first.state, { type: 'tick' }, now + 80_000);
     expect(end.state.players[0]!.gold).toBe(16);
   });

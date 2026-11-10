@@ -14,6 +14,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ### Changed
 
+- COOP, ronda normal: cada criptico resuelto es un golpe al jefe en el momento (antes, un solo golpe al resolver los 2). El daño de los jugadores por ronda se duplica; la vida de los jefes no cambia.
 - COOP: el oro es 15 + número de la ronda en curso **por cada criptico resuelto**, en el momento (antes, 15 + ronda por ronda normal ganada, al cerrarla). Vale también en la ronda difícil y aunque no se complete la ronda; solo cobran los vivos.
 - COOP, ronda difícil (grupal): cripticos medios o difíciles hasta la ronda 10; desde la 11, difíciles o muy difíciles (`HARD_ROUND_TIER_TABLE`).
 - COOP: el registro muestra lo más reciente arriba (antes quedaba oculto bajo el desborde) y guarda 12 líneas.
