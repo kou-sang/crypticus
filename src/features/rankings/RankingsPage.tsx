@@ -1,4 +1,4 @@
-// Ranking: una tabla por pool de Elo (Race, Royale por tiempo, Duel), global o entre amigos. Consultas puntuales con caché.
+// Ranking: una tabla por pool de Elo (Race, Royale por tiempo, Duel, COOP), global o entre amigos. Consultas puntuales con caché.
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../../hooks/useAuth';
 import { useFriends } from '../../hooks/useFriends';
@@ -10,13 +10,16 @@ import { RankingTable } from '../../components/RankingTable';
 import { poolTitle, royalePool, statsOf } from '../../lib/pools';
 import { EmptyState, ErrorBanner, PageHeader, Spinner } from '../../components/ui';
 import { GAME_LABELS } from '../../../shared/scoring';
-import { RANKED_MODES, type RankedMode, type UserProfile } from '../../../shared/types';
+import { RANKED_MODES, type GameMode, type UserProfile } from '../../../shared/types';
 import { ROYALE_CATEGORIES, ROYALE_CATEGORY_LABELS, type RatingPool, type RoyaleCategory } from '../../../shared/ratingPools';
 
 const VIEW_KEY = 'crypticus.rankingView.v2';
 
+/** Pestañas: los modos competitivos y COOP (Elo contra el nivel). */
+const RANKING_MODES: readonly GameMode[] = [...RANKED_MODES, 'coop'];
+
 interface RankingView {
-  mode: RankedMode;
+  mode: GameMode;
   royale: RoyaleCategory;
   scope: 'global' | 'friends';
 }
@@ -79,7 +82,7 @@ export default function RankingsPage() {
       {/* Controles en una sola franja: modo, tiempo (solo Royale) y alcance. En móvil se apilan. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Modo" className="flex border border-ink">
-          {RANKED_MODES.map((mode) => (
+          {RANKING_MODES.map((mode) => (
             <button key={mode} role="tab" aria-selected={view.mode === mode} onClick={() => setView((v) => ({ ...v, mode }))} className={seg(view.mode === mode)}>
               {GAME_LABELS[mode].title}
             </button>

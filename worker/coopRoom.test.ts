@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyCoopAction, advanceCoop, coopDeadline, coopRatingDelta, coopView, createCoopRoom, type CoopStartInput } from './coopRoom';
+import { applyCoopAction, advanceCoop, coopDeadline, coopRatingDelta, coopSolutions, coopView, createCoopRoom, type CoopStartInput } from './coopRoom';
 import { COOP_BRIEFING_MS } from '../shared/coop/protocol';
 
 const T0 = 1_000_000;
@@ -59,6 +59,8 @@ describe('sala COOP', () => {
     const right = await applyCoopAction(room, 'a', { kind: 'answer', slot, guess: 'ok' }, start + 3_500, verify);
     expect(right.reply.correct).toBe(true);
     expect(room.game?.players[0]!.assignments[slot]!.solved).toBe(true);
+    const solution = coopSolutions(room).find((s) => s.crypticId === room.assigned.a![slot]);
+    expect(solution?.solvedBy).toEqual(['a']);
   });
 
   it('Elo contra el rating del nivel', () => {

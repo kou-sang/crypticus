@@ -6,7 +6,7 @@ import type { RatingPool } from '../../shared/ratingPools';
 export function ModeRatings({ user }: { user: UserProfile }) {
   return (
     <span className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-muted">
-      {RANKED_MODES.map((mode) => {
+      {[...RANKED_MODES, 'coop' as const].map((mode) => {
         const pool: RatingPool = mode === 'royale' ? mainRoyalePool(user) : mode;
         const stats = statsOf(user, pool);
         return (

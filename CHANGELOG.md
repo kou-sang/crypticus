@@ -13,7 +13,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
   - Sala con elección de personaje y explicación previa salteable (cómo se juega, jefes y personajes).
   - Pantalla completa según los bocetos: arena con el jefe al centro y los jugadores alrededor, zona de cripticos, panel propio con objetos y habilidades, y ventana de tienda.
   - Siluetas propias de jefes, personajes y objetos; números de daño y curación proporcionales; avisos de muerte y resurrección; sonidos nuevos por tema (oro, habilidad, resurrección).
-  - Elo COOP contra el rating del nivel (AT 1500).
+  - Elo COOP contra el rating del nivel (AT 1500), con su panel en el Perfil y su pestaña en el Ranking.
+  - Resultados propios: estadísticas por jugador (daño, recibido, curación, oro, cripticos, caídas, pistas, activas y Elo), totales del equipo, estado de cada jefe y soluciones de los cripticos jugados.
   - Simulador de balance: `npx tsx scripts/simulate-coop.ts`.
 
 ### Removed
