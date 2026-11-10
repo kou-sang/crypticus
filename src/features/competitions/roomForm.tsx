@@ -525,34 +525,67 @@ export function ModeTabs({ value, onChange }: { value: GameMode; onChange: (game
   );
 }
 
-/** COOP: solo se elige el nivel. NT se muestra bloqueado hasta que tenga jefes y personajes. */
+const STAGE_INFO: Record<1 | 2 | 3, string> = {
+  1: 'Jefes con −1/3 de vida y daño base',
+  2: 'Dificultad original',
+  3: 'Jefes con +1/3 de vida y daño base',
+};
+
+/** COOP: nivel (AT; NT bloqueado hasta tener jefes y personajes) y subnivel 1–3 de dificultad. */
 function CoopPanel({ settings, update }: { settings: ModeSettings['coop']; update: (value: Partial<ModeSettings['coop']>) => void }) {
+  const radio = (active: boolean) =>
+    cx(
+      'border px-3 py-1 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40',
+      active ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink',
+    );
   return (
-    <Option title="Nivel" info="AT: 4 jefes en 22 minutos. NT: 7 jefes en 33 minutos (se desbloquea al ganar AT; todavía no disponible). Se juega de 4 a 8 jugadores.">
-      <div role="radiogroup" aria-label="Nivel" className="flex flex-wrap gap-1.5">
-        {(['AT', 'NT'] as const).map((level) => {
-          const locked = level === 'NT';
-          const active = settings.level === level;
-          return (
+    <>
+      <Option title="Nivel" info="AT: 4 jefes en 22 minutos. NT: 7 jefes en 33 minutos (se desbloquea al ganar AT; todavía no disponible). Se juega de 4 a 8 jugadores.">
+        <div role="radiogroup" aria-label="Nivel" className="flex flex-wrap gap-1.5">
+          {(['AT', 'NT'] as const).map((level) => {
+            const locked = level === 'NT';
+            return (
+              <button
+                key={level}
+                type="button"
+                role="radio"
+                aria-checked={settings.level === level}
+                disabled={locked}
+                onClick={() => update({ level })}
+                className={radio(settings.level === level)}
+              >
+                {level}
+                {locked && <span className="ml-1.5 text-[10px] font-normal uppercase tracking-widest">Pronto</span>}
+              </button>
+            );
+          })}
+        </div>
+      </Option>
+      <Option
+        title="Dificultad"
+        info="1: los jefes tienen 1/3 menos de vida y daño base. 2: la dificultad original. 3: 1/3 más. Ganar en una dificultad más alta da más Elo."
+      >
+        <div className="flex flex-col items-end gap-1">
+        <div role="radiogroup" aria-label="Dificultad" className="flex flex-wrap gap-1.5">
+          {([1, 2, 3] as const).map((stage) => (
             <button
-              key={level}
+              key={stage}
               type="button"
               role="radio"
-              aria-checked={active}
-              disabled={locked}
-              onClick={() => update({ level })}
-              className={cx(
-                'border px-3 py-1 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40',
-                active ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink',
-              )}
+              aria-checked={settings.stage === stage}
+              title={STAGE_INFO[stage]}
+              onClick={() => update({ stage })}
+              className={radio(settings.stage === stage)}
             >
-              {level}
-              {locked && <span className="ml-1.5 text-[10px] font-normal uppercase tracking-widest">Pronto</span>}
+              {settings.level}
+              {stage}
             </button>
-          );
-        })}
-      </div>
-    </Option>
+          ))}
+        </div>
+        <p className="text-xs text-muted">{STAGE_INFO[settings.stage]}</p>
+        </div>
+      </Option>
+    </>
   );
 }
 

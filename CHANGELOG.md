@@ -4,6 +4,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-10
+
+### Added
+
+- COOP: dificultad AT1, AT2 y AT3 al crear la sala. AT2 es la dificultad anterior. AT1 resta 1/3 a la vida y al daño base de los jefes, y AT3 los suma (`STAGE_FACTOR` en `balance.ts`).
+- Elo COOP: el rating del nivel depende de la dificultad (AT1 1350, AT2 1500, AT3 1650).
+- Simulador: `--stage 1|2|3`.
+
+### Compatibilidad
+
+- Salas, partidas y resultados sin dificultad cuentan como AT2.
+
 ## [1.4.1] - 2026-11-10
 
 ### Changed

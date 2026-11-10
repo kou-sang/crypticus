@@ -16,6 +16,17 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.5.0',
+    date: '2026-11-10',
+    title: 'COOP: tres dificultades',
+    highlight: true,
+    news: [
+      'Al crear una sala COOP eliges AT1, AT2 o AT3. AT2 es la de siempre.',
+      'En AT1 los jefes tienen un tercio menos de vida y de daño; en AT3, un tercio más.',
+      'Ganar en una dificultad más alta da más Elo.',
+    ],
+  },
+  {
     version: '1.4.1',
     date: '2026-11-10',
     title: 'COOP: cripticos propios',

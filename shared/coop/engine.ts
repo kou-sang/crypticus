@@ -24,7 +24,11 @@ import {
   bossBaseDamage,
   partyFactor,
   BOSS_HP_PER_PLAYER,
+  DEFAULT_COOP_STAGE,
+  STAGE_FACTOR,
+  normalizeStage,
   type CoopLevel,
+  type CoopStage,
   type CoopTier,
 } from './balance';
 import {
@@ -93,7 +97,14 @@ export function pickBosses(seed: number, level: CoopLevel): BossId[] {
 }
 
 /** Crea la partida. Elige y ordena los jefes al azar y arranca la presentación del primero. */
-export function createCoopGame(input: { seed: number; level: CoopLevel; players: CoopPlayerSetup[]; now: number }): CoopResult {
+export function createCoopGame(input: {
+  seed: number;
+  level: CoopLevel;
+  /** AT1/AT2/AT3: escala la vida y el daño base de los jefes. Por defecto, 2. */
+  stage?: CoopStage;
+  players: CoopPlayerSetup[];
+  now: number;
+}): CoopResult {
   const level = LEVELS[input.level];
   if (!level.available) throw new CoopSetupError(`El nivel ${input.level} todavía no está disponible.`);
   const count = input.players.length;
@@ -108,6 +119,7 @@ export function createCoopGame(input: { seed: number; level: CoopLevel; players:
     version: 1,
     seed,
     level: input.level,
+    stage: normalizeStage(input.stage),
     totalMs: level.totalMs,
     partySize: count,
     phase: 'bossIntro',
@@ -119,7 +131,7 @@ export function createCoopGame(input: { seed: number; level: CoopLevel; players:
     roundEndsGt: null,
     modifiers: { hideCells: false, shift: 0 },
     nextModifiers: { hideCells: false, shift: 0 },
-    bosses: bossIds.map((id, index) => createBoss(id, level.categories[index]!, count)),
+    bosses: bossIds.map((id, index) => createBoss(id, level.categories[index]!, count, normalizeStage(input.stage))),
     bossIndex: 0,
     players: input.players.map((setup, seat) => createPlayer(setup, seat)),
     shop: null,
@@ -215,9 +227,9 @@ function reject(message: string): never {
   throw new RuleError(message);
 }
 
-function createBoss(id: BossId, category: CoopState['bosses'][number]['category'], players: number): BossState {
+function createBoss(id: BossId, category: CoopState['bosses'][number]['category'], players: number, stage: CoopStage): BossState {
   const hpBonus = id === 'leviathan' ? LEVIATHAN.hpBonus : 0;
-  const hp = Math.round(partyFactor(players) * players * BOSS_HP_PER_PLAYER[category] * (1 + hpBonus));
+  const hp = Math.round(partyFactor(players) * players * BOSS_HP_PER_PLAYER[category] * STAGE_FACTOR[stage] * (1 + hpBonus));
   return {
     id,
     category,
@@ -738,7 +750,8 @@ function applyPharaonisEffects(ctx: Ctx): void {
 
 /** Daño del golpe del jefe actual en `gt` (antes de las defensas del jugador). */
 export function bossDamage(state: CoopState, boss: BossState, gt: number): number {
-  return partyFactor(state.partySize) * bossBaseDamage(boss.category) * (1 + gt / state.totalMs) * (1 + boss.damageBonus);
+  const stage = STAGE_FACTOR[state.stage ?? DEFAULT_COOP_STAGE];
+  return partyFactor(state.partySize) * bossBaseDamage(boss.category) * stage * (1 + gt / state.totalMs) * (1 + boss.damageBonus);
 }
 
 function bossAttack(ctx: Ctx, target: PlayerState): void {

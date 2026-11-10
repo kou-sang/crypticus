@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOSS_HP_PER_PLAYER, partyFactor } from './balance';
 import type { BossId } from './catalog/bosses';
 import type { CharacterId } from './catalog/characters';
-import { CoopSetupError, createCoopGame, currentBoss, gameTime, offerPrice, reduceCoop, type CoopAction } from './engine';
+import { CoopSetupError, bossDamage, createCoopGame, currentBoss, gameTime, offerPrice, reduceCoop, type CoopAction } from './engine';
 import type { CoopEvent } from './events';
 import type { CoopState } from './state';
 
@@ -294,5 +294,28 @@ describe('rendición', () => {
     for (const id of ['p0', 'p1', 'p2']) state = act(state, { type: 'surrender', playerId: id, accept: true }, now).state;
     const after = act(state, { type: 'leave', playerId: 'p3' }, now);
     expect(after.state.result).toMatchObject({ won: false, surrendered: true });
+  });
+});
+
+describe('subniveles AT1/AT2/AT3', () => {
+  it('escalan la vida y el daño base de los jefes en 2/3, 1 y 4/3', () => {
+    const make = (stage: 1 | 2 | 3) => createCoopGame({ seed: 3, level: 'AT', stage, players: setup(BASIC), now: T0 }).state;
+    const [at1, at2, at3] = [make(1), make(2), make(3)];
+    expect(at2.stage).toBe(2);
+    at2.bosses.forEach((boss, i) => {
+      expect(at1.bosses[i]!.maxHp).toBe(Math.round((boss.maxHp * 2) / 3));
+      expect(at3.bosses[i]!.maxHp).toBe(Math.round((boss.maxHp * 4) / 3));
+    });
+    const gt = 60_000;
+    const base = bossDamage(at2, at2.bosses[0]!, gt);
+    expect(bossDamage(at1, at1.bosses[0]!, gt)).toBeCloseTo((base * 2) / 3);
+    expect(bossDamage(at3, at3.bosses[0]!, gt)).toBeCloseTo((base * 4) / 3);
+  });
+
+  it('sin subnivel es AT2 (partidas anteriores)', () => {
+    const created = createCoopGame({ seed: 3, level: 'AT', players: setup(BASIC), now: T0 }).state;
+    expect(created.stage).toBe(2);
+    const legacy = { ...created, stage: undefined };
+    expect(bossDamage(legacy, legacy.bosses[0]!, 0)).toBeCloseTo(bossDamage(created, created.bosses[0]!, 0));
   });
 });

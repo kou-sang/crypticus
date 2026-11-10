@@ -46,6 +46,7 @@ import {
   coopDeadline,
   coopFinished,
   coopRatingDelta,
+  coopLevelRating,
   coopShownBy,
   coopSolutions,
   coopView,
@@ -487,7 +488,7 @@ export class CompetitionRoom extends DurableObject<Env> {
       const users = await firestore.batchGet<{ modeStats?: Record<string, { rating?: number }> }>(uids.map((uid) => `users/${uid}`));
       const won = game.result.won;
       const finishedAt = Date.now();
-      const levelRating = LEVELS[coop.level].rating;
+      const levelRating = coopLevelRating(coop.level, coop.stage);
       const ratings = Object.fromEntries(uids.map((uid) => [uid, users.get(uid)?.modeStats?.coop?.rating ?? 1200]));
       // Quien abandonó pierde aunque el resto gane.
       const winnerOf = (uid: string) => won && game.players.find((p) => p.id === uid)?.status !== 'left';
@@ -495,6 +496,7 @@ export class CompetitionRoom extends DurableObject<Env> {
       const bossesDefeated = game.bosses.filter((b) => b.defeatedGt !== null).length;
       const summary: CoopResultSummary = {
         level: coop.level,
+        stage: coop.stage ?? 2,
         won,
         endedGt: game.result.endedGt,
         ...(game.result.surrendered ? { surrendered: true } : {}),
@@ -567,7 +569,7 @@ export class CompetitionRoom extends DurableObject<Env> {
                 modeRatingAfter: ratings[uid]! + (deltas[uid] ?? 0),
                 modeRatingDelta: deltas[uid] ?? 0,
                 ratingPool: 'coop',
-                coop: { level: coop.level, character: player.character, bossesDefeated },
+                coop: { level: coop.level, stage: coop.stage ?? 2, character: player.character, bossesDefeated },
               },
             },
             {

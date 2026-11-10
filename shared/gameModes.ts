@@ -56,6 +56,8 @@ export type DuelFormat = '1v1' | '2v2';
 
 export interface CoopSettings {
   level: 'AT' | 'NT';
+  /** AT1, AT2 (original) o AT3. */
+  stage: 1 | 2 | 3;
 }
 
 export interface ModeSettings {
@@ -94,7 +96,7 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
   },
   royale: { baseSec: 120, incrementSec: 5, cooldownSec: 1, skips: 0 },
   duel: { hp: 150, damage: 'difficulty', comeback: 'low', cooldownSec: 2, combo: true, surrender: { enabled: true, maxUses: 2 }, format: '1v1' },
-  coop: { level: 'AT' },
+  coop: { level: 'AT', stage: 2 },
 };
 
 export const MODE_MAX_PLAYERS: Record<GameMode, number> = { race: 8, royale: 8, duel: 2, coop: 8 };
@@ -158,10 +160,10 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
   if (settings.game === 'coop') {
     // COOP tiene motor propio (shared/coop): estas reglas solo identifican la sala.
     return {
-      config: { ...base, mode: 'timed', flow: 'free', durationSec: 60 * 60, coop: { level: settings.coop.level } },
+      config: { ...base, mode: 'timed', flow: 'free', durationSec: 60 * 60, coop: { level: settings.coop.level, stage: settings.coop.stage } },
       maxPlayers: MODE_MAX_PLAYERS.coop,
       clueCount: 1,
-      title: `COOP ${settings.coop.level}`,
+      title: `COOP ${settings.coop.level}${settings.coop.stage}`,
     };
   }
 
@@ -233,6 +235,6 @@ export function settingsFromConfig(config: CompetitionConfig): ModeSettings {
           format: config.duel.teams ? '2v2' : '1v1',
         }
       : d.duel,
-    coop: config.coop ? { level: config.coop.level } : d.coop,
+    coop: config.coop ? { level: config.coop.level, stage: config.coop.stage ?? 2 } : d.coop,
   };
 }

@@ -1,7 +1,7 @@
 // Pantalla de carga (estilo LoL): tarjetas de la party con su estado, y mientras tanto la explicación
 // (salteable), los jefes y los personajes. Empieza cuando todos están listos o vence el tiempo.
 import { memo, useEffect, useState } from 'react';
-import { LEVELS } from '../../../shared/coop/balance';
+import { LEVELS, STAGE_FACTOR, coopLevelLabel } from '../../../shared/coop/balance';
 import { BOSSES } from '../../../shared/coop/catalog/bosses';
 import { CHARACTERS } from '../../../shared/coop/catalog/characters';
 import type { CoopClientAction, CoopReply, CoopView } from '../../../shared/coop/protocol';
@@ -54,7 +54,7 @@ export const Briefing = memo(function Briefing({
     <div className="mx-auto flex h-full max-w-5xl flex-col gap-3 px-6 pb-4 pt-2">
       <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted">COOP · Nivel {view.level}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted">COOP · Nivel {coopLevelLabel(view.level, view.stage)}</p>
           <h1 className="truncate font-display text-3xl">{view.title}</h1>
         </div>
         <div className="text-right">
@@ -100,6 +100,8 @@ export const Briefing = memo(function Briefing({
           <div className="space-y-3 text-base leading-relaxed">
             <p>
               Derroten a los {view.bosses.length} jefes en {level.totalMs / 60_000} minutos. Si se acaba el tiempo o caen todos, pierden.
+              {view.stage !== 2 &&
+                ` En ${coopLevelLabel(view.level, view.stage)} los jefes tienen ${view.stage === 1 ? '1/3 menos' : '1/3 más'} de vida y daño base (×${STAGE_FACTOR[view.stage].toFixed(2).replace('.', ',')}).`}
             </p>
             <ul className="list-disc space-y-1.5 pl-6">
               <li>

@@ -58,8 +58,11 @@ Falta:
 16. Flujo al iniciar: selección de personajes (60 s; al vencer, quien no eligió recibe uno libre al azar) → carga con explicación salteable (90 s o todos listos) → presentación del primer jefe. Quien sale antes de empezar queda fuera desde el primer instante.
 17. Rendición: «Rendirse» abre una votación de 30 s de partida. Votan vivos y caídos (no los que salieron). Un «no» solo retira ese voto; pasa con el sí de todos y termina en derrota (cuenta para el Elo como cualquier derrota).
 18. Cripticos: la regla de no repetir es por jugador. Cada uno tiene su lista por dificultad, ordenada por su propio historial (`userSeen`); en una ronda se evita repetir entre aliados si hay otro disponible. Al terminar, cada uno ve solo los que le aparecieron en pantalla, y solo esos se marcan como vistos.
+19. Dificultad AT1/AT2/AT3: multiplica la vida y el daño base de los jefes por 2/3, 1 y 4/3. Como REX ASSUERUS nace con la vida actual de HAMAN, también escala. No cambian el tiempo, los cripticos, la tienda ni las habilidades. Rating del nivel para el Elo: 1350, 1500 y 1650.
 
 ## Balance (simulador)
+
+Con los bots «normal» (40 partidas por tamaño), hoy las victorias son 0 % en las tres dificultades. Jefes caídos en promedio con 8 jugadores: AT1 1,15, AT2 0,82 y AT3 0,65. La dificultad mueve la curva, pero no resuelve el problema de fondo (rondas difíciles y daño de los jugadores).
 
 ```
 npx tsx scripts/simulate-coop.ts --games 200 --party 4,6,8 --skill normal
