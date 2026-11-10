@@ -77,6 +77,8 @@ export interface PlayerState {
   debboraRecharges: number;
   hiramSwapArmed: boolean;
   assignments: Assignment[];
+  /** Ronda normal en la que ya atacó al resolver (el golpe es inmediato). Opcional: estados anteriores. */
+  attackedRound?: number | null;
   stats: PlayerStats;
 }
 

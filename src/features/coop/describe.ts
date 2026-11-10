@@ -37,7 +37,7 @@ export function describeEvent(event: CoopEvent, state: CoopState | null): string
     case 'roundEnd':
       if (event.kind === 'hard') return event.hardSuccess ? '¡Todos resolvieron! Atacan y se abre la tienda.' : 'Alguien no resolvió: todos reciben daño.';
       return event.winners.length > 0
-        ? `Atacan: ${event.winners.map((id) => nameOf(state, id)).join(', ')}.`
+        ? `Ganaron la ronda (oro): ${event.winners.map((id) => nameOf(state, id)).join(', ')}.`
         : 'Nadie resolvió a tiempo.';
     case 'bossAbility': {
       const boss = BOSSES[event.bossId].name;

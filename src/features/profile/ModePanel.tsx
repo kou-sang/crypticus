@@ -74,7 +74,7 @@ export const ModePanel = memo(function ModePanel({
             ) : (
               <>
                 <p className="mb-2 text-right font-mono text-xs text-muted">{solved} resueltos</p>
-                <HistoryTable entries={entries} modeDeltas />
+                <HistoryTable entries={entries} modeDeltas coop={pool === 'coop'} />
               </>
             )}
           </div>

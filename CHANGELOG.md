@@ -4,6 +4,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-10
+
+### Changed
+
+- COOP, ronda normal: cada jugador golpea al jefe en el momento en que resuelve sus cripticos (antes, todos al cerrar la ronda). Si el golpe derriba al jefe, la ronda termina ahí y nadie más recibe daño. El oro llega al cerrar la ronda. La ronda difícil no cambia.
+- Perfil → COOP: el historial muestra Nivel (AT1–AT3), Resultado, Ronda, Jefes derrotados y Rating, en vez de Puesto y Resueltos. Las entradas nuevas guardan `coop.rounds` y `coop.bosses`; las anteriores muestran «—» en Ronda.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added

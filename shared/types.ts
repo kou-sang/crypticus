@@ -217,6 +217,6 @@ export interface HistoryEntry {
   ratingPool?: RatingPool;
   /** Royale: control de tiempo jugado (desde v1.2). */
   royale?: { baseSec: number; incrementSec: number };
-  /** COOP: nivel, personaje y jefes derrotados. */
-  coop?: { level: 'AT' | 'NT'; stage?: 1 | 2 | 3; character: string; bossesDefeated: number };
+  /** COOP: nivel, personaje, jefes derrotados (de `bosses`) y ronda alcanzada. `bosses`/`rounds` desde v1.6. */
+  coop?: { level: 'AT' | 'NT'; stage?: 1 | 2 | 3; character: string; bossesDefeated: number; bosses?: number; rounds?: number };
 }

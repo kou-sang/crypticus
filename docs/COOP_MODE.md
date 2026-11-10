@@ -40,7 +40,7 @@ Falta:
 
 ## Interpretaciones (confirmar si alguna no es así)
 
-1. Los golpes y el oro se aplican **al terminar la ronda**, en orden de asiento. El sobrante de daño sobre un jefe muerto se pierde.
+1. Ronda normal: cada jugador golpea al jefe **en el momento** en que resuelve todos sus cripticos. Si ese golpe lo derriba, la ronda termina ahí: nadie más recibe daño y los ganadores cobran su oro. El oro y los efectos de ronda ganada llegan al cerrar la ronda. En la ronda difícil, los ataques siguen al final y en orden de asiento. El daño que sobra sobre un jefe muerto se pierde.
 2. Orden al terminar la ronda: ataques de los jugadores → efectos de PHARAONIS → quemaduras previas de LEVIATHAN → golpes del jefe → oro → inhibición de JEZABEL. Las quemaduras nuevas arden desde la ronda siguiente.
 3. Los muertos no retienen la ronda: termina cuando todos los vivos no inhibidos resolvieron. Su curación de 20 se aplica al resolver.
 4. Ronda difícil: el 60 % de los cripticos son difíciles y el 40 % muy difíciles de 2 palabras (el manual no da el reparto).
