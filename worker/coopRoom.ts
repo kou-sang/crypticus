@@ -26,11 +26,18 @@ export interface CoopStartInput {
   title: string;
   level: CoopLevel;
   players: CoopSeat[];
-  /** Ids por dificultad, ordenados (los que nadie vio, primero). */
-  pools: Record<CoopTier, string[]>;
+  /** Por jugador: ids por dificultad, ordenados por SU historial (los que nunca vio, primero). */
+  pools: Record<string, PlayerPools>;
   seed: number;
   now: number;
 }
+
+export type PlayerPools = Record<CoopTier, string[]>;
+
+/** Máximo de ids por dificultad y jugador guardados en la sala (cabe de sobra en una partida de 22 min). */
+export const COOP_POOL_LIMIT = 50;
+
+const ZERO_CURSORS = (): Record<CoopTier, number> => ({ easy: 0, medium: 0, hard: 0, veryHard2: 0, veryHard3: 0 });
 
 export interface CoopRoomState {
   version: 1;
@@ -45,11 +52,17 @@ export interface CoopRoomState {
   leftEarly: string[];
   briefing: { endsAt: number; ready: string[] } | null;
   game: CoopState | null;
-  pools: Record<CoopTier, string[]>;
-  cursors: Record<CoopTier, number>;
+  /** Por jugador (desde v1.4.1). Las salas anteriores usan `pools`/`cursors` compartidos. */
+  playerPools?: Record<string, PlayerPools>;
+  playerCursors?: Record<string, Record<CoopTier, number>>;
+  /** Legado (salas anteriores a v1.4.1): lista compartida. */
+  pools?: PlayerPools;
+  cursors?: Record<CoopTier, number>;
   /** Cripticos de la ronda en curso, por jugador y casilla. */
   assigned: Record<string, string[]>;
   played: string[];
+  /** Cripticos que cada jugador llegó a ver (el de cada casilla aparece al resolver el anterior). */
+  shown?: Record<string, string[]>;
   cooldownUntil: Record<string, number>;
   /** Quién resolvió cada criptico (soluciones al terminar). Opcional: salas creadas antes de v1.3.1. */
   solvedBy?: Record<string, string[]>;
@@ -78,10 +91,11 @@ export function createCoopRoom(input: CoopStartInput): CoopRoomState {
     leftEarly: [],
     briefing: null,
     game: null,
-    pools: input.pools,
-    cursors: { easy: 0, medium: 0, hard: 0, veryHard2: 0, veryHard3: 0 },
+    playerPools: input.pools,
+    playerCursors: Object.fromEntries(input.players.map((p) => [p.uid, ZERO_CURSORS()])),
     assigned: {},
     played: [],
+    shown: {},
     cooldownUntil: {},
     solvedBy: {},
     createdAt: input.now,
@@ -99,16 +113,51 @@ export function coopDeadline(room: CoopRoomState): number | null {
   return room.game ? nextDeadline(room.game) : null;
 }
 
-/** Siguiente criptico sin repetir en la partida para una dificultad. */
-function takeCryptic(room: CoopRoomState, tier: CoopTier): string {
+/**
+ * Siguiente criptico del jugador para una dificultad: de SU lista, sin repetir en su partida. Si hay otro
+ * disponible, evita el que ya tiene un aliado en esta ronda (el saltado queda para la próxima vez).
+ */
+function takeCryptic(room: CoopRoomState, uid: string, tier: CoopTier, takenThisRound: Set<string>): string {
+  const own = room.playerPools?.[uid];
+  const pools = own ?? room.pools;
+  if (!pools) throw new GameError('no_cryptics', 'No hay cripticos disponibles.');
+  let cursors: Record<CoopTier, number>;
+  if (own) {
+    room.playerCursors ??= {};
+    cursors = room.playerCursors[uid] ??= ZERO_CURSORS();
+  } else {
+    cursors = room.cursors ??= ZERO_CURSORS();
+  }
   for (const candidate of [tier, ...TIER_FALLBACK[tier]]) {
-    const pool = room.pools[candidate];
-    if (pool.length === 0) continue;
-    const id = pool[room.cursors[candidate] % pool.length]!;
-    room.cursors[candidate] += 1;
-    return id;
+    const pool = pools[candidate];
+    if (!pool || pool.length === 0) continue;
+    const start = cursors[candidate] % pool.length;
+    let index = start;
+    for (let step = 0; step < pool.length; step += 1) {
+      const at = (start + step) % pool.length;
+      if (!takenThisRound.has(pool[at]!)) {
+        index = at;
+        break;
+      }
+    }
+    // Se trae el elegido a la posición del cursor: los saltados siguen pendientes.
+    [pool[start], pool[index]] = [pool[index]!, pool[start]!];
+    cursors[candidate] += 1;
+    return pool[start]!;
   }
   throw new GameError('no_cryptics', 'No hay cripticos disponibles.');
+}
+
+/** Registra el criptico que el jugador tiene en pantalla (el primero sin resolver de la ronda). */
+function markShown(room: CoopRoomState, uid: string): void {
+  const player = room.game?.players.find((p) => p.id === uid);
+  if (!player) return;
+  const slot = player.assignments.findIndex((a) => !a.solved);
+  const crypticId = slot >= 0 ? room.assigned[uid]?.[slot] : undefined;
+  if (!crypticId) return;
+  room.shown ??= {};
+  const list = (room.shown[uid] ??= []);
+  if (!list.includes(crypticId)) list.push(crypticId);
 }
 
 /** Aplica los eventos del motor a la sala: asigna cripticos al abrir cada ronda. */
@@ -116,12 +165,16 @@ function absorb(room: CoopRoomState, events: CoopEvent[]): void {
   for (const event of events) {
     if (event.type !== 'roundStart') continue;
     room.assigned = {};
+    const taken = new Set<string>();
     for (const [uid, tiers] of Object.entries(event.tiers)) {
-      const ids = tiers.map((tier) => takeCryptic(room, tier));
+      const ids = tiers.map((tier) => takeCryptic(room, uid, tier, taken));
+      for (const id of ids) taken.add(id);
       room.assigned[uid] = ids;
       room.played.push(...ids);
     }
   }
+  // Siempre se llama con `room.game` ya actualizado: el primer criptico pendiente de cada uno cuenta como visto.
+  for (const uid of Object.keys(room.assigned)) markShown(room, uid);
 }
 
 /** Cierra la selección: quien no eligió recibe un personaje libre al azar (por semilla). Abre la carga. */
@@ -340,8 +393,11 @@ export function coopView(room: CoopRoomState, uid: string, events: CoopEvent[], 
   const cryptics: CoopCrypticView[] =
     me && game && game.phase === 'round'
       ? me.assignments.map((assignment, slot) => {
-          const crypticId = room.assigned[uid]?.[slot] ?? '';
-          const secret = getCrypticSecret(crypticId);
+          // Solo se revela lo que el jugador ya vio o tiene en pantalla; el resto viaja sin id ni enunciado.
+          const current = me.assignments.findIndex((a) => !a.solved);
+          const visible = assignment.solved || slot === current;
+          const crypticId = visible ? (room.assigned[uid]?.[slot] ?? '') : '';
+          const secret = visible ? getCrypticSecret(crypticId) : undefined;
           return {
             slot,
             crypticId,
@@ -368,11 +424,20 @@ export function coopView(room: CoopRoomState, uid: string, events: CoopEvent[], 
   };
 }
 
-/** Soluciones de la partida terminada: cada criptico jugado con su respuesta y quién lo resolvió. */
-export function coopSolutions(room: CoopRoomState): Solution[] {
-  return [...new Set(room.played)].map((crypticId) => {
+/** Cripticos que vio un jugador (salas anteriores a v1.4.1: los que resolvió). */
+export function coopShownBy(room: CoopRoomState, uid: string): string[] {
+  if (room.shown) return [...new Set(room.shown[uid] ?? [])];
+  return Object.entries(room.solvedBy ?? {})
+    .filter(([, solvers]) => solvers.includes(uid))
+    .map(([crypticId]) => crypticId);
+}
+
+/** Soluciones para un jugador: solo los cripticos que vio él (no los de sus aliados), con su propio resultado. */
+export function coopSolutions(room: CoopRoomState, uid: string): Solution[] {
+  return coopShownBy(room, uid).map((crypticId) => {
     const secret = getCrypticSecret(crypticId);
-    return { crypticId, answer: secret?.answer ?? null, explanation: secret?.explanation ?? null, solvedBy: room.solvedBy?.[crypticId] ?? [] };
+    const solved = room.solvedBy?.[crypticId]?.includes(uid) ?? false;
+    return { crypticId, answer: secret?.answer ?? null, explanation: secret?.explanation ?? null, solvedBy: solved ? [uid] : [] };
   });
 }
 

@@ -16,6 +16,14 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.4.1',
+    date: '2026-11-10',
+    title: 'COOP: cripticos propios',
+    highlight: false,
+    news: ['En COOP cada uno recibe cripticos que nunca vio, aunque sus compañeros ya los hayan jugado.'],
+    fixes: ['Al terminar una partida COOP ves solo tus cripticos, no los de tus aliados ni los que no llegaron a salir.'],
+  },
+  {
     version: '1.4.0',
     date: '2026-11-10',
     title: 'COOP: arreglos y rendición',

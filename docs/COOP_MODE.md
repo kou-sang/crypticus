@@ -57,6 +57,7 @@ Falta:
 15. Las habilidades activas se usan en ronda, tienda o votación (una vez por ronda). No se usan durante la presentación de un jefe.
 16. Flujo al iniciar: selección de personajes (60 s; al vencer, quien no eligió recibe uno libre al azar) → carga con explicación salteable (90 s o todos listos) → presentación del primer jefe. Quien sale antes de empezar queda fuera desde el primer instante.
 17. Rendición: «Rendirse» abre una votación de 30 s de partida. Votan vivos y caídos (no los que salieron). Un «no» solo retira ese voto; pasa con el sí de todos y termina en derrota (cuenta para el Elo como cualquier derrota).
+18. Cripticos: la regla de no repetir es por jugador. Cada uno tiene su lista por dificultad, ordenada por su propio historial (`userSeen`); en una ronda se evita repetir entre aliados si hay otro disponible. Al terminar, cada uno ve solo los que le aparecieron en pantalla, y solo esos se marcan como vistos.
 
 ## Balance (simulador)
 

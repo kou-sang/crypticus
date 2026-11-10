@@ -6,6 +6,8 @@ import type { CharacterId } from '../shared/coop/catalog/characters';
 const T0 = 1_000_000;
 const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
 
+const pools = () => ({ easy: ids('e', 50), medium: ids('m', 50), hard: ids('h', 50), veryHard2: ids('v', 10), veryHard3: [] as string[] });
+
 function input(): CoopStartInput {
   return {
     competitionId: 'c1',
@@ -17,7 +19,8 @@ function input(): CoopStartInput {
       { uid: 'c', name: 'Caro' },
       { uid: 'd', name: 'Dani' },
     ],
-    pools: { easy: ids('e', 50), medium: ids('m', 50), hard: ids('h', 50), veryHard2: ids('v', 10), veryHard3: [] },
+    // Misma lista para todos (peor caso): en una ronda no deben repetirse entre aliados.
+    pools: Object.fromEntries(['a', 'b', 'c', 'd'].map((uid) => [uid, pools()])),
     seed: 7,
     now: T0,
   };
@@ -81,7 +84,21 @@ describe('sala COOP', () => {
     expect(new Set(all).size).toBe(8);
     const view = coopView(room, 'a', [], T0);
     expect(view.game?.seed).toBe(0);
-    expect(view.mine.cryptics.map((c) => c.crypticId)).toEqual(room.assigned.a);
+    // Solo el criptico en pantalla viaja con id y enunciado; el siguiente aparece al resolver el anterior.
+    expect(view.mine.cryptics.map((c) => c.crypticId)).toEqual([room.assigned.a![0], '']);
+    expect(room.shown?.a).toEqual([room.assigned.a![0]]);
+  });
+
+  it('cada jugador sigue su propio historial: lo que vio un aliado no cuenta', async () => {
+    const base = input();
+    base.pools.a = { ...pools(), easy: ['fresco-a', ...ids('e', 49)], medium: ['fresco-a-m', ...ids('m', 49)] };
+    const room = createCoopRoom(base);
+    for (const [uid, character] of Object.entries(PICKS)) {
+      await applyCoopAction(room, uid, { kind: 'pick', character }, T0, verify);
+      await applyCoopAction(room, uid, { kind: 'lock' }, T0, verify);
+    }
+    advanceCoop(room, T0 + COOP_BRIEFING_MS + 6_000);
+    expect(['fresco-a', 'fresco-a-m']).toContain(room.assigned.a![0]);
   });
 
   it('respuesta incorrecta: espera de 2 s; correcta: marca el criptico', async () => {
@@ -95,8 +112,13 @@ describe('sala COOP', () => {
     const right = await applyCoopAction(room, 'a', { kind: 'answer', slot, guess: 'ok' }, start + 3_500, verify);
     expect(right.reply.correct).toBe(true);
     expect(room.game?.players[0]!.assignments[slot]!.solved).toBe(true);
-    const solution = coopSolutions(room).find((s) => s.crypticId === room.assigned.a![slot]);
+    const solution = coopSolutions(room, 'a').find((s) => s.crypticId === room.assigned.a![slot]);
     expect(solution?.solvedBy).toEqual(['a']);
+    // Los aliados no ven en sus soluciones los cripticos de «a».
+    const others = new Set(coopSolutions(room, 'b').map((s) => s.crypticId));
+    for (const id of room.assigned.a!) expect(others.has(id)).toBe(false);
+    // Resolver el primero deja ver el segundo.
+    if (slot === 0) expect(room.shown?.a).toEqual(room.assigned.a);
   });
 
   it('quien sale antes de empezar queda fuera desde el primer instante', async () => {

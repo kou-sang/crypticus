@@ -46,6 +46,7 @@ import {
   coopDeadline,
   coopFinished,
   coopRatingDelta,
+  coopShownBy,
   coopSolutions,
   coopView,
   createCoopRoom,
@@ -204,7 +205,7 @@ export class CompetitionRoom extends DurableObject<Env> {
     if (this.coop) {
       if (!this.coop.players.some((p) => p.uid === uid)) throw new Error('not_participant');
       if (!coopFinished(this.coop)) throw new Error('not_finished');
-      return coopSolutions(this.coop);
+      return coopSolutions(this.coop, uid);
     }
     const state = this.state;
     if (!state) throw new Error('not_found');
@@ -586,15 +587,13 @@ export class CompetitionRoom extends DurableObject<Env> {
             { kind: 'setFields', path: `users/${uid}`, fields: { 'modeStats.coop.rating': ratings[uid]! + (deltas[uid] ?? 0) } },
           ];
         }),
-        // Cripticos vistos: no se repetirán en las próximas salas de estos jugadores.
-        ...(coop.played.length > 0
-          ? existing.map<Write>((uid) => ({
-              kind: 'mergeMap',
-              path: `userSeen/${uid}`,
-              field: 'seen',
-              entries: Object.fromEntries(coop.played.map((id) => [id, finishedAt])),
-            }))
-          : []),
+        // Cripticos vistos, de cada jugador por separado: solo los que vio él cuentan para no repetírselos.
+        ...existing.flatMap<Write>((uid) => {
+          const seen = coopShownBy(coop, uid);
+          return seen.length > 0
+            ? [{ kind: 'mergeMap', path: `userSeen/${uid}`, field: 'seen', entries: Object.fromEntries(seen.map((id) => [id, finishedAt])) }]
+            : [];
+        }),
       ];
       await firestore.commit(writes);
       this.sync = { synced: true, attempts: this.sync.attempts };
