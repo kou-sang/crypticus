@@ -4,6 +4,25 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-10
+
+### Added
+
+- COOP: chat de sala desplegable al costado durante la selección, la carga y la partida (botón «Chat»), con aviso de mensajes nuevos. Es el mismo chat de la sala.
+- COOP: efectos de estado en la información del jugador (arena, panel propio y detalle): quemadura, veneno, inhibición, soldado, resguardo de Enoch, armadura, furia, ataque, oro, fuerza, sacrificio, pila de Samson y bendición de Urias, con su duración restante (`shared/coop/effects.ts`).
+- COOP: el registro muestra cada golpe (jugador → jefe o REX, jefe → jugador, con crítico, evasión, soldado y Túnica de José) y el daño directo con su causa. Los números flotantes de daño directo llevan la causa («−7 quemadura», «−1 veneno»).
+
+### Changed
+
+- COOP: el oro es 15 + número de la ronda en curso **por cada criptico resuelto**, en el momento (antes, 15 + ronda por ronda normal ganada, al cerrarla). Vale también en la ronda difícil y aunque no se complete la ronda; solo cobran los vivos.
+- COOP, ronda difícil (grupal): cripticos medios o difíciles hasta la ronda 10; desde la 11, difíciles o muy difíciles (`HARD_ROUND_TIER_TABLE`).
+- COOP: el registro muestra lo más reciente arriba (antes quedaba oculto bajo el desborde) y guarda 12 líneas.
+- Las grillas de respuesta ya no le quitan el foco a otro campo de texto (por ejemplo, el chat) al aparecer un criptico nuevo.
+
+### Fixed
+
+- COOP: una curación (o la regeneración de GOLIATH) volvía a reproducir la sacudida de daño en la tarjeta del jugador o del jefe, y parecía daño sin causa.
+
 ## [1.6.0] - 2026-11-10
 
 ### Changed

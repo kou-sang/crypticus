@@ -6,7 +6,7 @@ import {
   DEAD_ROUND_CRYPTICS,
   DEAD_SOLVE_HEAL,
   DECISION_MS,
-  GOLD_PER_ROUND_BASE,
+  GOLD_PER_CRYPTIC_BASE,
   HARD_ROUND_CRYPTICS,
   HINTS_MAX,
   HINTS_START,
@@ -513,11 +513,10 @@ function endRound(ctx: Ctx): void {
     }
   }
 
-  // 4) Oro y progreso de las rondas ganadas.
+  // 4) Progreso de las rondas ganadas (el oro ya llegó con cada criptico resuelto).
   if (kind === 'normal') {
     for (const player of winners) {
       if (player.status !== 'alive') continue;
-      gainGold(ctx, player, GOLD_PER_ROUND_BASE + round, 'round');
       player.stats.roundsWon += 1;
       onNormalWin(state, player);
     }
@@ -908,7 +907,7 @@ function heal(ctx: Ctx, target: PlayerState, rawAmount: number, source: HealSour
   return amount;
 }
 
-function gainGold(ctx: Ctx, player: PlayerState, raw: number, source: 'round' | 'offer' | 'tubalcain' | 'nathan', withBonus = true): void {
+function gainGold(ctx: Ctx, player: PlayerState, raw: number, source: 'cryptic' | 'offer' | 'tubalcain' | 'nathan', withBonus = true): void {
   const amount = Math.round(raw * (withBonus ? 1 + goldBonus(player, gtOf(ctx)) : 1));
   if (amount <= 0) return;
   player.gold += amount;
@@ -1150,7 +1149,9 @@ function solve(ctx: Ctx, player: PlayerState, slot: number): void {
     if (target) heal(ctx, target, DEAD_SOLVE_HEAL, 'deadSolve', player);
     return;
   }
-  // Ronda normal: quien resuelve todos sus cripticos golpea al jefe en el momento (el oro llega al cerrar la ronda).
+  // Oro inmediato por criptico resuelto: 15 + número de la ronda en curso (con los bonus de oro).
+  gainGold(ctx, player, GOLD_PER_CRYPTIC_BASE + state.roundNumber, 'cryptic');
+  // Ronda normal: quien resuelve todos sus cripticos golpea al jefe en el momento.
   if (state.roundKind === 'normal' && allSolved(player)) {
     const boss = currentBoss(state);
     if (boss && boss.hp > 0 && player.attackedRound !== state.roundNumber) {

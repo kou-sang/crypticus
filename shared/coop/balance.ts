@@ -77,12 +77,19 @@ export const TIER_TABLE: ReadonlyArray<{ from: number; shares: Partial<Record<Co
   { from: 21, shares: { medium: 0.2, hard: 0.5, veryHard2: 0.3 } },
   { from: 31, shares: { hard: 0.2, veryHard2: 0.5, veryHard3: 0.3 } },
 ];
-/** Ronda difícil: «difíciles y muy difíciles» (reparto sin confirmar). */
-export const HARD_ROUND_TIERS: Partial<Record<CoopTier, number>> = { hard: 0.6, veryHard2: 0.4 };
+/**
+ * Ronda difícil (grupal): medio o difícil hasta la ronda 10; desde la 11, difícil o muy difícil.
+ * Reparto sin confirmar.
+ */
+export const HARD_ROUND_TIER_TABLE: ReadonlyArray<{ from: number; shares: Partial<Record<CoopTier, number>> }> = [
+  { from: 1, shares: { medium: 0.5, hard: 0.5 } },
+  { from: 11, shares: { hard: 0.6, veryHard2: 0.4 } },
+];
 /** Jugadores muertos: un criptico fácil, medio o difícil. */
 export const DEAD_TIERS: Partial<Record<CoopTier, number>> = { easy: 1, medium: 1, hard: 1 };
 
-export const GOLD_PER_ROUND_BASE = 15; // + número de la ronda ganada.
+/** Oro por cada criptico resuelto (jugadores vivos): 15 + número de la ronda en curso. */
+export const GOLD_PER_CRYPTIC_BASE = 15;
 export const DEAD_SOLVE_HEAL = 20; // Al aliado vivo con menos HP.
 
 export const SHOP_MS = 45_000;

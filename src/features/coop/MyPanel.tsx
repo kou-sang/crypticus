@@ -9,7 +9,7 @@ import type { CoopState, ItemInstance, PlayerState } from '../../../shared/coop/
 import { armor, attackPower, maxHp } from '../../../shared/coop/stats';
 import { Button } from '../../components/ui';
 import { cx, errorMessage } from '../../lib/utils';
-import { HpBar } from './Arena';
+import { HpBar, StatusChips } from './Arena';
 import { ItemSilhouette } from './silhouettes';
 
 const DAMAGE_TYPE_LABEL = (type: DamageType) =>
@@ -85,6 +85,7 @@ export const MyPanel = memo(function MyPanel({
         <p className="shrink-0 truncate text-xs text-muted">
           {DAMAGE_TYPE_LABEL(me.damageType)} · Armadura {Math.round(armor(me, gt))} · Pistas {me.hints}
         </p>
+        <StatusChips player={me} state={state} gt={gt} className="shrink-0" />
         <ul className="grid min-h-0 flex-1 grid-cols-4 gap-2">
           {slots.map((item, index) => (
             <li key={item?.uid ?? `empty${index}`}>

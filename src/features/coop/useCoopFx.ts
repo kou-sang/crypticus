@@ -27,6 +27,12 @@ export interface LogLine {
   text: string;
 }
 
+/** Pulso visual de un objetivo: `n` cambia la `key` (reinicia la animación); `kind` decide cuál se reproduce. */
+export interface Pulse {
+  n: number;
+  kind: 'hit' | 'heal';
+}
+
 export interface LiceStain {
   id: number;
   left: number;
@@ -36,7 +42,18 @@ export interface LiceStain {
 
 const FLOATER_MS = 1_300;
 const BANNER_MS = 3_200;
-const LOG_LIMIT = 8;
+const LOG_LIMIT = 12;
+
+/** Causa corta junto al número flotante (el golpe del jefe no la lleva: se ve en el registro). */
+const DAMAGE_CAUSE: Partial<Record<Extract<CoopEvent, { type: 'damage' }>['source'], string>> = {
+  burn: 'quemadura',
+  poison: 'veneno',
+  pharaonis: 'PHARAONIS',
+  apple: 'manzana',
+  offer: 'oferta',
+  gedeon: 'soldado',
+  naaman: 'ofrenda',
+};
 const LICE_LIMIT = 14;
 
 /** 12 → 18 px según la cantidad (proporcional, en 4 escalones). */
@@ -64,9 +81,8 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
   const [banners, setBanners] = useState<Banner[]>([]);
   const [log, setLog] = useState<LogLine[]>([]);
   const [lice, setLice] = useState<LiceStain[]>([]);
-  /** Contador por objetivo: cambia la `key` del elemento para reiniciar la animación. */
-  const [hits, setHits] = useState<Record<string, number>>({});
-  const [heals, setHeals] = useState<Record<string, number>>({});
+  /** Último pulso por objetivo: antes, una curación remontaba la tarjeta con la sacudida de daño. */
+  const [pulses, setPulses] = useState<Record<string, Pulse>>({});
   const seq = useRef(0);
   const latestState = useRef(state);
   latestState.current = state;
@@ -85,7 +101,7 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
         const id = () => (seq.current += 1);
 
         for (const event of events) {
-          const text = describeEvent(event, current);
+          const text = describeEvent(event, current, meId);
           if (text) lines.push({ id: id(), text });
           switch (event.type) {
             case 'playerHit':
@@ -102,11 +118,19 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
             case 'bossHit':
               if (event.evaded) nextFloaters.push({ id: id(), target: event.playerId, text: 'Esquivó', tone: 'miss', size: 12 });
               break;
-            case 'damage':
-              nextFloaters.push({ id: id(), target: event.playerId, text: `−${event.amount}`, tone: 'damage', size: floaterSize(event.amount) });
+            case 'damage': {
+              const cause = DAMAGE_CAUSE[event.source];
+              nextFloaters.push({
+                id: id(),
+                target: event.playerId,
+                text: cause ? `−${event.amount} ${cause}` : `−${event.amount}`,
+                tone: 'damage',
+                size: floaterSize(event.amount),
+              });
               hitTargets.add(event.playerId);
               if (event.playerId === meId) cues.add(event.amount >= 50 ? 'danger' : 'hit');
               break;
+            }
             case 'heal':
               nextFloaters.push({ id: id(), target: event.playerId, text: `+${event.amount}`, tone: 'heal', size: floaterSize(event.amount) });
               healTargets.add(event.playerId);
@@ -171,8 +195,7 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
         }
         if (lines.length > 0) setLog((prev) => [...prev, ...lines].slice(-LOG_LIMIT));
         if (stains.length > 0) setLice((prev) => [...prev, ...stains].slice(-LICE_LIMIT));
-        if (hitTargets.size > 0) setHits((prev) => bump(prev, hitTargets));
-        if (healTargets.size > 0) setHeals((prev) => bump(prev, healTargets));
+        if (hitTargets.size > 0 || healTargets.size > 0) setPulses((prev) => pulse(prev, hitTargets, healTargets));
         if (events.some((e) => e.type === 'shopOpen')) playUi('open');
         // Un sonido por tipo y por difusión: varios golpes juntos no se apilan.
         for (const cue of cues) playCue(cue);
@@ -180,11 +203,14 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
     [subscribe, meId],
   );
 
-  return { floaters, banners, log, lice, hits, heals };
+  return { floaters, banners, log, lice, pulses };
 }
 
-function bump(prev: Record<string, number>, targets: Set<string>): Record<string, number> {
+/** Si en la misma difusión un objetivo recibe daño y curación, se ve el daño. */
+function pulse(prev: Record<string, Pulse>, hit: Set<string>, healed: Set<string>): Record<string, Pulse> {
   const next = { ...prev };
-  for (const target of targets) next[target] = (next[target] ?? 0) + 1;
+  for (const target of new Set([...hit, ...healed])) {
+    next[target] = { n: (prev[target]?.n ?? 0) + 1, kind: hit.has(target) ? 'hit' : 'heal' };
+  }
   return next;
 }

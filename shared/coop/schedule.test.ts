@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawTier, roundDurationMs, roundKind, tierShares } from './schedule';
+import { drawTier, hardTierShares, roundDurationMs, roundKind, tierShares } from './schedule';
 import { armorReduction, bossBaseDamage, partyFactor } from './balance';
 import { chance, roll, shuffled } from './rng';
 
@@ -33,7 +33,16 @@ describe('duraciones y dificultad', () => {
     expect(drawTier(7, 3, 'a', 0, 'normal')).toBe(drawTier(7, 3, 'a', 0, 'normal'));
     const tiers = new Set(Array.from({ length: 200 }, (_, i) => drawTier(7, 3, `p${i}`, 0, 'normal')));
     expect([...tiers].sort()).toEqual(['easy', 'medium']);
-    expect(['hard', 'veryHard2']).toContain(drawTier(1, 3, 'a', 0, 'hard'));
+  });
+
+  it('ronda difícil: medio o difícil hasta la 10; difícil o muy difícil desde la 11', () => {
+    expect(hardTierShares(3)).toEqual({ medium: 0.5, hard: 0.5 });
+    expect(hardTierShares(10)).toEqual({ medium: 0.5, hard: 0.5 });
+    expect(hardTierShares(11)).toEqual({ hard: 0.6, veryHard2: 0.4 });
+    const early = new Set(Array.from({ length: 200 }, (_, i) => drawTier(7, 3, `p${i}`, 0, 'hard')));
+    expect([...early].sort()).toEqual(['hard', 'medium']);
+    const late = new Set(Array.from({ length: 200 }, (_, i) => drawTier(7, 14, `p${i}`, 0, 'hard')));
+    expect([...late].sort()).toEqual(['hard', 'veryHard2']);
   });
 });
 

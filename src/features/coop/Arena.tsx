@@ -4,9 +4,10 @@ import { memo } from 'react';
 import { BOSSES, SUMMONS } from '../../../shared/coop/catalog/bosses';
 import { CHARACTERS } from '../../../shared/coop/catalog/characters';
 import type { BossState, CoopState, PlayerState } from '../../../shared/coop/state';
+import { statusEffects } from '../../../shared/coop/effects';
 import { maxHp } from '../../../shared/coop/stats';
 import { cx } from '../../lib/utils';
-import type { Floater, FxTarget } from './useCoopFx';
+import type { Floater, FxTarget, Pulse } from './useCoopFx';
 
 const CATEGORY_LABELS: Record<BossState['category'], string> = {
   easy: 'Easy',
@@ -67,19 +68,32 @@ function Floaters({ items }: { items: Floater[] }) {
   );
 }
 
-/** Estados con nombre (antes eran emojis): quemadura de LEVIATHAN, soldado de GEDEON, inhibición de JEZABEL. */
-function StatusChips({ player, state }: { player: PlayerState; state: CoopState }) {
-  const chips: Array<{ key: string; text: string; title: string }> = [];
-  if (player.soldierHp > 0) chips.push({ key: 'soldier', text: `Soldado ${player.soldierHp}`, title: 'Soldado de GEDEON: recibe el daño primero' });
-  if (player.burns.length > 0)
-    chips.push({ key: 'burn', text: `Quemado ×${player.burns.length}`, title: 'Quemadura de LEVIATHAN: pierde vida al final de cada ronda' });
-  if (player.inhibitedRound === state.roundNumber) chips.push({ key: 'inhibit', text: 'Inhibido', title: 'JEZABEL: esta ronda no resuelve' });
-  if (chips.length === 0) return null;
+/** Chips de efectos de estado (perjudiciales en rojo, beneficios en verde). El detalle va en el `title`. */
+export function StatusChips({
+  player,
+  state,
+  gt,
+  className,
+}: {
+  player: PlayerState;
+  state: CoopState;
+  gt: number;
+  className?: string;
+}) {
+  const effects = statusEffects(state, player, gt);
+  if (effects.length === 0) return null;
   return (
-    <span className="flex flex-wrap justify-center gap-1">
-      {chips.map((chip) => (
-        <span key={chip.key} title={chip.title} className="border border-accent px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide text-accent">
-          {chip.text}
+    <span className={cx('flex flex-wrap gap-1', className)}>
+      {effects.map((effect) => (
+        <span
+          key={effect.key}
+          title={effect.detail}
+          className={cx(
+            'border px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide',
+            effect.tone === 'bad' ? 'border-accent text-accent' : 'border-ok text-ok',
+          )}
+        >
+          {effect.label}
         </span>
       ))}
     </span>
@@ -91,16 +105,16 @@ const Seat = memo(function Seat({
   state,
   isMe,
   floaters,
-  hit,
-  heal,
+  pulse,
+  gt,
   onSelect,
 }: {
   player: PlayerState;
   state: CoopState;
+  gt: number;
   isMe: boolean;
   floaters: Floater[];
-  hit: number;
-  heal: number;
+  pulse: Pulse | undefined;
   onSelect: (id: string) => void;
 }) {
   const angle = ((SEAT_ANGLES[player.seat] ?? 0) * Math.PI) / 180;
@@ -112,15 +126,15 @@ const Seat = memo(function Seat({
     <div className="absolute w-44 -translate-x-1/2 -translate-y-1/2" style={{ left: `${left}%`, top: `${top}%` }}>
       <Floaters items={floaters} />
       <button
-        key={`h${hit}-${heal}`}
+        key={`p${pulse?.n ?? 0}`}
         type="button"
         onClick={() => onSelect(player.id)}
         className={cx(
           'flex w-full flex-col gap-1 border-2 bg-paper px-2 py-1.5 text-left hover:bg-paper-2',
           isMe ? 'border-accent' : 'border-ink',
           down && 'opacity-55',
-          hit > 0 && 'coop-shake',
-          heal > 0 && 'coop-heal-glow',
+          pulse?.kind === 'hit' && 'coop-shake',
+          pulse?.kind === 'heal' && 'coop-heal-glow',
         )}
         aria-label={`${player.name}, ${CHARACTERS[player.character].name}: ${player.status === 'alive' ? `${player.hp} de vida` : 'fuera de combate'}`}
       >
@@ -132,7 +146,7 @@ const Seat = memo(function Seat({
         </span>
         <span className={cx('truncate text-xs leading-tight', isMe ? 'font-bold text-accent' : 'text-muted')}>{player.name}</span>
         <HpBar hp={player.hp} max={hpMax} />
-        <StatusChips player={player} state={state} />
+        <StatusChips player={player} state={state} gt={gt} className="justify-center" />
       </button>
     </div>
   );
@@ -142,15 +156,16 @@ export const Arena = memo(function Arena({
   state,
   meId,
   floaters,
-  hits,
-  heals,
+  pulses,
+  gt,
   onSelect,
 }: {
   state: CoopState;
   meId: string;
+  /** Tiempo de partida redondeado al segundo (así la arena no se repinta en cada refresco del reloj). */
+  gt: number;
   floaters: Floater[];
-  hits: Record<string, number>;
-  heals: Record<string, number>;
+  pulses: Record<string, Pulse>;
   onSelect: (playerId: string) => void;
 }) {
   const boss = state.bosses[state.bossIndex];
@@ -165,11 +180,11 @@ export const Arena = memo(function Arena({
           <div className="relative">
             <Floaters items={at('boss')} />
             <div
-              key={`b${hits.boss ?? 0}-${heals.boss ?? 0}`}
+              key={`b${pulses.boss?.n ?? 0}`}
               className={cx(
                 'flex w-72 flex-col items-center gap-1 border-2 border-ink bg-paper px-4 py-3 text-center',
-                (hits.boss ?? 0) > 0 && 'coop-shake',
-                (heals.boss ?? 0) > 0 && 'coop-heal-glow',
+                pulses.boss?.kind === 'hit' && 'coop-shake',
+                pulses.boss?.kind === 'heal' && 'coop-heal-glow',
                 boss.hp <= 0 && 'opacity-40',
               )}
             >
@@ -185,8 +200,11 @@ export const Arena = memo(function Arena({
             <div className="relative">
               <Floaters items={at('rex')} />
               <div
-                key={`r${hits.rex ?? 0}`}
-                className={cx('flex w-44 flex-col items-center gap-1 border-2 border-ink bg-paper px-3 py-2 text-center', (hits.rex ?? 0) > 0 && 'coop-shake')}
+                key={`r${pulses.rex?.n ?? 0}`}
+                className={cx(
+                  'flex w-44 flex-col items-center gap-1 border-2 border-ink bg-paper px-3 py-2 text-center',
+                  pulses.rex?.kind === 'hit' && 'coop-shake',
+                )}
               >
                 <p className="font-display text-sm font-semibold uppercase leading-tight">{SUMMONS.rexAssuerus.name}</p>
                 <HpBar hp={rex.hp} max={rex.maxHp} tone="accent" />
@@ -202,8 +220,8 @@ export const Arena = memo(function Arena({
           state={state}
           isMe={player.id === meId}
           floaters={at(player.id)}
-          hit={hits[player.id] ?? 0}
-          heal={heals[player.id] ?? 0}
+          pulse={pulses[player.id]}
+          gt={gt}
           onSelect={onSelect}
         />
       ))}

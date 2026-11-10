@@ -17,7 +17,7 @@ export type CoopEvent =
   | { type: 'damage'; gt: number; playerId: string; amount: number; source: DamageSource }
   | { type: 'heal'; gt: number; playerId: string; amount: number; source: HealSource }
   | { type: 'bossHeal'; gt: number; amount: number; source: 'goliath' | 'jezabel' }
-  | { type: 'gold'; gt: number; playerId: string; amount: number; source: 'round' | 'offer' | 'tubalcain' | 'nathan' | 'stolen' }
+  | { type: 'gold'; gt: number; playerId: string; amount: number; source: 'cryptic' | 'offer' | 'tubalcain' | 'nathan' | 'stolen' }
   | { type: 'death'; gt: number; playerId: string }
   | { type: 'revive'; gt: number; playerId: string; hp: number }
   | { type: 'bossAbility'; gt: number; bossId: BossId; ability: PharaonisEffect | 'summonRex' | 'rexDown' | 'hideCells' | 'shift' | 'inhibit' | 'burn' | 'surcharge'; detail?: string }

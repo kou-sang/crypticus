@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { cx } from '../../lib/utils';
 import { enumerationGroups, toCellLetter } from './playUtils';
-import { attachKeyboard, centerInView, focusKeyboard, isKeyboardFocused } from './keyboardInput';
+import { attachKeyboard, centerInView, focusKeyboard, isKeyboardFocused, isTypingElsewhere } from './keyboardInput';
 
 export function AnswerGrid({
   enumeration,
@@ -84,7 +84,8 @@ export function AnswerGrid({
     };
     const detach = attachKeyboard({ onText: write, onErase: erase, onKey, onFocusChange: setFocused });
     // Escritorio: el foco va solo a la grilla nueva. Celular: si el teclado ya estaba abierto, sigue abierto.
-    if (!isKeyboardFocused() && window.matchMedia('(pointer: fine)').matches) focusKeyboard();
+    // Si escribe en el chat u otro campo, no se le quita el foco.
+    if (!isKeyboardFocused() && !isTypingElsewhere() && window.matchMedia('(pointer: fine)').matches) focusKeyboard();
     if (isKeyboardFocused()) window.requestAnimationFrame(center);
     return detach;
   }, []);

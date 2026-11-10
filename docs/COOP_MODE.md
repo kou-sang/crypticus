@@ -40,10 +40,10 @@ Falta:
 
 ## Interpretaciones (confirmar si alguna no es así)
 
-1. Ronda normal: cada jugador golpea al jefe **en el momento** en que resuelve todos sus cripticos. Si ese golpe lo derriba, la ronda termina ahí: nadie más recibe daño y los ganadores cobran su oro. El oro y los efectos de ronda ganada llegan al cerrar la ronda. En la ronda difícil, los ataques siguen al final y en orden de asiento. El daño que sobra sobre un jefe muerto se pierde.
-2. Orden al terminar la ronda: ataques de los jugadores → efectos de PHARAONIS → quemaduras previas de LEVIATHAN → golpes del jefe → oro → inhibición de JEZABEL. Las quemaduras nuevas arden desde la ronda siguiente.
+1. Ronda normal: cada jugador golpea al jefe **en el momento** en que resuelve todos sus cripticos. Si ese golpe lo derriba, la ronda termina ahí y nadie más recibe daño. El oro (15 + número de la ronda en curso, con los bonus de oro) se cobra al resolver **cada** criptico, en cualquier ronda y aunque no se complete; solo lo cobran los vivos. Los efectos de ronda ganada llegan al cerrar la ronda. En la ronda difícil, los ataques siguen al final y en orden de asiento. El daño que sobra sobre un jefe muerto se pierde.
+2. Orden al terminar la ronda: ataques de los jugadores → efectos de PHARAONIS → quemaduras previas de LEVIATHAN → golpes del jefe → progreso de ronda ganada → inhibición de JEZABEL. Las quemaduras nuevas arden desde la ronda siguiente.
 3. Los muertos no retienen la ronda: termina cuando todos los vivos no inhibidos resolvieron. Su curación de 20 se aplica al resolver.
-4. Ronda difícil: el 60 % de los cripticos son difíciles y el 40 % muy difíciles de 2 palabras (el manual no da el reparto).
+4. Ronda difícil: hasta la ronda 10, 50 % medios y 50 % difíciles; desde la 11, 60 % difíciles y 40 % muy difíciles de 2 palabras (`HARD_ROUND_TIER_TABLE`; el reparto no está confirmado).
 5. Las armas especiales (Espada de Goliat, Arco de Jonatán, Anillo del Faraón) también cambian el tipo de daño. La Vara de Moisés no es un arma.
 6. La armadura de los jugadores reduce cualquier daño del jefe. El veneno, las quemaduras, la manzana, el 5 % de PHARAONIS y los 100 de la oferta secreta son daño directo, sin armadura.
 7. El Manto de Elías evita el golpe por completo (0 de daño).

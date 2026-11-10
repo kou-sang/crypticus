@@ -2,10 +2,12 @@
 import { memo } from 'react';
 import { CHARACTERS } from '../../../shared/coop/catalog/characters';
 import { ITEMS } from '../../../shared/coop/catalog/items';
+import { statusEffects } from '../../../shared/coop/effects';
 import { gameTime } from '../../../shared/coop/engine';
 import type { CoopState } from '../../../shared/coop/state';
 import { armor, attackPower, maxHp } from '../../../shared/coop/stats';
 import { Modal } from '../../components/Modal';
+import { cx } from '../../lib/utils';
 import { HpBar } from './Arena';
 import { itemName } from './MyPanel';
 import { ItemSilhouette } from './silhouettes';
@@ -24,6 +26,7 @@ export const PlayerDetails = memo(function PlayerDetails({
   const player = state.players.find((p) => p.id === playerId);
   const gt = gameTime(state, now);
   const character = player ? CHARACTERS[player.character] : null;
+  const effects = player ? statusEffects(state, player, gt) : [];
   return (
     <Modal open={Boolean(player)} onClose={onClose} title={player && character ? `${player.name} · ${character.name}` : ''}>
       {player && character && (
@@ -36,9 +39,29 @@ export const PlayerDetails = memo(function PlayerDetails({
                 {Math.round(attackPower(state, player, gt, state.bosses[state.bossIndex]?.id === 'goliath'))} · Armadura {Math.round(armor(player, gt))} ·
                 Pistas {player.hints}
               </p>
-              {player.soldierHp > 0 && <p className="text-xs">Soldado de Gedeon: {player.soldierHp} de vida.</p>}
-              {player.burns.length > 0 && <p className="text-xs">Quemado ×{player.burns.length} (LEVIATHAN): pierde vida al final de cada ronda.</p>}
             </div>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-muted">Efectos de estado</p>
+            {effects.length === 0 ? (
+              <p className="text-muted">Sin efectos.</p>
+            ) : (
+              <ul className="space-y-1">
+                {effects.map((effect) => (
+                  <li key={effect.key} className="flex items-baseline gap-2">
+                    <span
+                      className={cx(
+                        'shrink-0 border px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide',
+                        effect.tone === 'bad' ? 'border-accent text-accent' : 'border-ok text-ok',
+                      )}
+                    >
+                      {effect.label}
+                    </span>
+                    <span className="text-xs">{effect.detail}.</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Pasiva</p>

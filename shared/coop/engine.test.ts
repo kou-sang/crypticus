@@ -83,13 +83,13 @@ describe('createCoopGame', () => {
 });
 
 describe('ronda normal', () => {
-  it('termina cuando todos resuelven: cada uno ataca y gana 15 + ronda de oro', () => {
+  it('termina cuando todos resuelven: cada uno ataca y gana 15 + ronda de oro por criptico', () => {
     const game = startGame('serpentis');
     const boss = currentBoss(game.state)!;
     const { state, events } = solveAll(game.state, game.now + 20_000);
     expect(ofType(events, 'roundEnd')[0]!.winners).toHaveLength(4);
     expect(currentBoss(state)!.hp).toBe(boss.maxHp - 4 * 30);
-    expect(state.players.every((p) => p.gold === 16)).toBe(true);
+    expect(state.players.every((p) => p.gold === 2 * 16)).toBe(true);
     expect(state.roundNumber).toBe(2);
   });
 
@@ -234,7 +234,7 @@ describe('jefes', () => {
     let current = state;
     const decision = current.decisions[0]!;
     for (const p of current.players) current = act(current, { type: 'vote', playerId: p.id, decisionId: decision.id, accept: true }, game.now + 12_000).state;
-    expect(current.players.every((p) => p.gold === 16 + 300)).toBe(true);
+    expect(current.players.every((p) => p.gold === 2 * 16 + 300)).toBe(true);
     expect(currentBoss(current)!.damageBonus).toBeCloseTo(0.1);
     expect(current.phase).toBe('round');
   });
@@ -322,7 +322,7 @@ describe('subniveles AT1/AT2/AT3', () => {
 });
 
 describe('ronda normal: golpe inmediato', () => {
-  it('quien resuelve sus cripticos ataca en el momento; el oro llega al cerrar la ronda', () => {
+  it('quien resuelve sus cripticos ataca en el momento y gana oro por cada criptico', () => {
     const { state, now } = startGame('serpentis');
     const hp = currentBoss(state)!.hp;
     let current = state;
@@ -336,11 +336,13 @@ describe('ronda normal: golpe inmediato', () => {
     expect(ofType(events, 'playerHit').filter((h) => h.playerId === 'p0')).toHaveLength(1);
     expect(currentBoss(current)!.hp).toBeLessThan(hp);
     expect(current.phase).toBe('round');
-    expect(ofType(events, 'gold')).toHaveLength(0);
-    // Al cerrar la ronda no vuelve a atacar.
+    // 15 + ronda 1 por cada criptico, en el momento de resolverlo.
+    expect(ofType(events, 'gold').map((g) => g.amount)).toEqual([16, 16]);
+    // Al cerrar la ronda no vuelve a atacar ni cobra de nuevo.
     const end = solveAll(current, now + 2_000, ['p0']);
     expect(ofType(end.events, 'playerHit').filter((h) => h.playerId === 'p0')).toHaveLength(0);
-    expect(ofType(end.events, 'gold').some((g) => g.playerId === 'p0')).toBe(true);
+    expect(ofType(end.events, 'gold').some((g) => g.playerId === 'p0')).toBe(false);
+    expect(end.state.players[0]!.gold).toBe(32);
   });
 
   it('si el golpe derriba al jefe, la ronda termina ya y nadie recibe daño', () => {
@@ -355,5 +357,16 @@ describe('ronda normal: golpe inmediato', () => {
     });
     expect(ofType(events, 'bossDefeated')).toHaveLength(1);
     expect(ofType(events, 'bossHit')).toHaveLength(0);
+  });
+});
+
+describe('oro por criptico', () => {
+  it('cobra 15 + ronda por cada criptico aunque no complete la ronda', () => {
+    const { state, now } = startGame('serpentis');
+    const first = act(state, { type: 'solve', playerId: 'p0', slot: 0 }, now + 1_000);
+    expect(ofType(first.events, 'gold')).toEqual([{ type: 'gold', gt: 1_000, playerId: 'p0', amount: 16, source: 'cryptic' }]);
+    expect(ofType(first.events, 'playerHit')).toHaveLength(0); // El golpe llega con el 2/2.
+    const end = reduceCoop(first.state, { type: 'tick' }, now + 80_000);
+    expect(end.state.players[0]!.gold).toBe(16);
   });
 });

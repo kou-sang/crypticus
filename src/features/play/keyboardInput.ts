@@ -134,6 +134,13 @@ export function isKeyboardFocused(): boolean {
   return element !== null && document.activeElement === element;
 }
 
+/** El jugador escribe en otro campo (chat, formulario): una grilla nueva no debe quitarle el foco. */
+export function isTypingElsewhere(): boolean {
+  const active = document.activeElement;
+  if (!active || active === element) return false;
+  return active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea, select'));
+}
+
 /** Al salir de la partida: cierra el teclado y quita el input. */
 export function releaseKeyboard(): void {
   current = null;
