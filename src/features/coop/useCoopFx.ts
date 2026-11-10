@@ -37,11 +37,17 @@ export interface Pulse {
   kind: 'hit' | 'heal';
 }
 
+/** Mancha de los piojos de PHARAONIS. Posición en %, tamaño en px, giro en grados, alfa de la tinta 0–1. */
 export interface LiceStain {
   id: number;
   left: number;
   top: number;
-  size: number;
+  width: number;
+  height: number;
+  rotate: number;
+  /** `border-radius` irregular (8 radios): da la forma de mancha. */
+  radius: string;
+  alpha: number;
 }
 
 const FLOATER_MS = 1_300;
@@ -59,7 +65,9 @@ const DAMAGE_CAUSE: Partial<Record<Extract<CoopEvent, { type: 'damage' }>['sourc
   gedeon: 'soldado',
   naaman: 'ofrenda',
 };
-const LICE_LIMIT = 14;
+/** Manchas por golpe y tope en pantalla (las más viejas se van primero). */
+const LICE_PER_HIT = 10;
+const LICE_LIMIT = 60;
 
 /** 12 → 18 px según la cantidad (proporcional, en 4 escalones). */
 export function floaterSize(amount: number): number {
@@ -71,6 +79,25 @@ export function floaterSize(amount: number): number {
 }
 
 /** PRNG pequeño para ubicar las manchas a partir de la semilla del evento. */
+/**
+ * Mancha al azar: tamaño de 10 a 64 px, proporción 0,6–1,6, giro libre y contorno irregular. Translúcida
+ * (14–24 % de la tinta del tema): donde se superponen dos o más, se oscurece por acumulación.
+ */
+function liceStain(random: () => number): Omit<LiceStain, 'id'> {
+  const base = 10 + random() ** 1.6 * 54; // Más manchas chicas que grandes.
+  const ratio = 0.6 + random();
+  const r = () => `${Math.round(30 + random() * 40)}%`;
+  return {
+    left: random() * 94,
+    top: random() * 88,
+    width: Math.round(base * Math.sqrt(ratio)),
+    height: Math.round(base / Math.sqrt(ratio)),
+    rotate: Math.round(random() * 360),
+    radius: `${r()} ${r()} ${r()} ${r()} / ${r()} ${r()} ${r()} ${r()}`,
+    alpha: 0.14 + random() * 0.1,
+  };
+}
+
 function seeded(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -181,7 +208,7 @@ export function useCoopFx(subscribe: (listener: (events: CoopEvent[]) => void) =
               break;
             case 'lice': {
               const random = seeded(event.seed);
-              for (let i = 0; i < 3; i += 1) stains.push({ id: id(), left: random() * 90, top: random() * 80, size: 18 + random() * 36 });
+              for (let i = 0; i < LICE_PER_HIT; i += 1) stains.push({ id: id(), ...liceStain(random) });
               break;
             }
             case 'roundStart':

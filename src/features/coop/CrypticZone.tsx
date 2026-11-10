@@ -303,7 +303,20 @@ export function CrypticZone({
         ))}
       </ol>
       {lice.map((stain) => (
-        <span key={stain.id} className="coop-lice" style={{ left: `${stain.left}%`, top: `${stain.top}%`, width: stain.size, height: stain.size }} />
+        <span
+          key={stain.id}
+          className="coop-lice"
+          style={{
+            left: `${stain.left}%`,
+            top: `${stain.top}%`,
+            width: stain.width,
+            height: stain.height,
+            borderRadius: stain.radius,
+            transform: `rotate(${stain.rotate}deg)`,
+            // Color de la tinta del tema (oscura en claros, clara en oscuros) con alfa bajo.
+            background: `color-mix(in srgb, var(--ink) ${Math.round(stain.alpha * 100)}%, transparent)`,
+          }}
+        />
       ))}
     </section>
   );
