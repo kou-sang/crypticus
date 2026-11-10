@@ -14,6 +14,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ### Fixed
 
+- Revancha: si dos jugadores la piden a la vez terminaban en salas distintas (cada pedido creaba una y la última pisaba `rematchId`). Ahora la sala de revancha tiene id fijo por partida (`rematchRoomId`: `<primera sala>-r<n>`) y se crea con precondición «no existe»: el primero la crea y los demás entran a esa misma sala, también con «Cambiar parámetros». Si ya empezó, avisa.
+- Revancha: conserva el código de 4 letras de la sala anterior (si sigue libre) y el mismo chat (`chatId`: el de la primera sala de la serie). Reglas de Firestore: se puede escribir en ese chat desde la sala de revancha (`viaId`).
 - Al resolver un criptico (sobre todo en Royale, que pasa al siguiente sin pausa) la página bajaba sola: cada grilla nueva se centraba en pantalla. Ahora solo se desplaza si las casillas no se ven enteras (por ejemplo, tapadas por el teclado del celular).
 - Chat de sala: alto fijo con barra de desplazamiento siempre visible (antes empezaba con el alto de un renglón y crecía con los mensajes).
 

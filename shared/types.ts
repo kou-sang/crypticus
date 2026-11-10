@@ -130,6 +130,8 @@ export interface Competition extends CompetitionConfig {
   clueCount?: number; // Cantidad pedida al crear; el servidor elige los cripticos al iniciar.
   rematchId?: string; // Partida terminada: última propuesta de revancha (la ven todos los jugadores).
   rematchOf?: string; // Sala de revancha: partida de origen.
+  chatId?: string; // Revancha: el chat es el de la primera sala de la serie (`competitions/{chatId}/messages`).
+  rematchDepth?: number; // Revancha: número en la serie (1, 2, 3…).
   invitedNames?: Record<string, string>; // Sala de revancha: nombres de los invitados (para mostrar quién falta).
   declinedIds?: string[]; // Sala de revancha: invitados que la rechazaron.
   teams?: Record<string, 0 | 1>; // Duel 2 vs 2: equipo elegido por cada jugador en la sala.

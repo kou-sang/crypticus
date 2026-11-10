@@ -238,7 +238,8 @@ export function CoopLive({ competition, profile }: { competition: Competition; p
   const lowTimeRound = useRef(0);
   const fullscreen = useCoopFullscreen();
   const chat = useChatDrawer();
-  const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId: competition.id }), [competition.id]);
+  const chatRoot = competition.chatId ?? competition.id;
+  const chatTarget = useMemo(() => ({ kind: 'competition' as const, competitionId: chatRoot, viaId: competition.id }), [chatRoot, competition.id]);
   const chatRef = useRef<HTMLElement>(null);
   // El registro de la partida también va al chat, intercalado por hora (hora del servidor, como los mensajes).
   const systemLines = useMemo(

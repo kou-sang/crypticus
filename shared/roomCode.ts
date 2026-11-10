@@ -25,6 +25,14 @@ export function normalizeRoomCode(raw: string): string | null {
 }
 
 /** Nombre de la sala: código + anfitrión. */
+/**
+ * Id fijo de la sala de revancha de una partida: dos pedidos a la vez apuntan a la misma sala.
+ * `<primera sala>-r<n>`: corto aunque se encadenen muchas revanchas (los ids de sala tienen tope de 64).
+ */
+export function rematchRoomId(origin: { id: string; chatId?: string; rematchDepth?: number }): string {
+  return `${origin.chatId ?? origin.id}-r${(origin.rematchDepth ?? 0) + 1}`;
+}
+
 export function roomTitle(code: string, hostName: string): string {
   return `${code} · ${hostName}`.slice(0, 60);
 }

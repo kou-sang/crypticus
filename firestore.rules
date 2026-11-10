@@ -123,10 +123,15 @@ service cloud.firestore {
 
       match /messages/{messageId} {
         allow read: if signedIn();
+        // Participante de la sala dueña del chat, o (revancha) de una sala `viaId` que usa este chat.
         allow create: if signedIn()
           && request.resource.data.authorId == request.auth.uid
           && validText(request.resource.data.text)
-          && request.auth.uid in get(/databases/$(database)/documents/competitions/$(competitionId)).data.participantIds;
+          && (request.auth.uid in get(/databases/$(database)/documents/competitions/$(competitionId)).data.participantIds
+              || (request.resource.data.get('viaId', '') is string
+                  && request.resource.data.get('viaId', '') != ''
+                  && get(/databases/$(database)/documents/competitions/$(request.resource.data.viaId)).data.get('chatId', '') == competitionId
+                  && request.auth.uid in get(/databases/$(database)/documents/competitions/$(request.resource.data.viaId)).data.participantIds));
         allow update, delete: if false;
       }
     }
