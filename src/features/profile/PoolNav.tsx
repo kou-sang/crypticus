@@ -1,5 +1,5 @@
 // Selector de modo del perfil, al estilo Lichess: columna a la izquierda en PC y fila deslizable en móvil.
-// Royale se abre en sus categorías de tiempo; Boss aparece deshabilitado hasta que exista.
+// Royale se abre en sus categorías de tiempo; COOP aparece deshabilitado hasta tener su panel (PR 4 de COOP).
 import { memo } from 'react';
 import { GAME_LABELS } from '../../../shared/scoring';
 import { ROYALE_CATEGORIES, ROYALE_CATEGORY_LABELS, type RatingPool } from '../../../shared/ratingPools';
@@ -98,7 +98,7 @@ export const PoolNav = memo(function PoolNav({
             ♛
           </span>
           <span>
-            <span className="block whitespace-nowrap text-[11px] font-semibold uppercase tracking-widest">{GAME_LABELS.boss.title}</span>
+            <span className="block whitespace-nowrap text-[11px] font-semibold uppercase tracking-widest">{GAME_LABELS.coop.title}</span>
             <span className="block text-xs">Pronto</span>
           </span>
         </p>

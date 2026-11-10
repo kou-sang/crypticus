@@ -9,16 +9,20 @@ export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
 /** Cómo termina una competencia. */
 export type CompetitionMode =
   | 'timed' // Reloj fijo; gana quien más puntos tenga al acabar.
-  | 'count' // Carrera: termina cuando alguien llega a `targetCount` cripticos.
-  | 'boss'; // Cooperativo: todos contra un jefe con barra de vida.
+  | 'count'; // Carrera: termina cuando alguien llega a `targetCount` cripticos.
 
 /** Modo de juego elegido en la UI. Define (vía `buildConfig`) las reglas del motor. */
 export type GameMode =
   | 'race' // Carrera: gana quien llega antes a la meta.
   | 'royale' // Hasta 8, reloj por jugador estilo ajedrez; gana el último en pie.
   | 'duel' // 1 contra 1 con vida: acertar primero daña al rival.
-  | 'boss'; // Cooperativo contra un jefe (próximamente).
-export const GAME_MODES: readonly GameMode[] = ['race', 'royale', 'duel', 'boss'];
+  | 'coop'; // Cooperativo: de 4 a 8 contra jefes (motor propio en shared/coop).
+export const GAME_MODES: readonly GameMode[] = ['race', 'royale', 'duel', 'coop'];
+
+/** COOP: nivel elegido en la sala. */
+export interface CoopConfig {
+  level: 'AT' | 'NT';
+}
 
 export type DuelDamage = 'difficulty' | 'speed';
 
@@ -43,7 +47,6 @@ export type GameFlow =
 
 export type ComebackLevel = 'off' | 'low' | 'high';
 export type TierMix = 'balanced' | 'easy' | 'hard' | 'progressive';
-export type BossLevel = 'normal' | 'hard' | 'epic';
 export type CompetitionStatus = 'lobby' | 'live' | 'finished';
 export type DeviceKind = 'mobile' | 'desktop';
 export type CompetitionVisibility = 'public' | 'friends' | 'private';
@@ -57,7 +60,6 @@ export interface CompetitionConfig {
   difficultyVote: boolean; // Solo 'rounds': se vota la dificultad del siguiente.
   rivalCountdownSec: number; // Solo 'rounds': tras el primer acierto, segundos para que el resto acierte (0 = cierra al instante).
   comeback: ComebackLevel; // Bonus proporcional para quien va perdiendo.
-  bossLevel: BossLevel;
   maxHintsPerClue: number;
   hintsPerGame?: number; // Tope de pistas por jugador en toda la partida (Race). Ausente = sin tope.
   tierMix: TierMix; // Solo 'free': proporción/orden de dificultades.
@@ -66,6 +68,7 @@ export interface CompetitionConfig {
   intervalSec?: number; // 'rounds': pausa entre cripticos (se revela la solución anterior).
   duel?: DuelConfig;
   royale?: RoyaleConfig;
+  coop?: CoopConfig;
   cooldownSec?: number; // Espera mínima entre respuestas (anti spam).
   surrender?: { enabled: boolean; maxUses: number }; // Race: rendirse ante un criptico.
 }
@@ -128,13 +131,14 @@ export interface Competition extends CompetitionConfig {
   invitedNames?: Record<string, string>; // Sala de revancha: nombres de los invitados (para mostrar quién falta).
   declinedIds?: string[]; // Sala de revancha: invitados que la rechazaron.
   teams?: Record<string, 0 | 1>; // Duel 2 vs 2: equipo elegido por cada jugador en la sala.
+  coopCharacters?: Record<string, string>; // COOP: personaje elegido por cada jugador (ver shared/coop/catalog).
 }
 
 export interface Participant {
   uid: string;
   displayName: string;
   team?: 0 | 1; // Duel 2 vs 2.
-  score: number; // En 'boss' = daño infligido.
+  score: number;
   solvedIds: string[];
   hintsByClue: Record<string, number>;
   hintsUsed: number;
@@ -166,7 +170,7 @@ export interface ModeStats {
   draws: number;
 }
 
-export type RankedMode = Exclude<GameMode, 'boss'>;
+export type RankedMode = Exclude<GameMode, 'coop'>;
 export const RANKED_MODES: readonly RankedMode[] = ['race', 'royale', 'duel'];
 
 export interface UserProfile {
@@ -212,4 +216,6 @@ export interface HistoryEntry {
   ratingPool?: RatingPool;
   /** Royale: control de tiempo jugado (desde v1.2). */
   royale?: { baseSec: number; incrementSec: number };
+  /** COOP: nivel, personaje y jefes derrotados. */
+  coop?: { level: 'AT' | 'NT'; character: string; bossesDefeated: number };
 }

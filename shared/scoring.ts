@@ -1,8 +1,7 @@
-// Reglas de puntuación, daño al jefe, ranking, validación y rating.
+// Reglas de puntuación, ranking, validación y rating (COOP tiene su propio motor en shared/coop).
 // Funciones puras usadas por el motor (servidor) y por la UI (previsualización).
 
 import type {
-  BossLevel,
   ComebackLevel,
   CompetitionConfig,
   Difficulty,
@@ -12,6 +11,10 @@ import type {
   RankedParticipant,
   TierMix,
 } from './types';
+import { PARTY_MAX as COOP_MAX_PLAYERS, PARTY_MIN as COOP_MIN_PLAYERS } from './coop/balance';
+
+/** COOP visible y jugable. Se activa cuando esté la pantalla de partida (PR 3 de COOP). */
+export const COOP_ENABLED = false;
 
 export const DEFAULT_CONFIG: CompetitionConfig = {
   mode: 'timed',
@@ -22,7 +25,6 @@ export const DEFAULT_CONFIG: CompetitionConfig = {
   difficultyVote: false,
   rivalCountdownSec: 0,
   comeback: 'off',
-  bossLevel: 'normal',
   maxHintsPerClue: 3,
   tierMix: 'balanced',
 };
@@ -63,7 +65,11 @@ export const GAME_LABELS: Record<GameMode, { title: string; tagline: string; des
     tagline: 'Cara a cara',
     description: 'El mismo criptico para todos, 1 contra 1 o 2 contra 2 con vida compartida. Quien lo resuelve primero golpea; con combo, los aciertos seguidos golpean más fuerte.',
   },
-  boss: { title: 'Boss', tagline: 'Próximamente', description: 'Hasta cuatro jugadores contra un mismo adversario. En preparación.' },
+  coop: {
+    title: 'COOP',
+    tagline: 'Cooperativo',
+    description: 'De 4 a 8 jugadores contra una serie de jefes bíblicos, con personajes, habilidades y tienda. Solo PC.',
+  },
 };
 
 export const DUEL_DAMAGE_LABELS: Record<DuelDamage, { title: string; description: string }> = {
@@ -82,17 +88,10 @@ export const TIER_MIX_LABELS: Record<TierMix, string> = {
   hard: 'Mayoría difíciles',
   progressive: 'Progresiva (fácil → difícil)',
 };
-export const BOSS_LABELS: Record<BossLevel, string> = { normal: 'Normal', hard: 'Duro', epic: 'Épico' };
 
 // ---------- Puntaje ----------
 
 const BASE_POINTS = 100;
-const BOSS_BASE_DAMAGE = 100;
-const BOSS_MIN_RATIO = 0.1;
-
-export const BOSS_HP_PER_PLAYER: Record<BossLevel, number> = { normal: 350, hard: 500, epic: 700 };
-/** Vida que recupera el jefe por cada respuesta incorrecta. */
-export const BOSS_HEAL_ON_MISS: Record<BossLevel, number> = { normal: 15, hard: 25, epic: 40 };
 
 const TIER_MULTIPLIER: Record<Difficulty, number> = { easy: 1, medium: 1.5, hard: 2 };
 /** Remontada: suave = 1 + 1·brecha; fuerte = 1 + 2·brecha (brecha = (líder − tú) / líder). */
@@ -127,15 +126,6 @@ export interface SolveInput {
 export function computeSolvePoints(input: SolveInput): number {
   const base = BASE_POINTS * TIER_MULTIPLIER[input.tier];
   return Math.round(base * comebackFactor(input.comeback, input.score, input.leaderScore));
-}
-
-/** Daño al jefe: proporcional al tiempo restante (con un mínimo del 10 %). */
-export function computeBossDamage(tier: Difficulty, remainingRatio: number): number {
-  return Math.round(BOSS_BASE_DAMAGE * TIER_MULTIPLIER[tier] * Math.max(BOSS_MIN_RATIO, clamp01(remainingRatio)));
-}
-
-export function bossMaxHp(level: BossLevel, players: number): number {
-  return BOSS_HP_PER_PLAYER[level] * Math.max(1, players);
 }
 
 // ---------- Duelo ----------
@@ -175,10 +165,6 @@ export function computeDuelDamage(input: {
   );
 }
 
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
-}
-
 // ---------- Validación ----------
 
 /** Valida una configuración; devuelve la lista de errores (vacía si es válida). */
@@ -193,7 +179,6 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
   if (maxPlayers < LIMITS.minPlayers || maxPlayers > LIMITS.maxPlayers) {
     errors.push(`Los jugadores deben estar entre ${LIMITS.minPlayers} y ${LIMITS.maxPlayers}.`);
   }
-  if (config.winByTwo && config.mode === 'boss') errors.push('"Diferencia de dos" no aplica al modo jefe.');
   if (config.winByTwo && maxPlayers < 2) errors.push('"Diferencia de dos" requiere al menos 2 jugadores.');
   if (config.difficultyVote && config.flow !== 'rounds') errors.push('Votar dificultad requiere el flujo por rondas.');
   if (config.rivalCountdownSec < 0 || config.rivalCountdownSec > LIMITS.maxRivalCountdownSec) {
@@ -204,7 +189,13 @@ export function validateConfig(config: CompetitionConfig, maxPlayers: number): s
   if (config.hintsPerGame !== undefined && (config.hintsPerGame < 1 || config.hintsPerGame > 10)) {
     errors.push('Las pistas por partida deben estar entre 1 y 10.');
   }
-  if (config.game === 'boss') errors.push('El modo Boss estará disponible próximamente.');
+  if (config.game === 'coop') {
+    if (!COOP_ENABLED) errors.push('El modo COOP estará disponible próximamente.');
+    if (config.coop?.level !== 'AT') errors.push('El nivel NT todavía no está disponible.');
+    if (maxPlayers < COOP_MIN_PLAYERS || maxPlayers > COOP_MAX_PLAYERS) {
+      errors.push(`COOP se juega de ${COOP_MIN_PLAYERS} a ${COOP_MAX_PLAYERS} jugadores.`);
+    }
+  }
   if (config.game === 'duel') {
     const needed = config.duel?.teams ? 4 : 2;
     if (maxPlayers !== needed) errors.push(config.duel?.teams ? 'Duel 2 vs 2 es para 4 jugadores.' : 'Duel 1 vs 1 es para 2 jugadores.');

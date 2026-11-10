@@ -2,7 +2,6 @@
 // (lo que llega del cliente o de Firestore nunca se usa sin pasar por aquí) y el cliente para copiar reglas.
 import { DEFAULT_CONFIG, validateConfig } from './scoring';
 import type {
-  BossLevel,
   ComebackLevel,
   CompetitionConfig,
   CompetitionMode,
@@ -21,11 +20,11 @@ const num = (value: unknown, fallback: number): number => (typeof value === 'num
 const int = (value: unknown, fallback: number): number => Math.round(num(value, fallback));
 const obj = (value: unknown): Raw | null => (value && typeof value === 'object' && !Array.isArray(value) ? (value as Raw) : null);
 
-const MODES: readonly CompetitionMode[] = ['timed', 'count', 'boss'];
+const MODES: readonly CompetitionMode[] = ['timed', 'count'];
 const FLOWS: readonly GameFlow[] = ['free', 'rounds'];
-const GAMES: readonly GameMode[] = ['race', 'royale', 'duel', 'boss'];
+const GAMES: readonly GameMode[] = ['race', 'royale', 'duel', 'coop'];
+const COOP_LEVELS = ['AT', 'NT'] as const;
 const COMEBACKS: readonly ComebackLevel[] = ['off', 'low', 'high'];
-const BOSS_LEVELS: readonly BossLevel[] = ['normal', 'hard', 'epic'];
 const TIER_MIXES: readonly TierMix[] = ['balanced', 'easy', 'hard', 'progressive'];
 const DAMAGES: readonly DuelDamage[] = ['difficulty', 'speed'];
 export const VISIBILITIES: readonly CompetitionVisibility[] = ['public', 'friends', 'private'];
@@ -36,6 +35,7 @@ export function normalizeConfig(raw: Raw): CompetitionConfig {
   const duel = obj(raw.duel);
   const royale = obj(raw.royale);
   const surrender = obj(raw.surrender);
+  const coop = obj(raw.coop);
   const game = GAMES.includes(raw.game as GameMode) ? (raw.game as GameMode) : undefined;
   return {
     mode: oneOf(raw.mode, MODES, d.mode),
@@ -46,7 +46,6 @@ export function normalizeConfig(raw: Raw): CompetitionConfig {
     difficultyVote: raw.difficultyVote === true,
     rivalCountdownSec: int(raw.rivalCountdownSec, 0),
     comeback: oneOf(raw.comeback, COMEBACKS, d.comeback),
-    bossLevel: oneOf(raw.bossLevel, BOSS_LEVELS, d.bossLevel),
     maxHintsPerClue: int(raw.maxHintsPerClue, 0),
     tierMix: oneOf(raw.tierMix, TIER_MIXES, d.tierMix),
     ...(typeof raw.hintsPerGame === 'number' ? { hintsPerGame: int(raw.hintsPerGame, 1) } : {}),
@@ -67,6 +66,7 @@ export function normalizeConfig(raw: Raw): CompetitionConfig {
       ? { royale: { baseSec: int(royale.baseSec, 120), incrementSec: int(royale.incrementSec, 0), skips: int(royale.skips, 0) } }
       : {}),
     ...(surrender ? { surrender: { enabled: surrender.enabled === true, maxUses: int(surrender.maxUses, 1) } } : {}),
+    ...(game === 'coop' ? { coop: { level: oneOf(coop?.level, COOP_LEVELS, 'AT') } } : {}),
   };
 }
 
@@ -108,7 +108,6 @@ export const CONFIG_KEYS = [
   'difficultyVote',
   'rivalCountdownSec',
   'comeback',
-  'bossLevel',
   'maxHintsPerClue',
   'tierMix',
   'hintsPerGame',
@@ -118,7 +117,9 @@ export const CONFIG_KEYS = [
   'duel',
   'royale',
   'surrender',
+  'coop',
   // Campos de versiones anteriores que una edición limpia.
+  'bossLevel',
   'scoring',
   'extraTime',
   'wrongPenalty',

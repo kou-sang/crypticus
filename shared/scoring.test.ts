@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   comebackFactor,
   duelComboMultiplier,
-  computeBossDamage,
   computeRatingDeltas,
   computeSolvePoints,
   DEFAULT_CONFIG,
@@ -50,14 +49,6 @@ describe('computeSolvePoints', () => {
   });
 });
 
-describe('computeBossDamage', () => {
-  it('proporcional al tiempo restante con mínimo del 10 %', () => {
-    expect(computeBossDamage('hard', 1)).toBe(200);
-    expect(computeBossDamage('hard', 0.5)).toBe(100);
-    expect(computeBossDamage('easy', 0)).toBe(10);
-  });
-});
-
 describe('rankParticipants', () => {
   it('desempata por pistas y luego por tiempo', () => {
     const ranked = rankParticipants([
@@ -99,7 +90,6 @@ describe('validateConfig', () => {
     expect(validateConfig(DEFAULT_CONFIG, 8)).toEqual([]);
   });
   it('rechaza combinaciones inválidas', () => {
-    expect(validateConfig({ ...DEFAULT_CONFIG, mode: 'boss', winByTwo: true }, 4).length).toBeGreaterThan(0);
     expect(validateConfig({ ...DEFAULT_CONFIG, difficultyVote: true, flow: 'free' }, 4).length).toBeGreaterThan(0);
     expect(validateConfig({ ...DEFAULT_CONFIG, maxHintsPerClue: 11 }, 4).length).toBeGreaterThan(0);
   });

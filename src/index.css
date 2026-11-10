@@ -180,27 +180,6 @@ body {
 }
 .float-up { animation: float-up 1100ms ease-out forwards; }
 
-@keyframes boss-idle {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-.boss-idle { animation: boss-idle 2.4s ease-in-out infinite; }
-
-@keyframes boss-hit {
-  0% { transform: translateX(0) rotate(0); filter: none; }
-  20% { transform: translateX(-10px) rotate(-6deg); filter: brightness(1.8) saturate(0); }
-  40% { transform: translateX(8px) rotate(4deg); }
-  60% { transform: translateX(-5px) rotate(-2deg); }
-  100% { transform: none; filter: none; }
-}
-.boss-hit { animation: boss-hit 480ms ease-out; }
-
-@keyframes boss-heal {
-  0%, 100% { filter: none; }
-  50% { filter: drop-shadow(0 0 14px var(--ok)) brightness(1.15); }
-}
-.boss-heal { animation: boss-heal 700ms ease-in-out; }
-
 @keyframes toast-in {
   from { transform: translateX(110%); opacity: 0; }
   to { transform: none; opacity: 1; }

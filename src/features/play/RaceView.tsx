@@ -140,8 +140,7 @@ export function SequentialRace({ state, uid, actions, offsetMs }: { state: LiveS
           heading={`Criptico ${currentId ? cursor + 1 : cursor}`}
           maxHintsPerClue={state.config.maxHintsPerClue}
           gameHintsLeft={gameHintsLeft(state, me)}
-          isBoss={false}
-          actions={actions}
+                    actions={actions}
           successLabel={() => `¡Correcto! Llevas ${me.solvedIds.length + (currentId ? 1 : 0)}/${state.config.targetCount}`}
           cooldownMs={cooldownMs(state.config)}
           footer={<SurrenderButton state={state} uid={uid} actions={actions} />}

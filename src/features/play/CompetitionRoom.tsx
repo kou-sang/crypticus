@@ -16,7 +16,6 @@ import type { Competition, Participant } from '../../../shared/types';
 import { Badge, EmptyState, PageHeader, PageLoader } from '../../components/ui';
 import { BackLink } from '../../components/BackLink';
 import { ChatPanel } from '../chat/ChatPanel';
-import { BossBar } from './BossBar';
 import { DeviceNotice } from './DeviceNotice';
 import { FaintOverlay } from './FaintOverlay';
 import { RivalToasts } from './RivalToasts';
@@ -27,6 +26,7 @@ import { ResultsView } from './ResultsView';
 import { Scoreboard } from './Scoreboard';
 import { EndVote } from './EndVote';
 import { GameClock, StartCountdown } from './GameClock';
+import { CoopLive } from '../coop/CoopLive';
 
 export default function CompetitionRoom() {
   const { competitionId = '' } = useParams();
@@ -37,7 +37,9 @@ export default function CompetitionRoom() {
   const comp = competition.data;
   const isMember = comp?.participantIds.includes(profile.uid) ?? false;
   // El WebSocket se abre ya en el lobby: al iniciar, el estado llega directo del DO (sin esperar a Firestore).
-  const game = useGameChannel(competitionId, comp !== null && comp.status !== 'finished' && (isMember || comp.status === 'live'));
+  // COOP usa su propio canal (CoopLive): aquí solo los demás modos.
+  const coopRoom = comp?.game === 'coop';
+  const game = useGameChannel(competitionId, comp !== null && !coopRoom && comp.status !== 'finished' && (isMember || comp.status === 'live'));
   const offset = game.clockOffsetMs;
   const isLive = comp?.status === 'live' || (comp?.status === 'lobby' && game.state !== null);
 
@@ -98,6 +100,8 @@ export default function CompetitionRoom() {
     );
 
   const isParticipant = comp.participantIds.includes(profile.uid);
+  // COOP en vivo: pantalla completa propia (lobby y resultados siguen siendo los comunes).
+  if (coopRoom && comp.status === 'live') return <CoopLive competition={comp} profile={profile} />;
   const canJoin =
     comp.visibility !== 'friends' ||
     comp.hostId === profile.uid ||
@@ -124,7 +128,7 @@ export default function CompetitionRoom() {
       {/* Barra fija: el tiempo sigue a la vista al hacer scroll o con el teclado del móvil abierto. */}
       {isLive && !countdown && (
         <div className="sticky top-14 z-10 -mx-4 -mt-4 mb-6 flex items-center justify-end gap-3 border-b border-line bg-paper/95 px-4 py-2 backdrop-blur">
-          {live?.participants[profile.uid] && !live.boss && !live.config.royale && (
+          {live?.participants[profile.uid] && !live.config.royale && (
             <span className="mr-auto font-mono text-sm">
               {live.config.game === 'race' ? (
                 <>
@@ -172,7 +176,6 @@ export default function CompetitionRoom() {
               <EmptyState title="Estás mirando como espectador">La partida ya comenzó.</EmptyState>
             ) : (
               <>
-                {live.boss && <BossBar hp={live.boss.hp} maxHp={live.boss.maxHp} level={live.config.bossLevel} />}
                 <PlayView state={live} uid={profile.uid} actions={game.actions} solutions={game.solutions} offsetMs={offset} />
                 <RivalToasts state={live} uid={profile.uid} />
                 {live.round?.closesAt != null && !live.round.solvedBy.includes(profile.uid) && (
@@ -194,7 +197,6 @@ export default function CompetitionRoom() {
                 meId={profile.uid}
                 total={total}
                 metric={live ? rankMetric(live.config) : 'score'}
-                isBoss={comp.mode === 'boss'}
                 unit={comp.game === 'duel' ? 'vida' : undefined}
               />
             </section>

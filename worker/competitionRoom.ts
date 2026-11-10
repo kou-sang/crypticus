@@ -39,6 +39,21 @@ import { AppError } from './errors';
 import { FirestoreRest, type Write } from './firestore';
 import { buildCatalog, getCrypticSecret, solutionsFor } from './secrets';
 import type { Env } from './env';
+import {
+  CoopActionError,
+  advanceCoop,
+  applyCoopAction,
+  coopDeadline,
+  coopFinished,
+  coopRatingDelta,
+  coopView,
+  createCoopRoom,
+  type CoopRoomState,
+  type CoopStartInput,
+} from './coopRoom';
+import type { CoopEvent } from '../shared/coop/events';
+import { COOP_BRIEFING_MS, type CoopClientAction } from '../shared/coop/protocol';
+import { LEVELS } from '../shared/coop/balance';
 
 export interface StartInput {
   competitionId: string;
@@ -123,12 +138,15 @@ const MAX_COMPENSATION_MS = 80;
 const RACE_JITTER_MS = 15;
 
 const STATE_KEY = 'state';
+const COOP_KEY = 'coop';
 const SYNC_KEY = 'sync';
 const SYNC_RETRY_MS = 15_000;
 const MAX_SYNC_ATTEMPTS = 20;
 
 export class CompetitionRoom extends DurableObject<Env> {
   private state: LiveState | null = null;
+  /** Sala COOP (motor propio). Una sala es COOP o es de los demás modos, nunca ambas. */
+  private coop: CoopRoomState | null = null;
   private sync: SyncMeta = { synced: false, attempts: 0 };
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -136,6 +154,7 @@ export class CompetitionRoom extends DurableObject<Env> {
     // Restaura el estado tras hibernación/desalojo antes de procesar cualquier evento.
     ctx.blockConcurrencyWhile(async () => {
       this.state = (await ctx.storage.get<LiveState>(STATE_KEY)) ?? null;
+      this.coop = (await ctx.storage.get<CoopRoomState>(COOP_KEY)) ?? null;
       this.sync = (await ctx.storage.get<SyncMeta>(SYNC_KEY)) ?? { synced: false, attempts: 0 };
     });
   }
@@ -163,6 +182,20 @@ export class CompetitionRoom extends DurableObject<Env> {
     });
     await this.commit();
     return { startedAt: this.state.startedAt, endsAt: this.state.endsAt };
+  }
+
+  /** COOP: crea la sala (explicación previa → partida). Idempotente. */
+  async startCoop(input: CoopStartInput): Promise<{ startedAt: number; endsAt: number }> {
+    if (this.state) throw new Error('Sala inconsistente.');
+    if (!this.coop) {
+      this.coop = createCoopRoom(input);
+      await this.commitCoop([]);
+    } else if (this.coop.competitionId !== input.competitionId) {
+      throw new Error('Sala inconsistente.');
+    }
+    // Fin estimado (para las listas): explicación + tiempo total + presentaciones de jefes.
+    const endsAt = this.coop.createdAt + COOP_BRIEFING_MS + LEVELS[this.coop.level].totalMs + 60_000;
+    return { startedAt: this.coop.createdAt, endsAt };
   }
 
   /** Soluciones de una partida terminada, solo para sus participantes. */
@@ -206,6 +239,7 @@ export class CompetitionRoom extends DurableObject<Env> {
     }
     if (message.type === 'probeAck') return this.recordRtt(ws, Number(message.id));
     if (message.type === 'auth') return this.handleAuth(ws, message.token);
+    if (this.coop) return this.handleCoopMessage(ws, message);
 
     const uid = (ws.deserializeAttachment() as SocketAttachment | null)?.uid ?? null;
     const reqId = typeof message.reqId === 'string' ? message.reqId.slice(0, 40) : '';
@@ -237,6 +271,12 @@ export class CompetitionRoom extends DurableObject<Env> {
   // ---------- Alarma ----------
 
   async alarm(): Promise<void> {
+    if (this.coop) {
+      const events = advanceCoop(this.coop, Date.now());
+      await this.commitCoop(events);
+      if (coopFinished(this.coop)) await this.syncCoopResults();
+      return;
+    }
     const state = this.state;
     if (!state) return;
     if (state.status === 'live') {
@@ -254,6 +294,11 @@ export class CompetitionRoom extends DurableObject<Env> {
     try {
       const user = await verifyFirebaseToken(typeof token === 'string' ? token : '', this.env.FIREBASE_PROJECT_ID);
       ws.serializeAttachment({ uid: user.uid } satisfies SocketAttachment);
+      if (this.coop) {
+        this.send(ws, { type: 'coopState', view: coopView(this.coop, user.uid, [], Date.now()) });
+        this.probe(ws);
+        return;
+      }
       const solutions = this.state ? solutionsFor(this.state) : [];
       const state = this.state ? publicState(this.state, Date.now(), user.uid) : null;
       this.send(ws, { type: 'ready', uid: user.uid, state, solutions, serverTime: Date.now() });
@@ -381,6 +426,180 @@ export class CompetitionRoom extends DurableObject<Env> {
     }
   }
 
+  // ---------- COOP ----------
+
+  private async handleCoopMessage(ws: WebSocket, message: ClientMessage): Promise<void> {
+    const coop = this.coop!;
+    const uid = (ws.deserializeAttachment() as SocketAttachment | null)?.uid ?? null;
+    const reqId = 'reqId' in message && typeof message.reqId === 'string' ? message.reqId.slice(0, 40) : '';
+    let events: CoopEvent[] = [];
+    try {
+      if (!uid) throw new AppError(401, 'unauthenticated', 'Autentícate primero.');
+      if (message.type !== 'coop' || !message.action || typeof message.action !== 'object') {
+        throw new AppError(400, 'unknown_action', 'Acción desconocida en COOP.');
+      }
+      const outcome = await applyCoopAction(coop, uid, message.action as CoopClientAction, Date.now(), (crypticId, guess) => {
+        const secret = getCrypticSecret(crypticId);
+        if (!secret) throw new GameError('missing_cryptic', 'Criptico no encontrado.');
+        return verifyAnswer(this.env.ANSWER_HMAC_KEY, crypticId, guess, secret.hash);
+      });
+      events = outcome.events;
+      this.send(ws, { type: 'reply', reqId, ok: true, data: outcome.reply });
+    } catch (error) {
+      if (error instanceof CoopActionError) events = error.events;
+      const { code, message: text } = describeError(error);
+      this.send(ws, { type: 'reply', reqId, ok: false, error: { code, message: text } });
+    }
+    // Siempre se difunde: aun una acción rechazada pudo avanzar el reloj (fin de ronda, tienda…).
+    await this.commitCoop(events);
+    if (coopFinished(coop)) await this.syncCoopResults();
+  }
+
+  /** Difunde la vista de cada jugador, persiste y programa la próxima alarma. */
+  private async commitCoop(events: CoopEvent[]): Promise<void> {
+    const coop = this.coop;
+    if (!coop) return;
+    const now = Date.now();
+    for (const ws of this.ctx.getWebSockets()) {
+      const uid = (ws.deserializeAttachment() as SocketAttachment | null)?.uid;
+      if (uid) this.send(ws, { type: 'coopState', view: coopView(coop, uid, events, now) });
+    }
+    await this.ctx.storage.put(COOP_KEY, coop);
+    const deadline = coopDeadline(coop);
+    if (deadline !== null) await this.ctx.storage.setAlarm(Math.max(now, deadline));
+  }
+
+  /** Resultado COOP en Firestore: sala, historial, Elo contra el nivel y cripticos vistos. Reintenta por alarma. */
+  private async syncCoopResults(): Promise<void> {
+    const coop = this.coop;
+    const game = coop?.game;
+    if (!coop || !game?.result || this.sync.synced) return;
+    try {
+      const firestore = new FirestoreRest(this.env.FIREBASE_SERVICE_ACCOUNT);
+      const uids = coop.players.map((p) => p.uid);
+      const users = await firestore.batchGet<{ modeStats?: Record<string, { rating?: number }> }>(uids.map((uid) => `users/${uid}`));
+      const won = game.result.won;
+      const finishedAt = Date.now();
+      const levelRating = LEVELS[coop.level].rating;
+      const ratings = Object.fromEntries(uids.map((uid) => [uid, users.get(uid)?.modeStats?.coop?.rating ?? 1200]));
+      // Quien abandonó pierde aunque el resto gane.
+      const winnerOf = (uid: string) => won && game.players.find((p) => p.id === uid)?.status !== 'left';
+      const deltas = Object.fromEntries(uids.map((uid) => [uid, coopRatingDelta(ratings[uid]!, levelRating, winnerOf(uid))]));
+      const bossesDefeated = game.bosses.filter((b) => b.defeatedGt !== null).length;
+      const summary = {
+        level: coop.level,
+        won,
+        endedGt: game.result.endedGt,
+        rounds: game.roundNumber,
+        bossesDefeated,
+        bosses: game.bosses.map((b) => ({
+          id: b.id,
+          category: b.category,
+          maxHp: b.maxHp,
+          hp: b.hp,
+          defeatedGt: b.defeatedGt,
+          rounds: b.roundsFought,
+          damageTaken: b.damageTaken,
+          damageDealt: b.damageDealt,
+        })),
+        players: game.players.map((p) => ({
+          uid: p.id,
+          displayName: p.name,
+          character: p.character,
+          status: p.status,
+          ratingDelta: deltas[p.id] ?? 0,
+          ...p.stats,
+        })),
+      };
+      const existing = uids.filter((uid) => users.has(uid));
+      const writes: Write[] = [
+        {
+          kind: 'update',
+          path: `competitions/${coop.competitionId}`,
+          data: {
+            status: 'finished',
+            finishedAt,
+            winnerId: null,
+            endReason: won ? 'coopVictory' : 'coopDefeat',
+            coopResult: summary,
+            finalStandings: game.players.map((p, index) => ({
+              uid: p.id,
+              displayName: p.name,
+              rank: index + 1,
+              score: p.stats.damageDealt,
+              solved: p.stats.crypticsSolved,
+              hintsUsed: p.stats.hintsUsed,
+              ratingDelta: deltas[p.id] ?? 0,
+            })),
+          },
+        },
+        ...existing.flatMap<Write>((uid) => {
+          const player = game.players.find((p) => p.id === uid)!;
+          const winner = winnerOf(uid);
+          return [
+            {
+              kind: 'set',
+              path: `users/${uid}/history/${coop.competitionId}`,
+              data: {
+                competitionId: coop.competitionId,
+                title: coop.title,
+                mode: 'timed',
+                game: 'coop',
+                outcome: winner ? 'win' : 'loss',
+                flow: 'free',
+                finishedAt,
+                rank: winner ? 1 : 2,
+                players: uids.length,
+                score: player.stats.damageDealt,
+                solved: player.stats.crypticsSolved,
+                hintsUsed: player.stats.hintsUsed,
+                won: winner,
+                endReason: won ? 'coopVictory' : 'coopDefeat',
+                ratingDelta: deltas[uid] ?? 0,
+                modeRatingAfter: ratings[uid]! + (deltas[uid] ?? 0),
+                modeRatingDelta: deltas[uid] ?? 0,
+                ratingPool: 'coop',
+                coop: { level: coop.level, character: player.character, bossesDefeated },
+              },
+            },
+            {
+              kind: 'increment',
+              path: `users/${uid}`,
+              increments: {
+                'stats.played': 1,
+                'stats.wins': winner ? 1 : 0,
+                'stats.solved': player.stats.crypticsSolved,
+                'stats.hintsUsed': player.stats.hintsUsed,
+                'modeStats.coop.played': 1,
+                'modeStats.coop.wins': winner ? 1 : 0,
+                'modeStats.coop.losses': winner ? 0 : 1,
+                'modeStats.coop.draws': 0,
+              },
+            },
+            { kind: 'setFields', path: `users/${uid}`, fields: { 'modeStats.coop.rating': ratings[uid]! + (deltas[uid] ?? 0) } },
+          ];
+        }),
+        // Cripticos vistos: no se repetirán en las próximas salas de estos jugadores.
+        ...(coop.played.length > 0
+          ? existing.map<Write>((uid) => ({
+              kind: 'mergeMap',
+              path: `userSeen/${uid}`,
+              field: 'seen',
+              entries: Object.fromEntries(coop.played.map((id) => [id, finishedAt])),
+            }))
+          : []),
+      ];
+      await firestore.commit(writes);
+      this.sync = { synced: true, attempts: this.sync.attempts };
+      await this.ctx.storage.put(SYNC_KEY, this.sync);
+    } catch (error) {
+      this.sync = { synced: false, attempts: this.sync.attempts + 1 };
+      await this.ctx.storage.put(SYNC_KEY, this.sync);
+      console.error(`[coop] sync fallida (${this.sync.attempts})`, error);
+      if (this.sync.attempts < MAX_SYNC_ATTEMPTS) await this.ctx.storage.setAlarm(Date.now() + SYNC_RETRY_MS);
+    }
+  }
+
   // ---------- Latencia ----------
 
   private probe(ws: WebSocket): void {
@@ -461,10 +680,9 @@ export class CompetitionRoom extends DurableObject<Env> {
       // En 2 vs 2 gana el equipo: el compañero de quien figura como ganador también gana.
       const outcomeOf = (p: { uid: string; rank: number }): 'win' | 'loss' | 'draw' =>
         state.winnerId ? (isOnWinningSide(state, p.uid) ? 'win' : 'loss') : p.rank === 1 ? 'draw' : 'loss';
-      // El Elo es por modo: el jefe (cooperativo) y las partidas en solitario no lo cambian.
+      // El Elo es por modo: las partidas en solitario no lo cambian.
       const deltas = modeDeltas;
-      const bossDefeated = state.endReason === 'bossDefeated';
-      const isWinner = (playerId: string) => (state.boss ? bossDefeated : isOnWinningSide(state, playerId));
+      const isWinner = (playerId: string) => isOnWinningSide(state, playerId);
 
       const writes: Write[] = [
         {
@@ -475,8 +693,6 @@ export class CompetitionRoom extends DurableObject<Env> {
             finishedAt: state.finishedAt ?? Date.now(),
             winnerId: state.winnerId,
             endReason: state.endReason,
-            bossDefeated: state.boss ? bossDefeated : null,
-            boss: state.boss,
             finalStandings: ranked.map((p) => ({
               uid: p.uid,
               displayName: p.displayName,

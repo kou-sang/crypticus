@@ -27,8 +27,6 @@ const REASONS: Record<string, string> = {
   target: 'Alguien alcanzó la meta.',
   winByTwo: 'Ventaja de dos alcanzada.',
   exhausted: 'No quedan cripticos.',
-  bossDefeated: 'El jefe cayó.',
-  bossSurvived: 'El jefe resistió.',
   voted: 'Terminada por votación.',
   lastStanding: 'Último en pie.',
   knockout: 'Nocaut: un bando se quedó sin vida.',
@@ -38,8 +36,6 @@ const REASONS: Record<string, string> = {
 type FinishedCompetition = Competition & {
   finalStandings?: Standing[];
   endReason?: string;
-  bossDefeated?: boolean | null;
-  boss?: { hp: number; maxHp: number } | null;
 };
 
 /** Repaso: cada criptico con su respuesta y su explicación. Es lo que permite comprobar que la pista es justa. */
@@ -114,10 +110,9 @@ function SolutionsList({ competitionId, meId, names }: { competitionId: string; 
 export function ResultsView({ competition, meId }: { competition: FinishedCompetition; meId: string }) {
   const standings = competition.finalStandings ?? [];
   const winner = standings.find((s) => s.uid === competition.winnerId);
-  const isBoss = competition.mode === 'boss';
   // 2 vs 2: gana el equipo del ganador.
   const winners = winner && winner.team !== undefined ? standings.filter((s) => s.team === winner.team) : winner ? [winner] : [];
-  const won = isBoss ? competition.bossDefeated === true : winners.some((s) => s.uid === meId);
+  const won = winners.some((s) => s.uid === meId);
   const { profile } = useSession();
 
   // Fanfarria al entrar en resultados.
@@ -132,15 +127,7 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
           {REASONS[competition.endReason ?? ''] ?? 'Competencia terminada.'}
         </p>
         <p className="mt-2 font-display text-4xl">
-          {isBoss ? (
-            competition.bossDefeated ? (
-              <>
-                ¡Jefe <em className="text-accent">derrotado</em>!
-              </>
-            ) : (
-              `El jefe sobrevivió con ${competition.boss?.hp ?? '?'} de vida`
-            )
-          ) : winner ? (
+          {winner ? (
             <>
               {winners.length > 1 ? 'Ganan' : 'Gana'} <em className="text-accent">{winners.map((s) => s.displayName).join(' y ')}</em>
             </>
@@ -157,8 +144,8 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
             <th className="py-2">Jugador</th>
             <th className="py-2 text-right">Resueltos</th>
             <th className="py-2 text-right">Pistas</th>
-            <th className="py-2 text-right">{isBoss ? 'Daño' : 'Puntos'}</th>
-            {!isBoss && <th className="py-2 text-right">Rating</th>}
+            <th className="py-2 text-right">Puntos</th>
+            <th className="py-2 text-right">Rating</th>
           </tr>
         </thead>
         <tbody>
@@ -169,11 +156,9 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
               <td className="py-2.5 text-right font-mono">{s.solved}</td>
               <td className="py-2.5 text-right font-mono">{s.hintsUsed}</td>
               <td className="py-2.5 text-right font-mono font-semibold">{s.score}</td>
-              {!isBoss && (
-                <td className={cx('py-2.5 text-right font-mono', s.ratingDelta > 0 ? 'text-ok' : s.ratingDelta < 0 ? 'text-accent' : '')}>
-                  {s.ratingDelta > 0 ? `+${s.ratingDelta}` : s.ratingDelta}
-                </td>
-              )}
+              <td className={cx('py-2.5 text-right font-mono', s.ratingDelta > 0 ? 'text-ok' : s.ratingDelta < 0 ? 'text-accent' : '')}>
+                {s.ratingDelta > 0 ? `+${s.ratingDelta}` : s.ratingDelta}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -190,7 +175,7 @@ export function ResultsView({ competition, meId }: { competition: FinishedCompet
         </section>
       )}
 
-      {competition.participantIds.includes(meId) && !isBoss && (
+      {competition.participantIds.includes(meId) && (
         <RematchPanel target={{ competition, names: Object.fromEntries(standings.map((s) => [s.uid, s.displayName])) }} profile={profile} />
       )}
     </div>

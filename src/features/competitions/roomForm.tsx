@@ -3,7 +3,7 @@
 // recuerda entre visitas (localStorage) y es el punto de partida de cada sala nueva.
 import { useEffect, useState, type ReactNode } from 'react';
 import type { RoomDraft } from '../play/RematchPanel';
-import { cx } from '../../lib/utils';
+import { canPlayCoop, cx } from '../../lib/utils';
 import { loadJson, saveJson } from '../../lib/storage';
 import {
   DEFAULT_MODE_SETTINGS,
@@ -19,7 +19,7 @@ import {
   type DuelFormat,
   type ModeSettings,
 } from '../../../shared/gameModes';
-import { DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, LIMITS } from '../../../shared/scoring';
+import { COOP_ENABLED, DUEL_COMBO_INFO, DUEL_DAMAGE_LABELS, GAME_LABELS, LIMITS } from '../../../shared/scoring';
 import { GAME_MODES, type ComebackLevel, type CompetitionVisibility, type DuelDamage, type GameMode } from '../../../shared/types';
 
 export const STORAGE_KEY = 'crypticus.newGame.v2';
@@ -39,12 +39,19 @@ export function loadStored(draft?: RoomDraft | null): Stored {
   return {
     visibility: stored.visibility ?? 'public',
     settings: {
-      game: settings.game === 'boss' ? 'race' : (settings.game ?? 'race'),
+      // 'boss' (anterior a COOP) o COOP no disponible en este dispositivo: se vuelve a Race.
+      game: (settings.game as string) === 'boss' || (settings.game === 'coop' && !coopAvailable()) ? 'race' : (settings.game ?? 'race'),
       race: { ...DEFAULT_MODE_SETTINGS.race, ...settings.race },
       royale: { ...DEFAULT_MODE_SETTINGS.royale, ...settings.royale },
       duel: { ...DEFAULT_MODE_SETTINGS.duel, ...settings.duel },
+      coop: { ...DEFAULT_MODE_SETTINGS.coop, ...settings.coop },
     },
   };
+}
+
+/** COOP habilitado y jugable en este dispositivo (solo PC). */
+export function coopAvailable(): boolean {
+  return COOP_ENABLED && canPlayCoop();
 }
 
 export const VISIBILITY: Array<[CompetitionVisibility, string]> = [
@@ -487,12 +494,12 @@ export function saveStored(stored: Stored): void {
 export const VISIBILITY_INFO =
   'Pública: aparece en Jugar para todos. Amigos: la ven tus amigos y solo ellos pueden unirse. Privada: solo se entra con el código de 4 letras o el enlace.';
 
-/** Pestañas de modo (Race / Royale / Duel / Jefe próximamente). */
+/** Pestañas de modo (Race / Royale / Duel / COOP). */
 export function ModeTabs({ value, onChange }: { value: GameMode; onChange: (game: GameMode) => void }) {
   return (
     <div role="tablist" aria-label="Modo de juego" className="grid grid-cols-4 border border-ink">
       {GAME_MODES.map((game) => {
-        const soon = game === 'boss';
+        const soon = game === 'coop' && !coopAvailable();
         const active = value === game;
         return (
           <button
@@ -509,12 +516,43 @@ export function ModeTabs({ value, onChange }: { value: GameMode; onChange: (game
           >
             <span className="font-display text-lg font-semibold uppercase tracking-wide">{GAME_LABELS[game].title}</span>
             <span className={cx('text-[10px] uppercase tracking-widest', active ? 'opacity-70' : 'text-muted')}>
-              {soon ? 'Pronto' : GAME_LABELS[game].tagline}
+              {soon ? (COOP_ENABLED ? 'Solo PC' : 'Pronto') : GAME_LABELS[game].tagline}
             </span>
           </button>
         );
       })}
     </div>
+  );
+}
+
+/** COOP: solo se elige el nivel. NT se muestra bloqueado hasta que tenga jefes y personajes. */
+function CoopPanel({ settings, update }: { settings: ModeSettings['coop']; update: (value: Partial<ModeSettings['coop']>) => void }) {
+  return (
+    <Option title="Nivel" info="AT: 4 jefes en 22 minutos. NT: 7 jefes en 33 minutos (se desbloquea al ganar AT; todavía no disponible). Se juega de 4 a 8 jugadores.">
+      <div role="radiogroup" aria-label="Nivel" className="flex flex-wrap gap-1.5">
+        {(['AT', 'NT'] as const).map((level) => {
+          const locked = level === 'NT';
+          const active = settings.level === level;
+          return (
+            <button
+              key={level}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              disabled={locked}
+              onClick={() => update({ level })}
+              className={cx(
+                'border px-3 py-1 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40',
+                active ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink',
+              )}
+            >
+              {level}
+              {locked && <span className="ml-1.5 text-[10px] font-normal uppercase tracking-widest">Pronto</span>}
+            </button>
+          );
+        })}
+      </div>
+    </Option>
   );
 }
 
@@ -533,6 +571,7 @@ export function RoomRulesForm({
   const patchRace = (value: Partial<ModeSettings['race']>) => updateSettings((c) => ({ ...c, race: { ...c.race, ...value } }));
   const patchRoyale = (value: Partial<ModeSettings['royale']>) => updateSettings((c) => ({ ...c, royale: { ...c.royale, ...value } }));
   const patchDuel = (value: Partial<ModeSettings['duel']>) => updateSettings((c) => ({ ...c, duel: { ...c.duel, ...value } }));
+  const patchCoop = (value: Partial<ModeSettings['coop']>) => updateSettings((c) => ({ ...c, coop: { ...c.coop, ...value } }));
 
   return (
     <div className="space-y-4">
@@ -542,6 +581,7 @@ export function RoomRulesForm({
         {settings.game === 'race' && <RacePanel settings={settings.race} update={patchRace} />}
         {settings.game === 'royale' && <RoyalePanel settings={settings.royale} update={patchRoyale} />}
         {settings.game === 'duel' && <DuelPanel settings={settings.duel} update={patchDuel} />}
+        {settings.game === 'coop' && <CoopPanel settings={settings.coop} update={patchCoop} />}
         {visibilityNote ?? (
           <Option title="Sala" info={VISIBILITY_INFO}>
             <Chips<CompetitionVisibility>

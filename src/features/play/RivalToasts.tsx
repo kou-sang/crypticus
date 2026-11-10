@@ -9,7 +9,7 @@ interface Toast {
   id: string;
   title: string;
   detail: string;
-  tone: 'rival' | 'warn' | 'heal';
+  tone: 'rival' | 'warn';
 }
 
 const TOAST_MS = 3_800;
@@ -36,13 +36,11 @@ function toToast(event: GameEvent, state: LiveState): Toast | null {
       if (state.config.game === 'race') return null;
       if (state.config.royale) return { id, title: `${name} acertó`, detail: `+${event.seconds ?? 0}s a su reloj`, tone: 'rival' };
       const tier = event.tier ? DIFFICULTY_LABELS[event.tier].toLowerCase() : '';
-      const detail = state.boss ? `Golpeó al jefe (−${event.points})` : `Uno ${tier} · +${event.points}`;
+      const detail = `Uno ${tier} · +${event.points}`;
       return { id, title: `${name} acertó`, detail, tone: 'rival' };
     }
     case 'countdown':
       return { id, title: `${name} acertó primero`, detail: `Tienes ${event.seconds}s para acertar`, tone: 'warn' };
-    case 'heal':
-      return { id, title: `${name} falló`, detail: `El jefe se cura +${event.points}`, tone: 'heal' };
     default:
       return null;
   }
@@ -67,7 +65,7 @@ export const RivalToasts = memo(function RivalToasts({ state, uid }: { state: Li
     const next = fresh.map((e) => toToast(e, state)).filter((t): t is Toast => t !== null);
     if (next.length === 0) return;
     const kinds = new Set(fresh.map((e) => e.kind));
-    playCue(kinds.has('damage') ? 'hit' : kinds.has('eliminated') ? 'eliminated' : next.some((t) => t.tone === 'heal') ? 'heal' : 'rival');
+    playCue(kinds.has('damage') ? 'hit' : kinds.has('eliminated') ? 'eliminated' : 'rival');
     setToasts((prev) => [...prev, ...next].slice(-4));
     const ids = next.map((t) => t.id);
     // Sin cleanup por render: el estado cambia seguido y cancelaría el cierre del toast.
@@ -83,7 +81,6 @@ export const RivalToasts = memo(function RivalToasts({ state, uid }: { state: Li
             'toast-in rival-toast surface border-l-4 bg-paper px-4 py-3 shadow-[4px_4px_0_var(--ink)] ring-1 ring-ink',
             toast.tone === 'rival' && 'border-accent',
             toast.tone === 'warn' && 'border-ink',
-            toast.tone === 'heal' && 'border-ok',
           )}
         >
           <p className="text-sm font-semibold">{toast.title}</p>

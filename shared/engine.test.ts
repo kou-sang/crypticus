@@ -148,28 +148,6 @@ describe('rondas y votación', () => {
   });
 });
 
-describe('modo jefe', () => {
-  it('el daño depende del tiempo restante', () => {
-    const state = setup({ mode: 'boss', bossLevel: 'normal' }, ['a']);
-    expect(state.boss).toEqual({ maxHp: 350, hp: 350 });
-    expect(answer(state, 'a', 'h1', true, 0).points).toBe(200);
-    expect(answer(state, 'a', 'm1', true, 50_000).points).toBe(75);
-    expect(state.boss?.hp).toBe(75);
-    // Último criptico disponible sin derrotarlo: el jefe sobrevive.
-    answer(state, 'a', 'e1', true, 51_000);
-    expect(state.boss?.hp).toBe(26);
-    expect(state.endReason).toBe('bossSurvived');
-  });
-
-  it('victoria al llegar a 0', () => {
-    const state = setup({ mode: 'boss', bossLevel: 'normal' }, ['a']);
-    state.boss = { maxHp: 350, hp: 100 };
-    answer(state, 'a', 'h1', true, 0);
-    expect(state.endReason).toBe('bossDefeated');
-    expect(state.boss.hp).toBe(0);
-  });
-});
-
 describe('pistas', () => {
   it('limita por configuración y por cantidad disponible', () => {
     const state = setup({ maxHintsPerClue: 1 });
@@ -196,18 +174,6 @@ describe('cuenta atrás tras acierto (rondas)', () => {
     answer(state, 'b', 'm1', true, 3000);
     expect(state.round?.index).toBe(2);
     expect(state.participants.b!.score).toBeGreaterThan(0);
-  });
-});
-
-describe('jefe: fallar lo cura', () => {
-  it('recupera vida sin superar el máximo', () => {
-    const state = setup({ mode: 'boss', bossLevel: 'normal' }, ['a']);
-    answer(state, 'a', 'h1', false, 1000);
-    expect(state.boss?.hp).toBe(350);
-    answer(state, 'a', 'h1', true, 2000);
-    const afterHit = state.boss!.hp;
-    answer(state, 'a', 'm1', false, 3000);
-    expect(state.boss?.hp).toBe(afterHit + 15);
   });
 });
 

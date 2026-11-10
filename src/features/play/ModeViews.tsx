@@ -106,8 +106,7 @@ export function RoyaleFlow({ state, uid, actions, offsetMs }: { state: LiveState
             successLabel={(seconds) => `+${seconds}s a tu reloj`}
             cooldownMs={cooldownMs(state.config)}
             maxHintsPerClue={0}
-            isBoss={false}
-            actions={actions}
+                        actions={actions}
           />
           <RoyaleSkip state={state} uid={uid} actions={actions} />
         </>

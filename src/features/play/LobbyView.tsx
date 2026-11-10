@@ -6,7 +6,8 @@ import { api } from '../../lib/api';
 import { chooseTeam, deleteCompetition, joinCompetition, leaveCompetition } from '../../lib/repo';
 import { assignTeams, isTeamDuel, startBlocker, TEAM_LABELS, TEAM_SIZE, type Team } from '../../../shared/teams';
 import { RoomSettingsDialog } from './RoomSettingsDialog';
-import { errorMessage } from '../../lib/utils';
+import { canPlayCoop, errorMessage } from '../../lib/utils';
+import { CharacterPicker } from '../coop/CharacterPicker';
 import { Avatar, Badge, Button, ErrorBanner } from '../../components/ui';
 import { describeMode, describeModifiers } from '../competitions/CompetitionCard';
 
@@ -32,6 +33,9 @@ export function LobbyView({
   const full = competition.participantIds.length >= competition.maxPlayers;
   // Lo mismo que valida el servidor al iniciar (p. ej. Duel sin rival).
   const blocker = startBlocker(competition, competition.participantIds);
+  const coop = competition.game === 'coop';
+  // COOP es solo para PC o laptop: en el celular no se puede entrar.
+  const deviceBlocked = coop && !canPlayCoop();
   const teamDuel = isTeamDuel(competition);
   const ordered = [...participants].sort((a, b) => a.joinedAt - b.joinedAt);
   const teams = teamDuel ? assignTeams(ordered.map((p) => p.uid), competition.teams ?? {}) : {};
@@ -154,6 +158,14 @@ export function LobbyView({
       </section>
       )}
 
+      {coop && <CharacterPicker competition={competition} participants={ordered} meId={profile.uid} />}
+
+      {deviceBlocked && (
+        <p role="alert" className="border-l-4 border-accent pl-3 text-sm">
+          COOP es solo para PC o laptop: abre esta sala desde una computadora.
+        </p>
+      )}
+
       {blocker && <p className="border-l-4 border-line pl-3 text-sm text-muted">{blocker}</p>}
 
       {invited.length > 0 && (
@@ -218,10 +230,10 @@ export function LobbyView({
         ) : (
           <Button
             loading={busy === 'join'}
-            disabled={full || !canJoin}
+            disabled={full || !canJoin || deviceBlocked}
             onClick={() => run('join', () => joinCompetition(competition.id, profile))}
           >
-            {full ? 'Sala llena' : canJoin ? 'Unirme' : 'Solo amigos del anfitrión'}
+            {full ? 'Sala llena' : deviceBlocked ? 'Solo PC o laptop' : canJoin ? 'Unirme' : 'Solo amigos del anfitrión'}
           </Button>
         )}
         {!code && (

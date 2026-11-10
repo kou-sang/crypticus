@@ -64,7 +64,6 @@ export function CluePanel({
   me,
   heading,
   maxHintsPerClue,
-  isBoss,
   actions,
   onNext,
   successLabel,
@@ -76,10 +75,9 @@ export function CluePanel({
   me: Participant;
   heading: string;
   maxHintsPerClue: number;
-  isBoss: boolean;
   actions: GameActions;
   onNext?: () => void; // Flujo libre: pasar al siguiente tras leer la explicación.
-  successLabel?: (points: number) => string; // Texto al acertar (por defecto, puntos o daño al jefe).
+  successLabel?: (points: number) => string; // Texto al acertar (por defecto, puntos).
   cooldownMs?: number; // Espera tras un intento antes de poder enviar otro.
   footer?: ReactNode; // Acciones extra del modo (p. ej. rendirse).
   gameHintsLeft?: number; // Pistas que quedan en toda la partida (Race).
@@ -182,7 +180,7 @@ export function CluePanel({
       <div className="mt-3 min-h-5 text-sm" aria-live="polite">
         {feedback?.kind === 'correct' && (
           <span className="font-semibold text-ok">
-            ✓ {successLabel ? successLabel(feedback.points) : isBoss ? `−${feedback.points} de vida al jefe` : `+${feedback.points} puntos`}
+            ✓ {successLabel ? successLabel(feedback.points) : `+${feedback.points} puntos`}
           </span>
         )}
         {solved && !solvedNow && <span className="font-semibold text-ok">✓ Resuelto</span>}

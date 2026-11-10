@@ -54,11 +54,16 @@ export interface DuelSettings {
 
 export type DuelFormat = '1v1' | '2v2';
 
+export interface CoopSettings {
+  level: 'AT' | 'NT';
+}
+
 export interface ModeSettings {
   game: GameMode;
   race: RaceSettings;
   royale: RoyaleSettings;
   duel: DuelSettings;
+  coop: CoopSettings;
 }
 
 /** Controles de tiempo de Royale, al estilo de las plataformas de ajedrez: minutos + segundos por acierto. */
@@ -89,9 +94,10 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
   },
   royale: { baseSec: 120, incrementSec: 5, cooldownSec: 1, skips: 0 },
   duel: { hp: 150, damage: 'difficulty', comeback: 'low', cooldownSec: 2, combo: true, surrender: { enabled: true, maxUses: 2 }, format: '1v1' },
+  coop: { level: 'AT' },
 };
 
-export const MODE_MAX_PLAYERS: Record<GameMode, number> = { race: 8, royale: 8, duel: 2, boss: 4 };
+export const MODE_MAX_PLAYERS: Record<GameMode, number> = { race: 8, royale: 8, duel: 2, coop: 8 };
 
 export function formatTimeControl(baseSec: number, incrementSec: number): string {
   const minutes = baseSec / 60;
@@ -149,7 +155,16 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
     };
   }
 
-  // Race (y Boss, que la validación rechaza mientras esté "próximamente").
+  if (settings.game === 'coop') {
+    // COOP tiene motor propio (shared/coop): estas reglas solo identifican la sala.
+    return {
+      config: { ...base, mode: 'timed', flow: 'free', durationSec: 60 * 60, coop: { level: settings.coop.level } },
+      maxPlayers: MODE_MAX_PLAYERS.coop,
+      clueCount: 1,
+      title: `COOP ${settings.coop.level}`,
+    };
+  }
+
   const race = settings.race;
   const hardcore = race.intensity === 'hardcore';
   return {
@@ -168,7 +183,7 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
       ...(race.hints ? { hintsPerGame: race.hintsPerGame } : {}),
       cooldownSec: race.cooldownSec,
     },
-    maxPlayers: settings.game === 'boss' ? MODE_MAX_PLAYERS.boss : MODE_MAX_PLAYERS.race,
+    maxPlayers: MODE_MAX_PLAYERS.race,
     // Se gana por meta, no por agotar la lista: hay cripticos de sobra para los 10 minutos.
     clueCount: hardcore ? 30 : 60,
     title: `Race a ${race.target}${hardcore ? ' · Hardcore' : ''}`,
@@ -218,5 +233,6 @@ export function settingsFromConfig(config: CompetitionConfig): ModeSettings {
           format: config.duel.teams ? '2v2' : '1v1',
         }
       : d.duel,
+    coop: config.coop ? { level: config.coop.level } : d.coop,
   };
 }

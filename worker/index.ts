@@ -4,13 +4,16 @@ import { AppError, errorResponse, json } from './errors';
 import { FirestoreRest } from './firestore';
 import type { Env } from './env';
 import type { Competition, CompetitionConfig, Difficulty, Participant } from '../shared/types';
-import { mergeLastSeen, selectCryptics, selectTiebreakers } from '../shared/selection';
+import { byFreshness, mergeLastSeen, selectCryptics, selectTiebreakers } from '../shared/selection';
 import { assignTeams, isTeamDuel, startBlocker } from '../shared/teams';
 import { ROYALE_TIER_COUNTS } from '../shared/gameModes';
-import { catalogByTier, catalogTiebreak, crypticKind } from './secrets';
+import { answerWords, catalogByTier, catalogTiebreak, crypticKind } from './secrets';
 import { validateConfig } from '../shared/scoring';
 import { normalizeConfig } from '../shared/config';
 import { handleCreate, handleUpdate } from './rooms';
+import { PARTY_MAX, PARTY_MIN, type CoopTier } from '../shared/coop/balance';
+import { CHARACTERS, type CharacterId } from '../shared/coop/catalog/characters';
+import type { CoopPlayerSetup } from '../shared/coop/protocol';
 
 export { CompetitionRoom } from './competitionRoom';
 
@@ -71,9 +74,80 @@ async function selectUnseen(
   });
   if (selection.crypticIds.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
   // Muerte súbita: solo Race, Royale y Duel con rivales (el jefe es cooperativo).
-  const competitive = competition.mode !== 'boss' && uids.length >= 2;
+  const competitive = uids.length >= 2;
   const tiebreakIds = competitive ? selectTiebreakers(catalogTiebreak(), lastSeen) : [];
   return { ...selection, tiebreakIds };
+}
+
+/**
+ * COOP: todo el catálogo por dificultad, con los que nadie de la sala vio primero. El DO los reparte por ronda
+ * sin repetir. Los de desempate son los «muy difíciles», separados por cantidad de palabras.
+ */
+async function coopPools(firestore: FirestoreRest, uids: string[]): Promise<Record<CoopTier, string[]>> {
+  const seenDocs = await firestore.batchGet<{ seen?: Record<string, number> }>(uids.map((uid) => `userSeen/${uid}`));
+  const lastSeen = mergeLastSeen([...seenDocs.values()].map((d) => d.seen));
+  const regular = catalogByTier();
+  const tiebreak = Object.values(catalogTiebreak()).flat();
+  const pools: Record<CoopTier, string[]> = {
+    easy: byFreshness(regular.easy, lastSeen),
+    medium: byFreshness(regular.medium, lastSeen),
+    hard: byFreshness(regular.hard, lastSeen),
+    veryHard2: byFreshness(tiebreak.filter((id) => answerWords(id) <= 2), lastSeen),
+    veryHard3: byFreshness(tiebreak.filter((id) => answerWords(id) >= 3), lastSeen),
+  };
+  if (pools.easy.length + pools.medium.length + pools.hard.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
+  return pools;
+}
+
+/** COOP: jugadores con su personaje (elegido en la sala, sin repetir). */
+function coopPlayers(competition: Competition, participants: Array<Participant & { id: string }>, names: Map<string, { displayName?: string }>): CoopPlayerSetup[] {
+  if (participants.length < PARTY_MIN || participants.length > PARTY_MAX) {
+    throw new AppError(409, 'bad_players', `COOP se juega de ${PARTY_MIN} a ${PARTY_MAX} jugadores.`);
+  }
+  const chosen = competition.coopCharacters ?? {};
+  const players = [...participants]
+    .sort((a, b) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0))
+    .map((p) => ({ uid: p.id, name: names.get(p.id)?.displayName ?? p.displayName, character: chosen[p.id] as CharacterId }));
+  const missing = players.filter((p) => !p.character || !(p.character in CHARACTERS));
+  if (missing.length > 0) throw new AppError(409, 'no_character', `Falta elegir personaje: ${missing.map((p) => p.name).join(', ')}.`);
+  const repeated = players.filter((p, i) => players.findIndex((o) => o.character === p.character) !== i);
+  if (repeated.length > 0) throw new AppError(409, 'repeated_character', `${CHARACTERS[repeated[0]!.character].name} está elegido dos veces.`);
+  return players;
+}
+
+async function startCoop(
+  env: Env,
+  firestore: FirestoreRest,
+  competitionId: string,
+  competition: Competition,
+  participants: Array<Participant & { id: string }>,
+): Promise<Response> {
+  const config = normalizeConfig(competition as unknown as Record<string, unknown>);
+  const configErrors = validateConfig(config, competition.maxPlayers);
+  if (configErrors.length > 0) throw new AppError(400, 'bad_config', configErrors.join(' '));
+  const uids = participants.map((p) => p.id);
+  const [pools, profiles] = await Promise.all([
+    coopPools(firestore, uids),
+    firestore.batchGet<{ displayName?: string }>(uids.map((uid) => `users/${uid}`)),
+  ]);
+  const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
+  let times: { startedAt: number; endsAt: number };
+  try {
+    times = await roomStub(env, competitionId).startCoop({
+      competitionId,
+      title: competition.title ?? '',
+      level: config.coop?.level ?? 'AT',
+      players: coopPlayers(competition, participants, profiles),
+      pools,
+      seed,
+      now: Date.now(),
+    });
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(409, 'start_failed', error instanceof Error ? error.message : 'No se pudo iniciar.');
+  }
+  await firestore.commit([{ kind: 'update', path: `competitions/${competitionId}`, data: { status: 'live', ...times } }]);
+  return json({ ok: true, data: times });
 }
 
 /** POST /api/competitions/start — el anfitrión inicia; el DO toma el control de la partida. */
@@ -88,6 +162,7 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   if (competition.status === 'finished') throw new AppError(409, 'already_finished', 'La competencia ya terminó.');
 
   const participants = await firestore.listDocs<Participant>(`competitions/${competitionId}/participants`);
+  if (competition.game === 'coop') return startCoop(env, firestore, competitionId, competition, participants);
   const minPlayers = competition.winByTwo ? 2 : 1;
   if (participants.length < minPlayers) {
     throw new AppError(409, 'not_enough_players', `Se necesitan al menos ${minPlayers} jugadores.`);

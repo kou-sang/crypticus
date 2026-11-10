@@ -107,6 +107,9 @@ async function main(): Promise<void> {
       ...(item.tiebreak ? { tiebreak: true } : {}),
       // Tipo principal: la selección evita dos seguidos del mismo (v1.0).
       ...(item.publicData.tags?.[0] ? { kind: String(item.publicData.tags[0]).trim().toLowerCase() } : {}),
+      // COOP: el Durable Object manda el enunciado con cada ronda, sin lecturas a Firestore.
+      clue: item.publicData.clue,
+      enumeration: item.publicData.enumeration,
     };
   }
   await mkdir('worker/generated', { recursive: true });

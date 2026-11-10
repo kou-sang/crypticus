@@ -22,18 +22,21 @@ type ModeFields = Pick<
   | 'hintsPerGame'
   | 'surrender'
   | 'cooldownSec'
+  | 'coop'
 >;
 
 export function describeMode(c: ModeFields): string {
   if (c.game === 'royale' && c.royale) return `Royale ${formatTimeControl(c.royale.baseSec, c.royale.incrementSec)}`;
   if (c.game === 'duel' && c.duel) return `Duel ${c.duel.teams ? '2 vs 2' : '1 vs 1'} · ${c.duel.hp} de vida`;
   if (c.game === 'race') return `Race a ${c.targetCount}`;
+  if (c.game === 'coop') return `COOP ${c.coop?.level ?? 'AT'}`;
   return 'Partida'; // Salas anteriores a los modos (v0.6).
 }
 
 /** Etiquetas cortas de los modificadores activos. */
 export function describeModifiers(c: ModeFields): string[] {
   if (c.game === 'royale') return ['Progresiva', 'Último en pie', c.royale?.skips ? `Saltear ×${c.royale.skips}` : 'Sin saltear'];
+  if (c.game === 'coop') return ['4 a 8 jugadores', c.coop?.level === 'NT' ? '7 jefes · 33 min' : '4 jefes · 22 min', 'Solo PC'];
   if (c.game === 'duel') {
     const tags = [`Daño por ${DUEL_DAMAGE_LABELS[c.duel?.damage ?? 'difficulty'].title.toLowerCase()}`];
     if (c.duel?.combo !== false) tags.push('Combo');

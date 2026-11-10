@@ -81,7 +81,6 @@ function RoundsFlow({
             heading={`Criptico ${round.index}`}
             maxHintsPerClue={state.config.maxHintsPerClue}
             gameHintsLeft={gameHintsLeft(state, me)}
-            isBoss={state.boss !== null}
             actions={actions}
             successLabel={
               state.config.duel
