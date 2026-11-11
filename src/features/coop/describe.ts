@@ -4,6 +4,7 @@ import { CHARACTERS } from '../../../shared/coop/catalog/characters';
 import { ITEMS } from '../../../shared/coop/catalog/items';
 import type { CoopEvent } from '../../../shared/coop/events';
 import type { CoopState } from '../../../shared/coop/state';
+import { HINT_KIND_LABELS } from '../../../shared/hints';
 
 const ABILITY_TEXT: Record<string, string> = {
   damage1: 'gana +5 % de daño.',
@@ -90,7 +91,7 @@ export function describeEvent(event: CoopEvent, state: CoopState | null, meId?: 
       if (event.kind === 'groupOffer') return event.approved ? 'La mayoría aceptó la oferta: +300 de oro para todos.' : 'Oferta rechazada.';
       return event.accepted.length > 0 ? `Aceptaron: ${event.accepted.map((id) => nameOf(state, id)).join(', ')}.` : 'Nadie aceptó.';
     case 'secretRevealed':
-      if (event.secret === 'apple') return `${nameOf(state, event.playerId)} compró la manzana: todos pierden el 20 % de su vida y ganan 2 pistas.`;
+      if (event.secret === 'apple') return `${nameOf(state, event.playerId)} compró la manzana: todos pierden el 20 % de su vida y ganan 2 pistas de tipos al azar.`;
       if (event.secret === 'cross') return '¡Apareció la Cruz de Jesús! La próxima tienda es gratis y la próxima ronda cura y revive a todos.';
       return null;
     case 'purchase':
@@ -101,6 +102,9 @@ export function describeEvent(event: CoopEvent, state: CoopState | null, meId?: 
       const target = event.targetId ? ` sobre ${nameOf(state, event.targetId)}` : '';
       return `${player.name} usó la activa de ${CHARACTERS[player.character].name}${target}.`;
     }
+    case 'hintGained':
+      // Solo la propia: el tipo de pista de los demás no aporta al registro.
+      return event.playerId === meId ? `Ganaste una pista de ${HINT_KIND_LABELS[event.kind].toLowerCase()}.` : null;
     case 'death':
       return `${nameOf(state, event.playerId)} cayó.`;
     case 'revive':

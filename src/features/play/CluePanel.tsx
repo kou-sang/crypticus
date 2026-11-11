@@ -10,6 +10,8 @@ import { errorMessage } from '../../lib/utils';
 import { playCue } from '../../lib/sound';
 import { Badge, Button, ErrorBanner } from '../../components/ui';
 import { AnswerGrid } from './AnswerGrid';
+import { HintPicker, RevealedHints, highlightClue } from './HintParts';
+import { availableKinds, type HintKind, type RevealedHint } from '../../../shared/hints';
 
 type Feedback =
   | { kind: 'correct'; points: number; explanation: string | null }
@@ -18,15 +20,23 @@ type Feedback =
   | { kind: 'stale' }
   | null;
 
-const TIER_TONE = { easy: 'ok', medium: 'neutral', hard: 'accent' } as const;
+const TIER_TONE = { easy: 'ok', medium: 'neutral', hard: 'accent', veryHard: 'accent' } as const;
 
 /** Enunciado sin la enumeración repetida: si el texto ya la trae, se muestra una sola vez. */
-export function ClueText({ cryptic, className }: { cryptic: Pick<CrypticPublic, 'clue' | 'enumeration'>; className?: string }) {
+export function ClueText({
+  cryptic,
+  className,
+  revealed,
+}: {
+  cryptic: Pick<CrypticPublic, 'clue' | 'enumeration'>;
+  className?: string;
+  revealed?: readonly RevealedHint[]; // Pistas elegibles (v1.9): resaltan las partes en el enunciado.
+}) {
   const { text, enumeration } = splitClue(cryptic.clue);
   return (
     // clue-text: el enunciado siempre en una fuente legible (en Cyber no usa la de rotulación ni pierde tildes).
     <span className={className ? `clue-text ${className}` : 'clue-text'}>
-      {text} <span className="whitespace-nowrap text-muted">{cryptic.enumeration || enumeration}</span>
+      {highlightClue(text, revealed)} <span className="whitespace-nowrap text-muted">{cryptic.enumeration || enumeration}</span>
     </span>
   );
 }
@@ -88,12 +98,16 @@ export function CluePanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'answer' | 'hint' | null>(null);
   const [hints, setHints] = useState<string[]>([]);
+  const [revealed, setRevealed] = useState<RevealedHint[] | null>(null);
+  const [pending, setPending] = useState<HintKind | null>(null);
   const [blockedUntil, setBlockedUntil] = useState(0);
 
   const solvedNow = feedback?.kind === 'correct';
   const solved = solvedNow || me.solvedIds.includes(cryptic.id);
   const hintsUsed = me.hintsByClue[cryptic.id] ?? 0;
   const hintsAvailable = Math.max(0, Math.min(Math.min(maxHintsPerClue, cryptic.hintCount) - hintsUsed, gameHintsLeft));
+  // Pistas elegibles (v1.9): el jugador elige el tipo; cripticos anteriores, un solo botón en orden fijo.
+  const kinds = cryptic.hintKinds ? availableKinds(cryptic.hintKinds, me.hintLog?.[cryptic.id]) : null;
   const complete = letters.every(Boolean);
 
   // Recupera pistas ya reveladas (p. ej. tras recargar).
@@ -101,7 +115,10 @@ export function CluePanel({
     if (hintsUsed === 0 || hints.length >= hintsUsed) return;
     actions
       .hint(cryptic.id, false)
-      .then((res) => setHints(res.hints))
+      .then((res) => {
+        setHints(res.hints);
+        setRevealed(res.revealed ?? null);
+      })
       .catch((err: unknown) => console.error('[hint] recuperar', err));
   }, [cryptic.id, hintsUsed, hints.length, actions]);
 
@@ -140,16 +157,24 @@ export function CluePanel({
     }
   };
 
-  const handleHint = async () => {
+  const handleHint = async (kind?: HintKind) => {
     setBusy('hint');
+    setPending(kind ?? null);
     setError(null);
     try {
-      const result = await actions.hint(cryptic.id, true);
+      const result = await actions.hint(cryptic.id, true, kind);
       setHints(result.hints);
+      setRevealed(result.revealed ?? null);
+      // Letra revelada: se escribe en su casilla si estaba vacía (se puede borrar).
+      const last = result.revealed?.[result.revealed.length - 1];
+      if (kind === 'letra' && last?.kind === 'letra') {
+        setLetters((prev) => prev.map((l, i) => (i === last.index && !l ? last.letter : l)));
+      }
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(null);
+      setPending(null);
     }
   };
 
@@ -161,7 +186,7 @@ export function CluePanel({
         <Badge tone={TIER_TONE[cryptic.tier]}>{DIFFICULTY_LABELS[cryptic.tier]}</Badge>
       </div>
       <h2 className="mt-3 font-display text-3xl leading-snug md:text-4xl">
-        <ClueText cryptic={cryptic} />
+        <ClueText cryptic={cryptic} revealed={revealed ?? undefined} />
       </h2>
 
       <div className="relative mt-6">
@@ -200,7 +225,9 @@ export function CluePanel({
 
       <ErrorBanner error={error} />
 
-      {hints.length > 0 && (
+      {revealed && <RevealedHints revealed={revealed} />}
+
+      {!revealed && hints.length > 0 && (
         <ol className="mt-6 space-y-2">
           {hints.map((hint, i) => (
             <li key={i} className="border-l-2 border-accent pl-3 text-sm">
@@ -217,10 +244,21 @@ export function CluePanel({
               Enviar
             </Button>
             <CooldownHint until={blockedUntil} />
-            <Button variant="secondary" onClick={handleHint} loading={busy === 'hint'} disabled={hintsAvailable <= 0}>
-              {hintsAvailable > 0 ? 'Pista' : 'Sin pistas'}
-              {hintsAvailable > 0 && <span className="font-mono text-xs opacity-70">· {hintsAvailable}</span>}
-            </Button>
+            {kinds ? (
+              maxHintsPerClue > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted">
+                    Pista{hintsAvailable > 0 ? ` (${hintsAvailable})` : ': sin cupo'}
+                  </span>
+                  <HintPicker available={kinds} onPick={handleHint} disabled={hintsAvailable <= 0} busy={pending} />
+                </div>
+              )
+            ) : (
+              <Button variant="secondary" onClick={() => handleHint()} loading={busy === 'hint'} disabled={hintsAvailable <= 0}>
+                {hintsAvailable > 0 ? 'Pista' : 'Sin pistas'}
+                {hintsAvailable > 0 && <span className="font-mono text-xs opacity-70">· {hintsAvailable}</span>}
+              </Button>
+            )}
           </>
         )}
         {!solved && footer}

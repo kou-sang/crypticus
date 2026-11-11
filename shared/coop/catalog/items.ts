@@ -161,7 +161,7 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
   hint: {
     id: 'hint',
     name: 'Pista',
-    description: 'Suma una pista a tu contador (máximo 2). No ocupa casilla.',
+    description: 'Suma una pista de un tipo al azar: definición, indicador, relleno o letra (máximo 2 en total). No ocupa casilla.',
     cost: 200,
     weight: 10,
     storage: 'instant',
@@ -187,7 +187,7 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     storage: 'instant',
     unique: true,
     onePerPlayer: true,
-    secret: 'Al comprarla, todos pierden el 20 % de su vida máxima y ganan 2 pistas (por encima del máximo).',
+    secret: 'Al comprarla, todos pierden el 20 % de su vida máxima y ganan 2 pistas de tipos al azar (por encima del máximo).',
   },
   balaamDonkey: {
     id: 'balaamDonkey',

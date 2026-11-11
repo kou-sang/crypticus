@@ -49,6 +49,7 @@ import { CHARACTERS, CHARACTER_PARAMS, type CharacterId } from './catalog/charac
 import { DEFAULT_DAMAGE_TYPE, ITEMS, ITEM_IDS, ITEM_PARAMS, WEAPON_TYPES, type ItemId, type WeaponVariant } from './catalog/items';
 import type { CoopEvent, DamageSource, HealSource } from './events';
 import { chance, pickIndex, pickWeighted, roll, shuffled } from './rng';
+import { HINT_KINDS, type HintKind } from '../hints';
 import { drawTier, roundDurationMs, roundKind } from './schedule';
 import {
   emptyStats,
@@ -58,6 +59,7 @@ import {
   type PlayerState,
   type ShopOffer,
   type ShopState,
+  type HintBag,
 } from './state';
 import { armor, attackPower, damageTakenReduction, evasion, goldBonus, hasItem, itemEffectiveness, maxHp } from './stats';
 
@@ -72,8 +74,13 @@ export interface CoopPlayerSetup {
 export type CoopAction =
   | { type: 'tick' }
   | { type: 'solve'; playerId: string; slot: number }
-  | { type: 'useHint'; playerId: string }
-  | { type: 'useActive'; playerId: string; targetId?: string; amount?: number }
+  /**
+   * Usa una pista de un tipo (v1.9). El servidor ya validó que el criptico la admite y, si es de letra,
+   * eligió la posición (`letterIndex`) al azar entre las ocultas.
+   */
+  | { type: 'useHint'; playerId: string; kind: HintKind; letterIndex?: number }
+  /** DEBBORA: `hintKind`/`letterIndex` los elige el servidor (un tipo al azar de los que admite el criptico). */
+  | { type: 'useActive'; playerId: string; targetId?: string; amount?: number; hintKind?: HintKind; letterIndex?: number }
   | { type: 'useItem'; playerId: string; itemUid: string; targetId?: string }
   | { type: 'buy'; playerId: string; offerId: string }
   | { type: 'shopSwap'; playerId: string; targetId: string }
@@ -133,7 +140,7 @@ export function createCoopGame(input: {
     nextModifiers: { hideCells: false, shift: 0 },
     bosses: bossIds.map((id, index) => createBoss(id, level.categories[index]!, count, normalizeStage(input.stage))),
     bossIndex: 0,
-    players: input.players.map((setup, seat) => createPlayer(setup, seat)),
+    players: input.players.map((setup, seat) => createPlayer(setup, seat, seed)),
     shop: null,
     shopsOpened: 0,
     shopSurcharge: 0,
@@ -247,7 +254,7 @@ function createBoss(id: BossId, category: CoopState['bosses'][number]['category'
   };
 }
 
-function createPlayer(setup: CoopPlayerSetup, seat: number): PlayerState {
+function createPlayer(setup: CoopPlayerSetup, seat: number, seed: number): PlayerState {
   const character = CHARACTERS[setup.character];
   return {
     id: setup.id,
@@ -259,7 +266,7 @@ function createPlayer(setup: CoopPlayerSetup, seat: number): PlayerState {
     winStacks: 0,
     uriasBlessing: 0,
     gold: 0,
-    hints: HINTS_START,
+    hints: startingHints(seed, setup.id),
     charges: character.startCharges,
     activeUsedRound: null,
     inventory: [],
@@ -1069,7 +1076,7 @@ function buy(ctx: Ctx, player: PlayerState, offerId: string): void {
     if (item.unique && (ownedByAnyone(state, item.id) || (item.id === 'apple' && state.appleBought))) reject('Otro jugador ya lo tiene.');
     if (item.onePerPlayer && hasItem(player, item.id)) reject('Ya tienes uno.');
     if (item.storage !== 'instant' && player.inventory.length >= INVENTORY_SLOTS) reject('Inventario lleno.');
-    if (item.id === 'hint' && player.character !== 'debbora' && player.hints >= HINTS_MAX) reject('Ya tienes el máximo de pistas.');
+    if (item.id === 'hint' && player.character !== 'debbora' && hintTotal(player) >= HINTS_MAX) reject('Ya tienes el máximo de pistas.');
   }
   player.gold -= price;
   player.stats.goldSpent += price;
@@ -1085,7 +1092,7 @@ function buy(ctx: Ctx, player: PlayerState, offerId: string): void {
   }
   const item = ITEMS[offer.itemId!];
   if (item.id === 'hint') {
-    player.hints += ITEM_PARAMS.hint.hints;
+    for (let i = 0; i < ITEM_PARAMS.hint.hints; i += 1) gainHint(ctx, player, 'shop', `${offerId}:${i}`);
     return;
   }
   if (item.id === 'apple') {
@@ -1093,7 +1100,8 @@ function buy(ctx: Ctx, player: PlayerState, offerId: string): void {
     ctx.events.push({ type: 'secretRevealed', gt, secret: 'apple', playerId: player.id });
     for (const target of alivePlayers(state)) {
       loseHp(ctx, target, maxHp(state, target) * ITEM_PARAMS.apple.maxHpLossShare, 'apple');
-      if (target.status === 'alive') target.hints += ITEM_PARAMS.apple.hints; // No cuenta para el máximo.
+      // No cuenta para el máximo.
+      if (target.status === 'alive') for (let i = 0; i < ITEM_PARAMS.apple.hints; i += 1) gainHint(ctx, target, 'apple', `apple:${i}`);
     }
     checkWipe(ctx);
     return;
@@ -1114,9 +1122,9 @@ function applyAction(ctx: Ctx, action: Exclude<CoopAction, { type: 'tick' }>): v
     case 'solve':
       return solve(ctx, player, action.slot);
     case 'useHint':
-      return useHint(ctx, player);
+      return useHint(ctx, player, action.kind, action.letterIndex);
     case 'useActive':
-      return useActive(ctx, player, action.targetId, action.amount);
+      return useActive(ctx, player, action.targetId, action.amount, action.hintKind, action.letterIndex);
     case 'useItem':
       return useItem(ctx, player, action.itemUid, action.targetId);
     case 'buy':
@@ -1169,21 +1177,45 @@ function solve(ctx: Ctx, player: PlayerState, slot: number): void {
   if (participants.length > 0 && participants.every(allSolved)) endRound(ctx);
 }
 
-function useHint(ctx: Ctx, player: PlayerState): void {
+function useHint(ctx: Ctx, player: PlayerState, kind: HintKind, letterIndex: number | undefined): void {
   if (ctx.state.phase !== 'round') reject('Las pistas se usan durante la ronda.');
-  if (player.hints <= 0) reject('No te quedan pistas.');
-  revealNextHint(ctx, player);
-  player.hints -= 1;
+  if (!HINT_KINDS.includes(kind)) reject('Tipo de pista desconocido.');
+  if ((player.hints[kind] ?? 0) <= 0) reject('No te quedan pistas de ese tipo.');
+  revealHint(ctx, player, kind, letterIndex);
+  player.hints[kind] -= 1;
   player.stats.hintsUsed += 1;
 }
 
-/** Revela la siguiente pista del primer criptico sin resolver. */
-function revealNextHint(ctx: Ctx, player: PlayerState): void {
+/** Revela una pista del tipo pedido en el primer criptico sin resolver. */
+function revealHint(ctx: Ctx, player: PlayerState, kind: HintKind, letterIndex: number | undefined): void {
   const slot = player.assignments.findIndex((a) => !a.solved);
   const assignment = player.assignments[slot] ?? reject('No tienes un criptico en pantalla.');
-  if (assignment.hintsRevealed >= 2) reject('Ese criptico no tiene más pistas.');
+  if (kind === 'letra' && !(Number.isInteger(letterIndex) && letterIndex! >= 0)) reject('Falta la letra.');
+  assignment.hintLog = [...(assignment.hintLog ?? []), kind === 'letra' ? `letra:${letterIndex}` : kind];
   assignment.hintsRevealed += 1;
-  ctx.events.push({ type: 'hintRevealed', gt: gtOf(ctx), playerId: player.id, slot, level: assignment.hintsRevealed });
+  ctx.events.push({ type: 'hintRevealed', gt: gtOf(ctx), playerId: player.id, slot, level: assignment.hintsRevealed, kind });
+}
+
+/** Pistas al empezar: HINTS_START de tipos al azar. */
+function startingHints(seed: number, playerId: string): HintBag {
+  const bag: HintBag = { definicion: 0, indicador: 0, relleno: 0, letra: 0 };
+  for (let i = 0; i < HINTS_START; i += 1) bag[randomHintKind(seed, ['hintStart', playerId, i])] += 1;
+  return bag;
+}
+
+/** Tipo de pista al azar, con igual probabilidad (tienda, manzana, inicio). */
+function randomHintKind(seed: number, key: Array<string | number>): HintKind {
+  return pickWeighted(seed, key, HINT_KINDS.map((value) => ({ value, weight: 1 }))) ?? 'definicion';
+}
+
+function gainHint(ctx: Ctx, player: PlayerState, source: 'shop' | 'apple', key: string): void {
+  const kind = randomHintKind(ctx.state.seed, ['hintGain', player.id, ctx.state.roundNumber, key, hintTotal(player)]);
+  player.hints[kind] += 1;
+  ctx.events.push({ type: 'hintGained', gt: gtOf(ctx), playerId: player.id, kind, source });
+}
+
+export function hintTotal(player: Pick<PlayerState, 'hints'>): number {
+  return HINT_KINDS.reduce((sum, kind) => sum + (player.hints[kind] ?? 0), 0);
 }
 
 function requireAlly(state: CoopState, player: PlayerState, targetId: string | undefined): PlayerState {
@@ -1193,7 +1225,14 @@ function requireAlly(state: CoopState, player: PlayerState, targetId: string | u
   return target;
 }
 
-function useActive(ctx: Ctx, player: PlayerState, targetId: string | undefined, amount: number | undefined): void {
+function useActive(
+  ctx: Ctx,
+  player: PlayerState,
+  targetId: string | undefined,
+  amount: number | undefined,
+  hintKind: HintKind | undefined,
+  letterIndex: number | undefined,
+): void {
   const { state } = ctx;
   if (state.phase !== 'round' && state.phase !== 'shop' && state.phase !== 'decision') reject('Ahora no se pueden usar habilidades.');
   if (player.status !== 'alive') reject('Solo los vivos usan su habilidad.');
@@ -1216,7 +1255,7 @@ function useActive(ctx: Ctx, player: PlayerState, targetId: string | undefined, 
       break;
     case 'debbora':
       if (state.phase !== 'round') reject('Se usa con un criptico en pantalla.');
-      revealNextHint(ctx, player);
+      revealHint(ctx, player, hintKind ?? reject('Ese criptico no tiene más pistas.'), letterIndex);
       break;
     case 'gedeon':
       target = requireAlly(state, player, targetId);

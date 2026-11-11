@@ -3,11 +3,11 @@ import { bearerToken, verifyFirebaseToken } from './auth';
 import { AppError, errorResponse, json } from './errors';
 import { FirestoreRest } from './firestore';
 import type { Env } from './env';
-import type { Competition, CompetitionConfig, Difficulty, Participant } from '../shared/types';
-import { byFreshness, mergeLastSeen, selectCryptics, selectTiebreakers } from '../shared/selection';
+import { DIFFICULTIES, type Competition, type CompetitionConfig, type Difficulty, type Participant } from '../shared/types';
+import { CRYPTIC_KIND_WEIGHTS, kindWeightedOrder, mergeLastSeen, selectCryptics } from '../shared/selection';
 import { assignTeams, isTeamDuel, startBlocker } from '../shared/teams';
-import { ROYALE_TIER_COUNTS } from '../shared/gameModes';
-import { answerWords, catalogByTier, catalogTiebreak, crypticKind } from './secrets';
+import { startsFor, tierCountsFor } from '../shared/progression';
+import { catalogByTier, crypticKind } from './secrets';
 import { validateConfig } from '../shared/scoring';
 import { normalizeConfig } from '../shared/config';
 import { handleCreate, handleUpdate } from './rooms';
@@ -51,38 +51,33 @@ async function selectUnseen(
   firestore: FirestoreRest,
   competition: Competition,
   uids: string[],
-): Promise<{ crypticIds: string[]; pool: Record<Difficulty, string[]>; tiebreakIds: string[] }> {
+): Promise<{ crypticIds: string[]; pool: Record<Difficulty, string[]> }> {
   const seenDocs = await firestore.batchGet<{ seen?: Record<string, number> }>(uids.map((uid) => `userSeen/${uid}`));
   const lastSeen = mergeLastSeen([...seenDocs.values()].map((d) => d.seen));
-  const pool = competition.pool ?? { easy: [], medium: [], hard: [] };
   // `clueCount` (v0.7+) evita que el cliente tenga que elegir cripticos; antes se deducía de la lista guardada.
   const stored = typeof competition.clueCount === 'number' ? competition.clueCount : null;
   const count =
     stored ??
     (competition.flow === 'rounds'
-      ? Math.max(pool.easy.length, pool.medium.length, pool.hard.length, 1)
+      ? Math.max(...DIFFICULTIES.map((tier) => (competition.pool?.[tier] ?? []).length), 1)
       : Math.max(competition.crypticIds.length, 1));
+  const starts = startsFor(competition);
   const selection = selectCryptics({
     byTier: catalogByTier(),
     lastSeen,
     flow: competition.flow,
-    tierMix: competition.tierMix,
+    // Con progresión (Royale, Race Pacífico) la lista siempre va en orden; salas creadas antes de v1.9 incluidas.
+    tierMix: competition.flow === 'free' && starts ? 'progressive' : competition.tierMix,
     count,
     kindOf: crypticKind,
-    // Royale: 10 fáciles, 10 medios y después solo difíciles.
-    ...(competition.game === 'royale' ? { tierCounts: ROYALE_TIER_COUNTS } : {}),
+    kindWeights: CRYPTIC_KIND_WEIGHTS,
+    // Royale y Race Pacífico: lista en orden con la progresión del modo (v1.9).
+    ...(competition.flow === 'free' && starts ? { tierCounts: tierCountsFor(starts, count) } : {}),
   });
   if (selection.crypticIds.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
-  // Muerte súbita: solo Race, Royale y Duel con rivales (el jefe es cooperativo).
-  const competitive = uids.length >= 2;
-  const tiebreakIds = competitive ? selectTiebreakers(catalogTiebreak(), lastSeen) : [];
-  return { ...selection, tiebreakIds };
+  return selection;
 }
 
-/**
- * COOP: todo el catálogo por dificultad, con los que nadie de la sala vio primero. El DO los reparte por ronda
- * sin repetir. Los de desempate son los «muy difíciles», separados por cantidad de palabras.
- */
 /**
  * Cripticos de cada jugador por dificultad, ordenados por SU historial: primero los que nunca vio, después
  * los vistos hace más tiempo. Lo que vieron sus aliados no cuenta. Se guardan los primeros COOP_POOL_LIMIT.
@@ -90,20 +85,17 @@ async function selectUnseen(
 async function coopPools(firestore: FirestoreRest, uids: string[]): Promise<Record<string, PlayerPools>> {
   const seenDocs = await firestore.batchGet<{ seen?: Record<string, number> }>(uids.map((uid) => `userSeen/${uid}`));
   const regular = catalogByTier();
-  if (regular.easy.length + regular.medium.length + regular.hard.length === 0) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
-  const tiebreak = Object.values(catalogTiebreak()).flat();
-  const veryHard2 = tiebreak.filter((id) => answerWords(id) <= 2);
-  const veryHard3 = tiebreak.filter((id) => answerWords(id) >= 3);
+  if (Object.values(regular).every((ids) => ids.length === 0)) throw new AppError(409, 'no_cryptics', 'No hay cripticos disponibles.');
   return Object.fromEntries(
     uids.map((uid) => {
       const lastSeen = mergeLastSeen([seenDocs.get(uid)?.seen]);
-      const top = (ids: string[]) => byFreshness(ids, lastSeen).slice(0, COOP_POOL_LIMIT);
+      // Frescos primero y con el reparto por tipo (v1.9).
+      const top = (ids: string[]) => kindWeightedOrder(ids, crypticKind, CRYPTIC_KIND_WEIGHTS, lastSeen).slice(0, COOP_POOL_LIMIT);
       const pools: PlayerPools = {
         easy: top(regular.easy),
         medium: top(regular.medium),
         hard: top(regular.hard),
-        veryHard2: top(veryHard2),
-        veryHard3: top(veryHard3),
+        veryHard: top(regular.veryHard),
       };
       return [uid, pools];
     }),
@@ -190,7 +182,7 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   if (configErrors.length > 0) throw new AppError(400, 'bad_config', configErrors.join(' '));
 
   // Selección sin repetir: se descartan (o se dejan para el final) los cripticos que ya vio algún jugador.
-  const [{ crypticIds, pool, tiebreakIds }, profiles] = await Promise.all([
+  const [{ crypticIds, pool }, profiles] = await Promise.all([
     selectUnseen(firestore, competition, participants.map((p) => p.id)),
     firestore.batchGet<{ displayName?: string }>(participants.map((p) => `users/${p.id}`)),
   ]);
@@ -211,7 +203,6 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
       })),
       crypticIds,
       pool,
-      tiebreakIds,
       startedAt: Date.now() + COUNTDOWN_MS, // Tras la selección: el margen no se consume en lecturas.
     });
   } catch (error) {
@@ -222,7 +213,7 @@ async function handleStart(request: Request, env: Env): Promise<Response> {
   // Los clientes escuchan este cambio en Firestore y abren el WebSocket.
   // La lista de cripticos no se publica: vive solo en el DO (el siguiente siempre es secreto).
   await firestore.commit([
-    { kind: 'update', path: `competitions/${competitionId}`, data: { status: 'live', crypticIds: [], pool: { easy: [], medium: [], hard: [] }, ...times } },
+    { kind: 'update', path: `competitions/${competitionId}`, data: { status: 'live', crypticIds: [], pool: { easy: [], medium: [], hard: [], veryHard: [] }, ...times } },
   ]);
   return json({ ok: true, data: times });
 }

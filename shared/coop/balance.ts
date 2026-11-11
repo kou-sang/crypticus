@@ -1,5 +1,6 @@
 // Números del modo COOP (manual v2). Todo lo ajustable vive aquí: el motor solo lee estas constantes.
 // Sin confirmar: ajustarlos con `scripts/simulate-coop.ts` antes de tocar las reglas.
+import type { Difficulty } from '../types';
 
 export type BossCategory = 'easy' | 'medium' | 'difficult' | 'expert' | 'nightmare';
 export const BOSS_CATEGORIES: readonly BossCategory[] = ['easy', 'medium', 'difficult', 'expert', 'nightmare'];
@@ -20,8 +21,8 @@ export const STAGE_RATING_OFFSET: Record<CoopStage, number> = { 1: -150, 2: 0, 3
 export const normalizeStage = (value: unknown): CoopStage => (value === 1 || value === 2 || value === 3 ? value : DEFAULT_COOP_STAGE);
 export const coopLevelLabel = (level: CoopLevel, stage: CoopStage | undefined): string => `${level}${stage ?? DEFAULT_COOP_STAGE}`;
 
-/** Dificultad de un criptico de COOP. «veryHard2/3»: muy difícil de 2 o 3 palabras (los de desempate). */
-export type CoopTier = 'easy' | 'medium' | 'hard' | 'veryHard2' | 'veryHard3';
+/** Dificultad de un criptico de COOP: la misma escala que el resto de los modos (v1.9). */
+export type CoopTier = Difficulty;
 
 export const PARTY_MIN = 4;
 export const PARTY_MAX = 8;
@@ -69,22 +70,17 @@ export const HARD_ROUND_MS_STEP = 3_000;
 /** Espera tras una respuesta incorrecta (la aplica el servidor; el motor no penaliza). */
 export const WRONG_ANSWER_COOLDOWN_MS = 2_000;
 
-/** Dificultad de los cripticos por número de ronda (desde la ronda `from`). */
+/** Dificultad de los cripticos por número de ronda (desde la ronda `from`), en rondas individuales y grupales (v1.9). */
 export const TIER_TABLE: ReadonlyArray<{ from: number; shares: Partial<Record<CoopTier, number>> }> = [
   { from: 1, shares: { easy: 0.6, medium: 0.4 } },
-  { from: 6, shares: { easy: 0.2, medium: 0.5, hard: 0.3 } },
-  { from: 11, shares: { medium: 0.6, hard: 0.4 } },
-  { from: 21, shares: { medium: 0.2, hard: 0.5, veryHard2: 0.3 } },
-  { from: 31, shares: { hard: 0.2, veryHard2: 0.5, veryHard3: 0.3 } },
+  { from: 6, shares: { easy: 0.4, medium: 0.4, hard: 0.2 } },
+  { from: 11, shares: { easy: 0.2, medium: 0.4, hard: 0.4 } },
+  { from: 16, shares: { medium: 0.4, hard: 0.6 } },
+  { from: 26, shares: { medium: 0.2, hard: 0.5, veryHard: 0.3 } },
+  { from: 31, shares: { medium: 0.15, hard: 0.43, veryHard: 0.42 } },
 ];
-/**
- * Ronda difícil (grupal): medio o difícil hasta la ronda 10; desde la 11, difícil o muy difícil.
- * Reparto sin confirmar.
- */
-export const HARD_ROUND_TIER_TABLE: ReadonlyArray<{ from: number; shares: Partial<Record<CoopTier, number>> }> = [
-  { from: 1, shares: { medium: 0.5, hard: 0.5 } },
-  { from: 11, shares: { hard: 0.6, veryHard2: 0.4 } },
-];
+/** Ronda difícil (grupal): misma tabla que las individuales desde v1.9. */
+export const HARD_ROUND_TIER_TABLE = TIER_TABLE;
 /** Jugadores muertos: un criptico fácil, medio o difícil. */
 export const DEAD_TIERS: Partial<Record<CoopTier, number>> = { easy: 1, medium: 1, hard: 1 };
 

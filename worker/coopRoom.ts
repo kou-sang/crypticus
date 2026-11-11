@@ -25,9 +25,19 @@ import {
   type CoopReply,
   type CoopView,
 } from '../shared/coop/protocol';
-import type { CoopState } from '../shared/coop/state';
+import type { Assignment, CoopState } from '../shared/coop/state';
 import { GameError } from '../shared/engine';
-import { getCrypticSecret } from './secrets';
+import {
+  HINT_KINDS,
+  availableKinds,
+  displayLetters,
+  hintText,
+  revealHints,
+  revealedLetterIndexes,
+  type HintKind,
+  type RevealedHint,
+} from '../shared/hints';
+import { getCrypticSecret, type WorkerCrypticSecret } from './secrets';
 import type { Solution } from '../shared/protocol';
 
 export interface CoopStartInput {
@@ -48,7 +58,7 @@ export type PlayerPools = Record<CoopTier, string[]>;
 /** Máximo de ids por dificultad y jugador guardados en la sala (cabe de sobra en una partida de 22 min). */
 export const COOP_POOL_LIMIT = 50;
 
-const ZERO_CURSORS = (): Record<CoopTier, number> => ({ easy: 0, medium: 0, hard: 0, veryHard2: 0, veryHard3: 0 });
+const ZERO_CURSORS = (): Record<CoopTier, number> => ({ easy: 0, medium: 0, hard: 0, veryHard: 0 });
 
 export interface CoopRoomState {
   version: 1;
@@ -86,9 +96,8 @@ export interface CoopRoomState {
 const TIER_FALLBACK: Record<CoopTier, CoopTier[]> = {
   easy: ['medium', 'hard'],
   medium: ['easy', 'hard'],
-  hard: ['medium', 'veryHard2'],
-  veryHard2: ['hard', 'veryHard3'],
-  veryHard3: ['veryHard2', 'hard'],
+  hard: ['medium', 'veryHard'],
+  veryHard: ['hard', 'medium'],
 };
 
 export function createCoopRoom(input: CoopStartInput): CoopRoomState {
@@ -145,6 +154,7 @@ function takeCryptic(room: CoopRoomState, uid: string, tier: CoopTier, takenThis
   for (const candidate of [tier, ...TIER_FALLBACK[tier]]) {
     const pool = pools[candidate];
     if (!pool || pool.length === 0) continue;
+    cursors[candidate] ??= 0; // Salas anteriores a v1.9 no tienen cursor de «muy difícil».
     const start = cursors[candidate] % pool.length;
     let index = start;
     for (let step = 0; step < pool.length; step += 1) {
@@ -356,14 +366,34 @@ async function runAction(
       room.solvedBy = { ...room.solvedBy, [crypticId]: [...(room.solvedBy?.[crypticId] ?? []), uid] };
       return { reply: { ok: true, correct: true, explanation: getCrypticSecret(crypticId)?.explanation ?? null }, events };
     }
-    case 'hint':
-      events.push(...applyEngine(room, { type: 'useHint', playerId: uid }, now, events));
+    case 'hint': {
+      // Pistas por tipo (v1.9): el servidor valida que el criptico en pantalla la admita y elige la letra.
+      const kind = HINT_KINDS.find((k) => k === action.hintKind) ?? null;
+      if (!kind) throw new GameError('bad_hint', 'Elige un tipo de pista.');
+      const pick = hintPick(room, uid, kind);
+      events.push(...applyEngine(room, { type: 'useHint', playerId: uid, kind, letterIndex: pick.letterIndex }, now, events));
       break;
-    case 'active':
+    }
+    case 'active': {
+      // DEBBORA: revela un tipo al azar entre los que admite su criptico en pantalla.
+      const me = room.game?.players.find((p) => p.id === uid);
+      const debbora = me?.character === 'debbora' ? randomHintPick(room, uid) : null;
       events.push(
-        ...applyEngine(room, { type: 'useActive', playerId: uid, targetId: action.targetId, amount: Number(action.amount) || undefined }, now, events),
+        ...applyEngine(
+          room,
+          {
+            type: 'useActive',
+            playerId: uid,
+            targetId: action.targetId,
+            amount: Number(action.amount) || undefined,
+            ...(debbora ? { hintKind: debbora.kind, letterIndex: debbora.letterIndex } : {}),
+          },
+          now,
+          events,
+        ),
       );
       break;
+    }
     case 'item':
       events.push(...applyEngine(room, { type: 'useItem', playerId: uid, itemUid: String(action.itemUid), targetId: action.targetId }, now, events));
       break;
@@ -401,6 +431,51 @@ async function runAction(
   return { reply: { ok: true }, events };
 }
 
+/** Criptico en pantalla de un jugador (el primero sin resolver) y su asignación. */
+function currentAssignment(room: CoopRoomState, uid: string) {
+  const me = room.game?.players.find((p) => p.id === uid);
+  const slot = me ? me.assignments.findIndex((a) => !a.solved) : -1;
+  const assignment = slot >= 0 ? me!.assignments[slot] : undefined;
+  const crypticId = slot >= 0 ? room.assigned[uid]?.[slot] : undefined;
+  if (!assignment || !crypticId) throw new GameError('no_cryptic', 'No tienes un criptico en pantalla.');
+  return { assignment, secret: getCrypticSecret(crypticId) };
+}
+
+/** Valida una pista de tipo `kind` para el criptico en pantalla; si es de letra, elige una oculta al azar. */
+function hintPick(room: CoopRoomState, uid: string, kind: HintKind): { letterIndex?: number } {
+  const { assignment, secret } = currentAssignment(room, uid);
+  if (!availableKinds(secret?.hintKinds, assignment.hintLog).includes(kind)) {
+    throw new GameError('bad_hint', 'Ese criptico no admite esa pista.');
+  }
+  if (kind !== 'letra') return {};
+  const letters = displayLetters(secret?.answer ?? '').length;
+  const taken = new Set(revealedLetterIndexes(assignment.hintLog));
+  const hidden = Array.from({ length: letters }, (_, i) => i).filter((i) => !taken.has(i));
+  return { letterIndex: hidden[Math.floor(Math.random() * hidden.length)] ?? 0 };
+}
+
+/** DEBBORA: un tipo al azar entre los que el criptico en pantalla todavía admite (null si no queda ninguno). */
+function randomHintPick(room: CoopRoomState, uid: string): { kind: HintKind; letterIndex?: number } | null {
+  let options: HintKind[];
+  try {
+    const { assignment, secret } = currentAssignment(room, uid);
+    options = availableKinds(secret?.hintKinds, assignment.hintLog);
+  } catch {
+    return null;
+  }
+  const kind = options[Math.floor(Math.random() * options.length)];
+  return kind ? { kind, ...hintPick(room, uid, kind) } : null;
+}
+
+/** Pistas mostradas de una asignación: estructuradas (v1.9) o, en importes anteriores, en orden fijo. */
+function shownHints(secret: WorkerCrypticSecret | null | undefined, assignment: Assignment): { hints: string[]; revealed?: RevealedHint[] } {
+  if (secret?.parts && secret.answer) {
+    const revealed = revealHints(assignment.hintLog, secret.parts, secret.answer);
+    return { hints: revealed.map(hintText), revealed };
+  }
+  return { hints: (secret?.hints ?? []).slice(0, assignment.hintsRevealed) };
+}
+
 /** Vista de un jugador: sin semilla y solo sus cripticos (con las pistas ya reveladas). */
 export function coopView(room: CoopRoomState, uid: string, events: CoopEvent[], now: number): CoopView {
   const game = room.game;
@@ -419,7 +494,8 @@ export function coopView(room: CoopRoomState, uid: string, events: CoopEvent[], 
             tier: assignment.tier,
             clue: secret?.clue ?? null,
             enumeration: game.modifiers.hideCells ? null : (secret?.enumeration ?? null),
-            hints: (secret?.hints ?? []).slice(0, assignment.hintsRevealed),
+            ...shownHints(secret, assignment),
+            ...(secret?.hintKinds && slot === current ? { hintKinds: availableKinds(secret.hintKinds, assignment.hintLog) } : {}),
             solved: assignment.solved,
           };
         })

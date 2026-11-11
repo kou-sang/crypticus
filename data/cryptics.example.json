@@ -4,23 +4,47 @@
     "answer": "arma",
     "difficulty": "facil",
     "hints": [
-      "La definición es «para la guerra». Es un anagrama.",
-      "Reordena las letras de «RAMA»."
+      "Definición: «para la guerra».",
+      "Indicador: «rota».",
+      "Relleno: «Rama»."
     ],
-    "explanation": "Anagrama de RAMA = ARMA."
+    "parts": {
+      "definicion": [
+        "para la guerra"
+      ],
+      "indicador": [
+        "rota"
+      ],
+      "relleno": [
+        "Rama"
+      ]
+    },
+    "explanation": "Anagrama de RAMA = ARMA.",
+    "tags": [
+      "Anagrama"
+    ]
   },
   {
     "clue": "Reptil cambiante: lecho con felino (8)",
     "answer": "camaleón",
     "difficulty": "medio",
     "hints": [
-      "La definición es «Reptil cambiante». Es una suma de piezas.",
-      "Junta: «lecho» + «felino»."
+      "Definición: «Reptil cambiante».",
+      "Relleno: «lecho», «felino»."
     ],
+    "parts": {
+      "definicion": [
+        "Reptil cambiante"
+      ],
+      "indicador": [],
+      "relleno": [
+        "lecho",
+        "felino"
+      ]
+    },
     "explanation": "CAMA (lecho) + LEÓN (felino) = CAMALEÓN.",
-    "setter": "kou-sang",
     "tags": [
-      "cha"
+      "Charada"
     ]
   }
 ]

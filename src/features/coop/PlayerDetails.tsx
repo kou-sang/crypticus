@@ -11,6 +11,7 @@ import { cx } from '../../lib/utils';
 import { HpBar, effectChipClass } from './Arena';
 import { itemName } from './MyPanel';
 import { ItemSilhouette } from './silhouettes';
+import { hintTotal } from '../../../shared/coop/engine';
 
 export const PlayerDetails = memo(function PlayerDetails({
   state,
@@ -37,7 +38,7 @@ export const PlayerDetails = memo(function PlayerDetails({
               <p className="font-mono text-xs">
                 {player.status === 'alive' ? 'En combate' : player.status === 'dead' ? 'Caído' : 'Salió'} · Oro {player.gold} · Daño{' '}
                 {Math.round(attackPower(state, player, gt, state.bosses[state.bossIndex]?.id === 'goliath'))} · Armadura {Math.round(armor(player, gt))} ·
-                Pistas {player.hints}
+                Pistas {hintTotal(player)}
               </p>
             </div>
           </div>

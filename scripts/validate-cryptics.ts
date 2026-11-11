@@ -14,8 +14,8 @@ async function main(): Promise<void> {
   const report = lintCryptics(parsed);
   for (const warning of report.warnings) console.warn(`  ! ${warning}`);
   for (const error of report.errors) console.error(`  ✗ ${error}`);
-  const { easy, medium, hard } = report.counts;
-  console.log(`${filePath}: ${report.total} cripticos (fáciles ${easy}, medios ${medium}, difíciles ${hard}; ${report.tiebreak} de desempate).`);
+  const { easy, medium, hard, veryHard } = report.counts;
+  console.log(`${filePath}: ${report.total} cripticos (fáciles ${easy}, medios ${medium}, difíciles ${hard}, muy difíciles ${veryHard}).`);
   if (report.errors.length > 0) {
     console.error(`${report.errors.length} error(es). Corrige el archivo antes de importarlo.`);
     process.exitCode = 1;

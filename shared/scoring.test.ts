@@ -100,7 +100,10 @@ describe('parseDifficulty', () => {
     expect(parseDifficulty('Fácil')).toBe('easy');
     expect(parseDifficulty('medio')).toBe('medium');
     expect(parseDifficulty('DIFICIL')).toBe('hard');
-    expect(parseDifficulty(5)).toBe('hard');
+    expect(parseDifficulty(4)).toBe('hard');
+    expect(parseDifficulty(5)).toBe('veryHard');
+    expect(parseDifficulty('muydificil')).toBe('veryHard');
+    expect(parseDifficulty('Muy difícil')).toBe('veryHard');
     expect(parseDifficulty(undefined)).toBe('medium');
     expect(parseDifficulty('rarísimo')).toBeNull();
   });

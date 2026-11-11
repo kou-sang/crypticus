@@ -4,12 +4,13 @@ import { GameChannel, type ConnectionState } from '../lib/gameChannel';
 import { ApiError } from '../lib/api';
 import type { LiveState } from '../../shared/engine';
 import type { AckReply, AnswerReply, HintReply, Solution } from '../../shared/protocol';
+import type { HintKind } from '../../shared/hints';
 import type { Difficulty } from '../../shared/types';
 
 /** Acciones de juego expuestas a la UI. */
 export interface GameActions {
   answer: (crypticId: string, guess: string) => Promise<AnswerReply>;
-  hint: (crypticId: string, reveal: boolean) => Promise<HintReply>;
+  hint: (crypticId: string, reveal: boolean, kind?: HintKind) => Promise<HintReply>;
   vote: (tier: Difficulty) => Promise<AckReply>;
   endVote: () => Promise<AckReply>;
   pass: () => Promise<AckReply>;
@@ -72,7 +73,7 @@ export function useGameChannel(competitionId: string, enabled: boolean): GameCha
       channel
         ? {
             answer: (id, guess) => channel.answer(id, guess),
-            hint: (id, reveal) => channel.hint(id, reveal),
+            hint: (id, reveal, kind) => channel.hint(id, reveal, kind),
             vote: (tier) => channel.vote(tier),
             endVote: () => channel.endVote(),
             pass: () => channel.pass(),

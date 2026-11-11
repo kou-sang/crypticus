@@ -1,6 +1,8 @@
 // Motor de juego autoritativo: estado + acción -> estado nuevo. Puro y síncrono.
 // Lo ejecuta el Durable Object; la validación criptográfica de respuestas ocurre fuera (async)
 // y aquí solo llega `correct: boolean`.
+import { startsFor, tierAt, votableTiers } from './progression';
+import { availableKinds, revealedLetterIndexes, totalHints, type HintKind, type HintKinds } from './hints';
 import {
   computeDuelDamage,
   computeSolvePoints,
@@ -30,6 +32,7 @@ export class GameError extends Error {
 export interface CatalogEntry {
   tier: Difficulty;
   hintCount: number;
+  hintKinds?: HintKinds; // Pistas elegibles (v1.9). Sin esto, pistas en orden fijo (`hintCount`).
   kind?: string; // Tipo (anagrama, contenedor…). Solo en el servidor: se quita del estado que ven los clientes.
 }
 
@@ -183,11 +186,7 @@ export function createLiveState(input: CreateInput): LiveState {
   }
   // Solo se conservan cripticos con secreto disponible en el catálogo.
   const known = (id: string) => id in input.catalog;
-  const pool = {
-    easy: input.pool.easy.filter(known),
-    medium: input.pool.medium.filter(known),
-    hard: input.pool.hard.filter(known),
-  };
+  const pool = Object.fromEntries(DIFFICULTIES.map((tier) => [tier, (input.pool[tier] ?? []).filter(known)])) as Record<Difficulty, string[]>;
   const crypticIds = input.crypticIds.filter(known);
   if (input.config.flow === 'free' && crypticIds.length === 0) throw new GameError('no_cryptics', 'No hay cripticos disponibles.');
   if (input.config.flow === 'rounds' && DIFFICULTIES.every((t) => pool[t].length === 0)) {
@@ -216,7 +215,8 @@ export function createLiveState(input: CreateInput): LiveState {
     endReason: null,
     finishedAt: null,
   };
-  if (input.config.flow === 'rounds') openRound(state, 'medium', input.startedAt, random);
+  // Primera ronda: la que marca la progresión del modo (partidas sin progresión: medio, como antes).
+  if (input.config.flow === 'rounds') openRound(state, startsFor(input.config) ? progressionTier(state, 1, random) : 'medium', input.startedAt, random);
   return state;
 }
 
@@ -547,6 +547,7 @@ export function applyAnswer(
 export interface HintOutcome {
   used: number;
   maxAllowed: number;
+  log: string[]; // Pistas pedidas en este criptico (ver Participant.hintLog).
 }
 
 /** Pistas que le quedan al jugador en toda la partida (sin tope: infinitas). */
@@ -555,22 +556,48 @@ export function gameHintsLeft(state: LiveState, participant: Participant): numbe
   return cap === undefined ? Number.POSITIVE_INFINITY : Math.max(0, cap - participant.hintsUsed);
 }
 
-export function applyHint(state: LiveState, input: { uid: string; crypticId: string; reveal: boolean; now: number }): HintOutcome {
+/**
+ * Pide (o consulta, sin `kind`) una pista. Desde v1.9 el jugador elige el tipo: definición, indicador,
+ * relleno o una letra (al azar entre las ocultas). Cada pista gasta un cupo, del criptico y de la partida.
+ * Cripticos sin pistas elegibles (importes anteriores): pistas en orden fijo.
+ */
+export function applyHint(
+  state: LiveState,
+  input: { uid: string; crypticId: string; reveal: boolean; kind?: HintKind; now: number; random?: () => number },
+): HintOutcome {
   const participant = requireParticipant(state, input.uid);
   const entry = state.catalog[input.crypticId];
   if (!entry) throw new GameError('unknown_cryptic', 'Criptico fuera de la competencia.');
   const used = participant.hintsByClue[input.crypticId] ?? 0;
-  const maxAllowed = Math.min(state.config.maxHintsPerClue, entry.hintCount, used + gameHintsLeft(state, participant));
-  if (!input.reveal) return { used, maxAllowed };
+  const log = participant.hintLog?.[input.crypticId] ?? [];
+  const perClue = entry.hintKinds ? totalHints(entry.hintKinds) : entry.hintCount;
+  const maxAllowed = Math.min(state.config.maxHintsPerClue, perClue, used + gameHintsLeft(state, participant));
+  if (!input.reveal) return { used, maxAllowed, log };
 
   requireLive(state, input.now);
   requireNoTiebreak(state);
   if (!isPlayable(state, participant, input.crypticId, input.now)) throw new GameError('not_playable', 'Ese criptico ya no está en juego.');
   if (used >= maxAllowed) throw new GameError('no_more_hints', 'No quedan pistas.');
+  let next = log;
+  if (entry.hintKinds) {
+    const kind = input.kind;
+    if (!kind || !availableKinds(entry.hintKinds, log).includes(kind)) throw new GameError('bad_hint', 'Esa pista no está disponible.');
+    let item: string = kind;
+    if (kind === 'letra') {
+      // Letra al azar entre las que siguen ocultas (siempre queda al menos una sin revelar).
+      const letters = (entry.hintKinds.letra ?? 0) + 1;
+      const taken = new Set(revealedLetterIndexes(log));
+      const hidden = Array.from({ length: letters }, (_, i) => i).filter((i) => !taken.has(i));
+      const random = input.random ?? Math.random;
+      item = `letra:${hidden[Math.floor(random() * hidden.length)] ?? hidden[0]}`;
+    }
+    next = [...log, item];
+    participant.hintLog = { ...(participant.hintLog ?? {}), [input.crypticId]: next };
+  }
   participant.hintsByClue = { ...participant.hintsByClue, [input.crypticId]: used + 1 };
   participant.hintsUsed += 1;
   pushEvent(state, { at: input.now, kind: 'hint', uid: input.uid, crypticId: input.crypticId });
-  return { used: used + 1, maxAllowed };
+  return { used: used + 1, maxAllowed, log: next };
 }
 
 // ---------- Votos y acuerdos ----------
@@ -587,6 +614,10 @@ export function applyDifficultyVote(state: LiveState, input: { uid: string; tier
     throw new GameError('vote_closed', 'La votación se abre cuando todos terminan el criptico.');
   }
   if (!DIFFICULTIES.includes(input.tier)) throw new GameError('bad_tier', 'Dificultad inválida.');
+  // Progresión (v1.9): solo se vota hasta la dificultad que ya se habilitó en esta ronda.
+  if (!votableTiers(startsFor(state.config), state.round.index).includes(input.tier)) {
+    throw new GameError('tier_locked', 'Esa dificultad todavía no se habilitó.');
+  }
   state.round.votes = { ...state.round.votes, [input.uid]: input.tier };
 }
 
@@ -710,9 +741,24 @@ export function resolveVote(votes: Record<string, Difficulty>, random: () => num
   return tied[Math.min(tied.length - 1, Math.floor(random() * tied.length))]!;
 }
 
+/**
+ * Dificultad de la ronda `n` según la progresión del modo (v1.9). Partidas sin progresión (anteriores
+ * a los modos de juego): al azar, como antes.
+ */
+export function progressionTier(state: LiveState, n: number, random: () => number = Math.random): Difficulty {
+  const starts = startsFor(state.config);
+  if (starts) return tierAt(starts, n);
+  return DIFFICULTIES[Math.floor(random() * DIFFICULTIES.length)] ?? 'medium';
+}
+
+/** La preferida; si se agotó, las más fáciles cercanas y, al final, las más difíciles. */
+function tierFallback(preferred: Difficulty): Difficulty[] {
+  const i = DIFFICULTIES.indexOf(preferred);
+  return [preferred, ...DIFFICULTIES.slice(0, i).reverse(), ...DIFFICULTIES.slice(i + 1)];
+}
+
 function drawFromPool(state: LiveState, preferred: Difficulty, random: () => number): { id: string; tier: Difficulty } | null {
-  const order: Difficulty[] =
-    preferred === 'easy' ? ['easy', 'medium', 'hard'] : preferred === 'hard' ? ['hard', 'medium', 'easy'] : ['medium', 'easy', 'hard'];
+  const order = tierFallback(preferred);
   // Evita repetir el tipo del criptico anterior (si quedan otros de esa dificultad).
   const lastId = state.usedIds[state.usedIds.length - 1];
   const lastKind = lastId ? state.catalog[lastId]?.kind : undefined;
@@ -775,8 +821,7 @@ function advanceRound(state: LiveState, now: number, random: () => number): void
     openVote(state, now);
     return;
   }
-  const preferred = DIFFICULTIES[Math.floor(random() * DIFFICULTIES.length)] ?? 'medium';
-  openRound(state, preferred, now, random);
+  openRound(state, progressionTier(state, state.round.index + 1, random), now, random);
 }
 
 /** Cierra la ronda y abre la votación de dificultad de la siguiente (también muestra la solución anterior). */
@@ -804,7 +849,7 @@ function openVote(state: LiveState, now: number): void {
 /** Fin de la votación: gana la mayoría y se sortea el criptico de esa dificultad. Abre en el acto. */
 function closeVote(state: LiveState, now: number, random: () => number): void {
   const round = state.round!;
-  const preferred = resolveVote(round.votes, random) ?? 'medium';
+  const preferred = resolveVote(round.votes, random) ?? progressionTier(state, round.index, random);
   const drawn = drawFromPool(state, preferred, random);
   if (!drawn) {
     state.round = null;

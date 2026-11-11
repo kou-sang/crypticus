@@ -76,7 +76,7 @@ Copia el archivo `cryptics.seed.json` que te envié a la carpeta `data\` del rep
 Copy-Item "$HOME\Downloads\cryptics.seed.json" .\data\
 ```
 
-Son 1130 cripticos originales, verificados por script: 1030 para las partidas (422 fáciles, 392 medios, 216 difíciles) y 100 de desempate, con respuestas de 2 o 3 palabras (`"tiebreak": true`). Los de desempate solo aparecen en la muerte súbita, cuando Race, Royale o Duel terminan empatados en la cima; su dificultad suma un nivel por cada palabra extra. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición o combinación). La dificultad sigue el estándar del proyecto: una sola operación con una palabra común es fácil; varias operaciones o una palabra poco común es medio; si además hace falta conocimiento externo, es difícil. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
+Desde v1.9 la lista es `cryptics-final.json` (2120 cripticos: 682 fáciles, 1013 medios, 200 difíciles y 225 muy difíciles), verificados por script. Cada uno lleva su tipo (palabra escondida, selector, anagrama, sustracción, reverso, contenedor, homófono, doble definición, misceláneas, charada o combinación) y sus partes (`parts`: definición, indicador y relleno tal como aparecen en el enunciado), que son la base de las pistas elegibles. Dificultad: un tipo puro es fácil (respuesta común en Argentina) o medio; difícil = combinación de 2 mecanismos; muy difícil = combinación de 3 o más, o respuesta de 2–3 palabras. Ya no hay pool de desempate. Está en `.gitignore` porque contiene las respuestas y el repo es público. Para pasar de la lista anterior a esta, importa con `--replace` (borra lo que ya no está). Para añadir más, usa el mismo formato (ver `data/cryptics.example.json`).
 
 Antes de importar, revisa el archivo (no toca Firestore):
 
@@ -84,7 +84,7 @@ Antes de importar, revisa el archivo (no toca Firestore):
 npx tsx scripts/validate-cryptics.ts data/cryptics.seed.json
 ```
 
-Comprueba enumeraciones, dificultad, que cada criptico tenga explicación y que no se repitan respuestas ni enunciados (la Ñ cuenta como N, igual que al jugar).
+Comprueba enumeraciones, dificultad, que cada criptico tenga explicación, que la definición y el relleno estén en el enunciado (dos definiciones en la doble definición) y que no se repitan respuestas ni enunciados (la Ñ cuenta como N, igual que al jugar).
 
 ### 1.3 Regenerar la clave en base64 (importante)
 

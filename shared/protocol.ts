@@ -1,13 +1,14 @@
 // Protocolo WebSocket entre el cliente y el Durable Object de cada competencia.
 import type { LiveState } from './engine';
 import type { Difficulty } from './types';
+import type { HintKind, RevealedHint } from './hints';
 import type { CoopClientAction, CoopReply, CoopView } from './coop/protocol';
 
 /** Mensajes cliente -> servidor. `reqId` correlaciona la respuesta. */
 export type ClientMessage =
   | { type: 'auth'; token: string }
   | { type: 'answer'; reqId: string; crypticId: string; guess: string }
-  | { type: 'hint'; reqId: string; crypticId: string; reveal: boolean }
+  | { type: 'hint'; reqId: string; crypticId: string; reveal: boolean; kind?: HintKind }
   | { type: 'vote'; reqId: string; tier: Difficulty }
   | { type: 'endVote'; reqId: string }
   | { type: 'pass'; reqId: string } // Royale: pasar al siguiente criptico
@@ -27,7 +28,8 @@ export interface AnswerReply {
 }
 
 export interface HintReply {
-  hints: string[];
+  hints: string[]; // Texto de cada pista revelada (todas las versiones).
+  revealed?: RevealedHint[]; // Pistas elegibles (v1.9): estructura para resaltar el enunciado y las letras.
   remaining: number;
 }
 

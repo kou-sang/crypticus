@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byFreshness, mergeLastSeen, selectCryptics, spreadByKind } from './selection';
+import { byFreshness, kindWeightedOrder, mergeLastSeen, selectCryptics, spreadByKind } from './selection';
 
 const byTier = { easy: ['e1', 'e2', 'e3'], medium: ['m1', 'm2', 'm3'], hard: ['h1', 'h2', 'h3'] };
 const fixed = () => 0;
@@ -113,5 +113,19 @@ describe('spreadByKind', () => {
       });
       for (let i = 1; i < crypticIds.length; i++) expect(kindOf(crypticIds[i]!)).not.toBe(kindOf(crypticIds[i - 1]!));
     }
+  });
+});
+
+describe('kindWeightedOrder (v1.9)', () => {
+  it('reparte por peso de tipo y, dentro de cada tipo, primero los no vistos', () => {
+    const ids = [...Array.from({ length: 50 }, (_, i) => `a${i}`), ...Array.from({ length: 50 }, (_, i) => `b${i}`)];
+    const kindOf = (id: string) => (id.startsWith('a') ? 'anagrama' : 'charada');
+    let seed = 1;
+    const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    const order = kindWeightedOrder(ids, kindOf, { anagrama: 9, charada: 1 }, new Map([['a0', 5]]), random);
+    expect(order).toHaveLength(100);
+    const firstTen = order.slice(0, 10).filter((id) => id.startsWith('a')).length;
+    expect(firstTen).toBeGreaterThanOrEqual(7);
+    expect(order.filter((id) => id.startsWith('a')).pop()).toBe('a0'); // El visto, último de su tipo.
   });
 });

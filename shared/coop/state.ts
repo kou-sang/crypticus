@@ -1,5 +1,6 @@
 // Estado de una partida COOP. Serializable (JSON): lo guarda el Durable Object y se difunde recortado.
 // Tiempos: `gt` = tiempo de partida en ms (se detiene en la presentación de cada jefe); `wall` = Date.now().
+import type { HintKind } from '../hints';
 import type { BossCategory, CoopLevel, CoopStage, CoopTier } from './balance';
 import type { BossId, PharaonisEffect } from './catalog/bosses';
 import type { CharacterId } from './catalog/characters';
@@ -12,8 +13,13 @@ export type PlayerStatus = 'alive' | 'dead' | 'left';
 export interface Assignment {
   tier: CoopTier;
   solved: boolean;
-  hintsRevealed: number; // 0–2: pistas del criptico ya mostradas.
+  hintsRevealed: number; // Pistas del criptico ya mostradas.
+  /** Tipo de cada pista mostrada (v1.9); las de letra, «letra:posición». */
+  hintLog?: string[];
 }
+
+/** Pistas de un jugador por tipo (v1.9): cada una sirve solo para su tipo. */
+export type HintBag = Record<HintKind, number>;
 
 export type BuffStat = 'armor' | 'attack' | 'gold' | 'rage';
 export interface Buff {
@@ -57,7 +63,7 @@ export interface PlayerState {
   /** +15 % de ataque permanente al morir URIAS. */
   uriasBlessing: number;
   gold: number;
-  hints: number;
+  hints: HintBag;
   charges: number | null; // null: sin límite.
   activeUsedRound: number | null;
   inventory: ItemInstance[];

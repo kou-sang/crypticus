@@ -1,10 +1,18 @@
 // Tipos de dominio compartidos entre el cliente (src/), el servidor y el motor (shared/engine.ts).
 // No importar nada de Firebase aquí: este módulo debe ser puro y testeable.
+import type { HintKinds } from './hints';
 import type { RatingPool } from './ratingPools';
 
-/** Clasificación de cripticos. */
-export type Difficulty = 'easy' | 'medium' | 'hard';
-export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
+/** Clasificación de cripticos. «veryHard» (v1.9): combinaciones de 3+ mecanismos y respuestas de 2–3 palabras. */
+export type Difficulty = 'easy' | 'medium' | 'hard' | 'veryHard';
+export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard', 'veryHard'];
+
+/** Partes de un criptico (v1.9): base de las pistas elegibles y del resaltado en el enunciado. */
+export interface CrypticParts {
+  definicion: string[];
+  indicador: string[];
+  relleno: string[];
+}
 
 /** Cómo termina una competencia. */
 export type CompetitionMode =
@@ -82,6 +90,8 @@ export interface CrypticPublic {
   enumeration: string; // Ej: "(5,3)"
   tier: Difficulty;
   hintCount: number;
+  /** Pistas elegibles por tipo (v1.9): usos máximos de cada una. Importes anteriores no lo tienen. */
+  hintKinds?: HintKinds;
   setter?: string;
   tags?: string[];
   rand?: number;
@@ -91,6 +101,7 @@ export interface CrypticPublic {
 export interface CrypticSecret {
   answer: string;
   hints: string[];
+  parts?: CrypticParts;
   explanation?: string;
 }
 
@@ -100,12 +111,14 @@ export interface CrypticImportItem {
   clue: string;
   answer: string;
   enumeration?: string;
-  difficulty?: string | number; // "facil" | "medio" | "dificil" | "easy" | ... | 1-5
+  difficulty?: string | number; // "facil" | "medio" | "dificil" | "muydificil" | "easy" | ... | 1-5
   hints?: string[];
+  /** Definición, indicador y relleno tal como aparecen en el enunciado (v1.9). */
+  parts?: Partial<CrypticParts>;
   explanation?: string;
   setter?: string;
   tags?: string[];
-  /** Pool de desempate (respuestas de 2 o 3 palabras): solo se usa en la muerte súbita. */
+  /** Obsoleto desde v1.9 (ya no hay muerte súbita): se ignora al importar. */
   tiebreak?: boolean;
 }
 
@@ -144,6 +157,8 @@ export interface Participant {
   score: number;
   solvedIds: string[];
   hintsByClue: Record<string, number>;
+  /** Pistas pedidas por criptico (v1.9): tipo de cada una; las de letra, «letra:posición». */
+  hintLog?: Record<string, string[]>;
   hintsUsed: number;
   attempts: number;
   wrongAttempts: number;
