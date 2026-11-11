@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { DIFFICULTY_VOTE_MS, type LiveState } from '../../../shared/engine';
 import { DIFFICULTY_LABELS } from '../../../shared/scoring';
-import { DIFFICULTIES, type Difficulty } from '../../../shared/types';
+import { type Difficulty } from '../../../shared/types';
+import { startsFor, votableTiers } from '../../../shared/progression';
 import type { GameActions } from '../../hooks/useGameChannel';
 import { cx, errorMessage } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ui';
@@ -11,6 +12,8 @@ export function DifficultyVote({ state, uid, actions }: { state: LiveState; uid:
   const [error, setError] = useState<string | null>(null);
   const votes = state.round?.votes ?? {};
   const mine = votes[uid];
+  // Progresión (v1.9): solo se vota hasta la dificultad que ya se habilitó en esta ronda.
+  const tiers = votableTiers(startsFor(state.config), state.round?.index ?? 1);
 
   const vote = async (tier: Difficulty) => {
     setError(null);
@@ -24,8 +27,8 @@ export function DifficultyVote({ state, uid, actions }: { state: LiveState; uid:
   return (
     <section aria-label="Votar dificultad del próximo criptico">
       <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Vota la dificultad del próximo criptico</p>
-      <div className="grid grid-cols-3 gap-1">
-        {DIFFICULTIES.map((tier) => {
+      <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+        {tiers.map((tier) => {
           const count = Object.values(votes).filter((v) => v === tier).length;
           return (
             <button
@@ -44,7 +47,7 @@ export function DifficultyVote({ state, uid, actions }: { state: LiveState; uid:
         })}
       </div>
       <p className="mt-1 text-[11px] text-muted">
-        {DIFFICULTY_VOTE_MS / 1000} s para votar. Gana la mayoría; en empate se sortea entre las más votadas. Sin votos: medio.
+        {DIFFICULTY_VOTE_MS / 1000} s para votar. Gana la mayoría; en empate se sortea entre las más votadas. Sin votos: la dificultad de la ronda.
       </p>
       <ErrorBanner error={error} />
     </section>

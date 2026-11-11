@@ -13,14 +13,14 @@ import { playCue } from '../../lib/sound';
 import { cx, errorMessage } from '../../lib/utils';
 import { AnswerGrid } from '../play/AnswerGrid';
 import { useCryptics } from '../play/useCryptics';
+import { HintPicker, RevealedHints, highlightClue } from '../play/HintParts';
 import type { LiceStain, LogLine } from './useCoopFx';
 
 const TIER_LABELS: Record<CoopCrypticView['tier'], string> = {
   easy: 'Fácil',
   medium: 'Medio',
   hard: 'Difícil',
-  veryHard2: 'Muy difícil · 2 palabras',
-  veryHard3: 'Muy difícil · 3 palabras',
+  veryHard: 'Muy difícil',
 };
 
 const secondsLeft = (ms: number) => Math.max(0, Math.ceil(ms / 1000));
@@ -164,13 +164,17 @@ function RoundCryptics({
       {current && clue ? (
         <div key={current.crypticId} className="coop-enter space-y-2">
           <p className="break-words font-display text-lg leading-snug">
-            {clue} {enumeration && <span className="font-mono text-base text-muted">{enumeration}</span>}
+            {highlightClue(clue, current.revealed)} {enumeration && <span className="font-mono text-base text-muted">{enumeration}</span>}
           </p>
-          {current.hints.map((hint, index) => (
-            <p key={hint} className="border-l-2 border-accent pl-2 text-sm">
-              Pista {index + 1}: {hint}
-            </p>
-          ))}
+          {current.revealed ? (
+            <RevealedHints revealed={current.revealed} />
+          ) : (
+            current.hints.map((hint, index) => (
+              <p key={hint} className="border-l-2 border-accent pl-2 text-sm">
+                Pista {index + 1}: {hint}
+              </p>
+            ))
+          )}
           <CrypticInput
             cryptic={{ ...current, clue, enumeration }}
             shift={state.modifiers.shift}
@@ -178,17 +182,17 @@ function RoundCryptics({
             act={act}
             onSolved={setExplanation}
           />
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              disabled={me.hints <= 0 || current.hints.length >= 2}
-              onClick={() => {
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Pistas por tipo (v1.9): cada una sirve solo para su tipo y el criptico tiene que admitirla. */}
+            <span className="text-xs text-muted">Usar pista:</span>
+            <HintPicker
+              available={current.hintKinds ?? []}
+              counts={me.hints}
+              onPick={(hintKind) => {
                 setHintError(null);
-                act({ kind: 'hint' }).catch((err: unknown) => setHintError(errorMessage(err)));
+                act({ kind: 'hint', hintKind }).catch((err: unknown) => setHintError(errorMessage(err)));
               }}
-            >
-              Usar pista ({me.hints})
-            </Button>
+            />
             {hintError && <span className="text-xs text-accent">{hintError}</span>}
           </div>
         </div>

@@ -5,17 +5,25 @@ const valid = {
   clue: 'Rama rota para la guerra (4)',
   answer: 'arma',
   difficulty: 'facil',
-  hints: ['La definición es «para la guerra».', 'Reordena RAMA.'],
+  hints: ['Definición: «para la guerra».', 'Indicador: «rota».', 'Relleno: «Rama».'],
+  parts: { definicion: ['para la guerra'], indicador: ['rota'], relleno: ['Rama'] },
   explanation: 'Anagrama de RAMA = ARMA.',
   tags: ['Anagrama'],
 };
 
 describe('lintCryptics', () => {
   it('acepta una lista correcta y cuenta por dificultad', () => {
-    const report = lintCryptics([valid, { ...valid, clue: 'Felino: grite desaforado (5)', answer: 'tigre', difficulty: 'medio' }]);
+    const tigre = {
+      ...valid,
+      clue: 'Felino: grite desaforado (5)',
+      answer: 'tigre',
+      difficulty: 'muy difícil',
+      parts: { definicion: ['Felino'], indicador: ['desaforado'], relleno: ['grite'] },
+    };
+    const report = lintCryptics([valid, tigre]);
     expect(report.errors).toEqual([]);
     expect(report.warnings).toEqual([]);
-    expect(report.counts).toEqual({ easy: 1, medium: 1, hard: 0 });
+    expect(report.counts).toEqual({ easy: 1, medium: 0, hard: 0, veryHard: 1 });
   });
 
   it('exige explicación y enumeración coherente', () => {
@@ -32,20 +40,19 @@ describe('lintCryptics', () => {
     expect(report.errors.some((e) => e.startsWith('Respuesta repetida'))).toBe(true);
   });
 
-  it('detecta enunciados repetidos y avisa de pistas o tipo faltantes', () => {
-    const report = lintCryptics([valid, { ...valid, answer: 'rama', hints: ['una'], tags: [] }]);
+  it('detecta enunciados repetidos y avisa de partes o tipo faltantes', () => {
+    const report = lintCryptics([valid, { ...valid, answer: 'rama', parts: undefined, tags: [] }]);
     expect(report.errors.some((e) => e.startsWith('Enunciado repetido'))).toBe(true);
     expect(report.warnings.length).toBe(2);
   });
 
-  it('los de desempate tienen 2 o 3 palabras y enumeración por palabra', () => {
-    const ok = { ...valid, clue: 'Pareja ideal o mitad de un cítrico (5,7)', answer: 'media naranja', tiebreak: true };
+  it('las partes deben estar en el enunciado; la doble definición lleva dos definiciones', () => {
+    const missing = lintCryptics([{ ...valid, parts: { ...valid.parts, relleno: ['ramo'] } }]);
+    expect(missing.errors.some((e) => e.includes('«ramo» no está en el enunciado'))).toBe(true);
+    const doble = { ...valid, clue: 'Asno ignorante (5)', answer: 'burro', tags: ['Doble definición'], parts: { definicion: ['Asno'], indicador: [], relleno: [] } };
+    expect(lintCryptics([doble]).errors.some((e) => e.includes('dos definiciones'))).toBe(true);
+    const ok = { ...doble, parts: { definicion: ['Asno', 'ignorante'], indicador: [], relleno: [] } };
     expect(lintCryptics([ok]).errors).toEqual([]);
-    expect(lintCryptics([ok]).tiebreak).toBe(1);
-    const oneWord = lintCryptics([{ ...valid, tiebreak: true }]);
-    expect(oneWord.errors.some((e) => e.includes('2 o 3 palabras'))).toBe(true);
-    const badEnum = lintCryptics([{ ...ok, clue: 'Pareja ideal o mitad de un cítrico (12)' }]);
-    expect(badEnum.errors.some((e) => e.includes('(5,7)'))).toBe(true);
   });
 
   it('rechaza un archivo que no es un array', () => {

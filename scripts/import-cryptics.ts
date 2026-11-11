@@ -9,7 +9,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { answerLengthFromEnumeration, deriveEnumeration, normalizeAnswer, splitClue } from '../shared/answer.js';
 import { hashAnswer } from '../shared/answerHash.js';
 import { parseDifficulty } from '../shared/scoring.js';
-import type { CrypticImportItem, CrypticPublic, CrypticSecret } from '../shared/types.js';
+import { hintKindsFor, totalHints } from '../shared/hints.js';
+import type { CrypticImportItem, CrypticParts, CrypticPublic, CrypticSecret } from '../shared/types.js';
 
 const BATCH_SIZE = 400; // < límite de 500 escrituras por batch.
 const SECRETS_PATH = 'worker/generated/cryptic-secrets.json';
@@ -18,7 +19,12 @@ interface ValidItem {
   id: string;
   publicData: Omit<CrypticPublic, 'id'>;
   secretData: CrypticSecret;
-  tiebreak: boolean;
+}
+
+function cleanParts(raw: CrypticImportItem['parts']): CrypticParts | undefined {
+  if (!raw) return undefined;
+  const list = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.trim() !== '') : []);
+  return { definicion: list(raw.definicion), indicador: list(raw.indicador), relleno: list(raw.relleno) };
 }
 
 function stableId(item: CrypticImportItem): string {
@@ -34,7 +40,7 @@ function validateItem(item: unknown, index: number): ValidItem {
     throw new Error(`#${index}: "answer" inválido`);
   }
   const tier = parseDifficulty(raw.difficulty);
-  if (!tier) throw new Error(`#${index}: "difficulty" debe ser fácil, medio o difícil`);
+  if (!tier) throw new Error(`#${index}: "difficulty" debe ser fácil, medio, difícil o muy difícil`);
   // La enumeración escrita en el enunciado se separa: la UI la muestra aparte.
   const { text: clue, enumeration: clueEnumeration } = splitClue(raw.clue);
   const enumeration = raw.enumeration ?? clueEnumeration ?? deriveEnumeration(raw.answer);
@@ -42,6 +48,9 @@ function validateItem(item: unknown, index: number): ValidItem {
     throw new Error(`#${index}: la enumeración ${enumeration} no coincide con "${raw.answer}"`);
   }
   const hints = Array.isArray(raw.hints) ? raw.hints.filter((h) => typeof h === 'string' && h.trim()) : [];
+  // Pistas elegibles (v1.9): salen de las partes; sin partes, quedan las pistas en orden fijo.
+  const parts = cleanParts(raw.parts);
+  const hintKinds = parts ? hintKindsFor(parts, raw.answer) : undefined;
 
   return {
     id: stableId(raw),
@@ -49,7 +58,8 @@ function validateItem(item: unknown, index: number): ValidItem {
       clue,
       enumeration,
       tier,
-      hintCount: hints.length,
+      hintCount: hintKinds ? totalHints(hintKinds) : hints.length,
+      ...(hintKinds ? { hintKinds } : {}),
       rand: Math.random(), // Para muestreo aleatorio eficiente (where rand >= x).
       ...(raw.setter ? { setter: raw.setter } : {}),
       ...(raw.tags ? { tags: raw.tags } : {}),
@@ -57,9 +67,9 @@ function validateItem(item: unknown, index: number): ValidItem {
     secretData: {
       answer: raw.answer.trim(),
       hints,
+      ...(parts ? { parts } : {}),
       ...(raw.explanation ? { explanation: raw.explanation } : {}),
     },
-    tiebreak: raw.tiebreak === true,
   };
 }
 
@@ -102,9 +112,10 @@ async function main(): Promise<void> {
       hash: await hashAnswer(hmacKey, item.id, item.secretData.answer),
       tier: item.publicData.tier,
       hints: item.secretData.hints,
+      ...(item.secretData.parts ? { parts: item.secretData.parts } : {}),
+      ...(item.publicData.hintKinds ? { hintKinds: item.publicData.hintKinds } : {}),
       answer: item.secretData.answer,
       ...(item.secretData.explanation ? { explanation: item.secretData.explanation } : {}),
-      ...(item.tiebreak ? { tiebreak: true } : {}),
       // Tipo principal: la selección evita dos seguidos del mismo (v1.0).
       ...(item.publicData.tags?.[0] ? { kind: String(item.publicData.tags[0]).trim().toLowerCase() } : {}),
       // COOP: el Durable Object manda el enunciado con cada ronda, sin lecturas a Firestore.

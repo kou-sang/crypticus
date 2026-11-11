@@ -1,5 +1,6 @@
 // Modos de juego: configuración de la UI -> reglas del motor. Puro: lo usan el cliente (al crear) y los tests.
 import { DEFAULT_CONFIG } from './scoring';
+import { ROYALE_CLUES, ROYALE_STARTS, tierCountsFor } from './progression';
 import type {
   ComebackLevel,
   CompetitionConfig,
@@ -78,8 +79,8 @@ export const ROYALE_PRESETS: ReadonlyArray<{ name: string; baseSec: number; incr
   { name: 'Rapid', baseSec: 180, incrementSec: 5 },
 ];
 
-/** Royale siempre es progresivo: 10 fáciles, 10 medios y después solo difíciles. */
-export const ROYALE_TIER_COUNTS: Record<Difficulty, number> = { easy: 10, medium: 10, hard: 40 };
+/** Royale siempre es progresivo: fácil 1–12, medio 13–25, difícil 26–35 y muy difícil desde el 36 (v1.9). */
+export const ROYALE_TIER_COUNTS: Record<Difficulty, number> = tierCountsFor(ROYALE_STARTS, ROYALE_CLUES);
 
 export const DEFAULT_MODE_SETTINGS: ModeSettings = {
   game: 'race',
@@ -129,7 +130,7 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
         cooldownSec: settings.royale.cooldownSec,
       },
       maxPlayers: MODE_MAX_PLAYERS.royale,
-      clueCount: ROYALE_TIER_COUNTS.easy + ROYALE_TIER_COUNTS.medium + ROYALE_TIER_COUNTS.hard,
+      clueCount: ROYALE_CLUES,
       title: `Royale ${formatTimeControl(baseSec, incrementSec)}`,
     };
   }
@@ -174,6 +175,8 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
       ...base,
       mode: 'count',
       flow: hardcore ? 'rounds' : 'free',
+      // Pacífico: cada jugador recorre la lista en orden, con la progresión de su meta (v1.9).
+      ...(hardcore ? {} : { tierMix: 'progressive' as const }),
       targetCount: race.target,
       durationSec: RACE_DURATION_SEC,
       rivalCountdownSec: hardcore ? race.suddenDeathSec : 0,
@@ -186,8 +189,9 @@ export function buildConfig(settings: ModeSettings): BuiltGame {
       cooldownSec: race.cooldownSec,
     },
     maxPlayers: MODE_MAX_PLAYERS.race,
-    // Se gana por meta, no por agotar la lista: hay cripticos de sobra para los 10 minutos.
-    clueCount: hardcore ? 30 : 60,
+    // Se gana por meta, no por agotar la lista. Pacífico: lista en orden con margen para rendiciones
+    // (30 para las metas de 3 a 10; más para metas personalizadas altas).
+    clueCount: hardcore ? 30 : Math.min(60, Math.max(30, race.target * 2 + 10)),
     title: `Race a ${race.target}${hardcore ? ' · Hardcore' : ''}`,
   };
 }

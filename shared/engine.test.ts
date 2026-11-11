@@ -170,7 +170,7 @@ describe('pistas', () => {
     const state = setup({ maxHintsPerClue: 1 });
     expect(applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, now: 1000 }).used).toBe(1);
     expect(() => applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, now: 1000 })).toThrow();
-    expect(applyHint(state, { uid: 'a', crypticId: 'e1', reveal: false, now: 1000 })).toEqual({ used: 1, maxAllowed: 1 });
+    expect(applyHint(state, { uid: 'a', crypticId: 'e1', reveal: false, now: 1000 })).toEqual({ used: 1, maxAllowed: 1, log: [] });
   });
 });
 
@@ -236,5 +236,36 @@ describe('votar terminar', () => {
     toggleEndVote(tied, { uid: 'a', now: 2000 });
     toggleEndVote(tied, { uid: 'b', now: 2000 });
     expect(tied.winnerId).toBeNull();
+  });
+});
+
+describe('pistas elegibles y progresión (v1.9)', () => {
+  const kinds = { definicion: 1, indicador: 1, relleno: 1, letra: 3 };
+  const withKinds = Object.fromEntries(Object.entries(catalog).map(([id, entry]) => [id, { ...entry, hintKinds: kinds }]));
+
+  it('cada pista elegida gasta un cupo; la letra sale al azar entre las ocultas', () => {
+    const state = createLiveState({
+      competitionId: 'c',
+      config: { ...DEFAULT_CONFIG, durationSec: 100, maxHintsPerClue: 2 },
+      participants: ['a'].map((uid) => makeParticipant({ uid })),
+      crypticIds: ['e1'],
+      pool,
+      catalog: withKinds,
+      startedAt: 0,
+    });
+    expect(applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, kind: 'indicador', now: 10 }).log).toEqual(['indicador']);
+    expect(() => applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, kind: 'indicador', now: 20 })).toThrow();
+    const out = applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, kind: 'letra', now: 30, random: () => 0.99 });
+    expect(out.log).toEqual(['indicador', 'letra:3']);
+    expect(() => applyHint(state, { uid: 'a', crypticId: 'e1', reveal: true, kind: 'relleno', now: 40 })).toThrow(); // Tope por criptico.
+  });
+
+  it('Race Hardcore: la primera ronda es fácil y no se vota lo que no se habilitó', () => {
+    const state = setup({ flow: 'rounds', game: 'race', targetCount: 5, difficultyVote: true });
+    expect(state.round?.tier).toBe('easy');
+    answer(state, 'a', state.round!.crypticId, true, 1000);
+    expect(state.round?.voting).toBe(true);
+    expect(() => applyDifficultyVote(state, { uid: 'a', tier: 'hard', now: 1500 })).toThrow();
+    applyDifficultyVote(state, { uid: 'a', tier: 'easy', now: 1500 });
   });
 });

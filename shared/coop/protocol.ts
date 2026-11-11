@@ -1,4 +1,5 @@
 // Protocolo WebSocket del modo COOP (mismo socket que el resto de los modos, mensajes propios).
+import type { HintKind, RevealedHint } from '../hints';
 import type { CoopLevel, CoopStage, CoopTier } from './balance';
 import type { BossId } from './catalog/bosses';
 import type { CharacterId } from './catalog/characters';
@@ -12,7 +13,7 @@ export type CoopClientAction =
   | { kind: 'lock' } // Confirmar el personaje elegido.
   | { kind: 'ready' } // Carga lista / saltear la explicación.
   | { kind: 'answer'; slot: number; guess: string }
-  | { kind: 'hint' }
+  | { kind: 'hint'; hintKind: HintKind } // Pista del tipo elegido (v1.9).
   | { kind: 'active'; targetId?: string; amount?: number }
   | { kind: 'item'; itemUid: string; targetId?: string }
   | { kind: 'buy'; offerId: string }
@@ -38,6 +39,9 @@ export interface CoopCrypticView {
   clue: string | null; // null: secretos anteriores a COOP; el cliente lo lee de Firestore.
   enumeration: string | null;
   hints: string[]; // Solo las pistas ya reveladas.
+  revealed?: RevealedHint[]; // Pistas elegibles (v1.9): para resaltar el enunciado y mostrar letras.
+  /** Tipos de pista que el criptico todavía admite (v1.9). Solo en el criptico en pantalla. */
+  hintKinds?: HintKind[];
   solved: boolean;
 }
 

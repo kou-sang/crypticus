@@ -73,13 +73,13 @@ export const GAME_LABELS: Record<GameMode, { title: string; tagline: string; des
 };
 
 export const DUEL_DAMAGE_LABELS: Record<DuelDamage, { title: string; description: string }> = {
-  difficulty: { title: 'Dificultad', description: 'Fácil 20, medio 30, difícil 40 de daño.' },
+  difficulty: { title: 'Dificultad', description: 'Fácil 20, medio 30, difícil 40, muy difícil 50 de daño.' },
   speed: { title: 'Velocidad', description: 'Hasta 40 de daño; baja cuanto más tardas (mín. 10).' },
 };
 export const DUEL_COMBO_INFO =
   'Combo ×N = N aciertos seguidos. Daño extra: ×2 +15 %, ×3 +30 %, ×4 +50 %, ×5 +80 %, ×6 o más +110 %. Se corta cuando el rival acierta.';
 
-export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil' };
+export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil', veryHard: 'Muy difícil' };
 
 export const COMEBACK_LABELS: Record<ComebackLevel, string> = { off: 'Sin remontada', low: 'Remontada suave', high: 'Remontada fuerte' };
 export const TIER_MIX_LABELS: Record<TierMix, string> = {
@@ -93,7 +93,7 @@ export const TIER_MIX_LABELS: Record<TierMix, string> = {
 
 const BASE_POINTS = 100;
 
-const TIER_MULTIPLIER: Record<Difficulty, number> = { easy: 1, medium: 1.5, hard: 2 };
+const TIER_MULTIPLIER: Record<Difficulty, number> = { easy: 1, medium: 1.5, hard: 2, veryHard: 2.5 };
 /** Remontada: suave = 1 + 1·brecha; fuerte = 1 + 2·brecha (brecha = (líder − tú) / líder). */
 export const COMEBACK_STRENGTH: Record<ComebackLevel, number> = { off: 0, low: 1, high: 2 };
 
@@ -130,7 +130,7 @@ export function computeSolvePoints(input: SolveInput): number {
 
 // ---------- Duelo ----------
 
-export const DUEL_TIER_DAMAGE: Record<Difficulty, number> = { easy: 20, medium: 30, hard: 40 };
+export const DUEL_TIER_DAMAGE: Record<Difficulty, number> = { easy: 20, medium: 30, hard: 40, veryHard: 50 };
 const DUEL_SPEED_MAX = 40;
 const DUEL_SPEED_WINDOW_MS = 90_000; // A los 90 s el daño por velocidad llega a su mínimo.
 const DUEL_SPEED_MIN_RATIO = 0.25;
@@ -306,7 +306,8 @@ export function parseDifficulty(raw: unknown): Difficulty | null {
   if (typeof raw === 'number') {
     if (raw <= 2) return 'easy';
     if (raw === 3) return 'medium';
-    if (raw <= 5) return 'hard';
+    if (raw === 4) return 'hard';
+    if (raw === 5) return 'veryHard';
     return null;
   }
   const value = String(raw)
@@ -317,6 +318,7 @@ export function parseDifficulty(raw: unknown): Difficulty | null {
   if (['easy', 'facil', 'f'].includes(value)) return 'easy';
   if (['medium', 'medio', 'media', 'normal', 'm'].includes(value)) return 'medium';
   if (['hard', 'dificil', 'd'].includes(value)) return 'hard';
+  if (['veryhard', 'very hard', 'muydificil', 'muy dificil', 'muy-dificil', 'md'].includes(value)) return 'veryHard';
   if (/^\d$/.test(value)) return parseDifficulty(Number(value));
   return null;
 }

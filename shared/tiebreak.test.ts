@@ -14,7 +14,6 @@ import {
   type LiveState,
 } from './engine';
 import { buildConfig, DEFAULT_MODE_SETTINGS, type ModeSettings } from './gameModes';
-import { selectTiebreakers } from './selection';
 import { makeParticipant } from './testUtils';
 import type { Difficulty } from './types';
 
@@ -46,7 +45,9 @@ function answer(state: LiveState, uid: string, crypticId: string, correct: boole
   return applyAnswer(state, { uid, crypticId, correct, now, random: first });
 }
 
-describe('Muerte súbita de desempate', () => {
+// Desde v1.9 el Worker ya no reserva cripticos de desempate: un empate en la cima queda en empate.
+// El motor conserva la muerte súbita solo para estados guardados antes de ese cambio.
+describe('Muerte súbita de desempate (estados anteriores a v1.9)', () => {
   it('un empate al final abre el desempate y gana el primero que acierta', () => {
     const state = start(peaceful);
     tick(state, END);
@@ -113,19 +114,5 @@ describe('Muerte súbita de desempate', () => {
     tick(state, END);
     expect(state.status).toBe('finished');
     expect(state.winnerId).toBe('a');
-  });
-});
-
-describe('selectTiebreakers', () => {
-  it('uno por dificultad, de fácil a difícil', () => {
-    const picked = selectTiebreakers({ easy: ['te'], medium: ['tm'], hard: ['th'] }, new Map(), first);
-    expect(picked).toEqual(['te', 'tm', 'th']);
-  });
-
-  it('completa con otras dificultades y prefiere los no vistos', () => {
-    const seen = new Map([['m1', 5]]);
-    const picked = selectTiebreakers({ easy: [], medium: ['m1', 'm2', 'm3'], hard: [] }, seen, first);
-    expect(picked).toHaveLength(3);
-    expect(picked[0]).not.toBe('m1');
   });
 });

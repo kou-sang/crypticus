@@ -2,6 +2,7 @@
 import { auth } from './firebase';
 import { ApiError } from './api';
 import type { AckReply, ActionMessage, AnswerReply, ClientMessage, HintReply, ServerMessage, Solution } from '../../shared/protocol';
+import type { HintKind } from '../../shared/hints';
 import type { LiveState } from '../../shared/engine';
 import type { Difficulty } from '../../shared/types';
 import type { CoopClientAction, CoopReply, CoopView } from '../../shared/coop/protocol';
@@ -82,8 +83,8 @@ export class GameChannel {
     return this.request<AnswerReply>({ type: 'answer', reqId: this.nextId(), crypticId, guess });
   }
 
-  hint(crypticId: string, reveal: boolean): Promise<HintReply> {
-    return this.request<HintReply>({ type: 'hint', reqId: this.nextId(), crypticId, reveal });
+  hint(crypticId: string, reveal: boolean, kind?: HintKind): Promise<HintReply> {
+    return this.request<HintReply>({ type: 'hint', reqId: this.nextId(), crypticId, reveal, ...(kind ? { kind } : {}) });
   }
 
   vote(tier: Difficulty): Promise<AckReply> {

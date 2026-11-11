@@ -16,6 +16,20 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.9.0',
+    date: '2026-11-11',
+    title: 'Cripticos nuevos, pistas a elección y dificultad progresiva',
+    highlight: true,
+    news: [
+      'Más de 2000 cripticos: casi 1000 nuevos y los anteriores revisados uno por uno (los de «iniciales de…» se reescribieron).',
+      'Nueva dificultad «muy difícil» y nuevo tipo «charada».',
+      'Pistas a elección: definición, indicador, relleno o una letra al azar. Lo que reveles se resalta en el enunciado.',
+      'La dificultad sube de a poco en cada modo: Royale, Race según la meta, Duel según la vida y COOP según la ronda.',
+      'COOP: las pistas son de un tipo (definición, indicador, relleno o letra); la de la tienda sale al azar.',
+      'Ya no hay desempate: si terminan iguales en la cima, es empate.',
+    ],
+  },
+  {
     version: '1.8.1',
     date: '2026-11-10',
     title: 'Revancha en la misma sala',

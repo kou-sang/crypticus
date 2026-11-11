@@ -22,11 +22,13 @@ describe('duraciones y dificultad', () => {
     expect(roundDurationMs('hard', 'expert')).toBe(21_000);
   });
 
-  it('reparto por número de ronda', () => {
+  it('reparto por número de ronda (v1.9)', () => {
     expect(tierShares(5)).toEqual({ easy: 0.6, medium: 0.4 });
-    expect(tierShares(6)).toEqual({ easy: 0.2, medium: 0.5, hard: 0.3 });
-    expect(tierShares(20)).toEqual({ medium: 0.6, hard: 0.4 });
-    expect(tierShares(31)).toEqual({ hard: 0.2, veryHard2: 0.5, veryHard3: 0.3 });
+    expect(tierShares(6)).toEqual({ easy: 0.4, medium: 0.4, hard: 0.2 });
+    expect(tierShares(15)).toEqual({ easy: 0.2, medium: 0.4, hard: 0.4 });
+    expect(tierShares(25)).toEqual({ medium: 0.4, hard: 0.6 });
+    expect(tierShares(26)).toEqual({ medium: 0.2, hard: 0.5, veryHard: 0.3 });
+    expect(tierShares(31)).toEqual({ medium: 0.15, hard: 0.43, veryHard: 0.42 });
   });
 
   it('la dificultad sorteada es determinista y respeta el reparto', () => {
@@ -35,14 +37,10 @@ describe('duraciones y dificultad', () => {
     expect([...tiers].sort()).toEqual(['easy', 'medium']);
   });
 
-  it('ronda difícil: medio o difícil hasta la 10; difícil o muy difícil desde la 11', () => {
-    expect(hardTierShares(3)).toEqual({ medium: 0.5, hard: 0.5 });
-    expect(hardTierShares(10)).toEqual({ medium: 0.5, hard: 0.5 });
-    expect(hardTierShares(11)).toEqual({ hard: 0.6, veryHard2: 0.4 });
-    const early = new Set(Array.from({ length: 200 }, (_, i) => drawTier(7, 3, `p${i}`, 0, 'hard')));
-    expect([...early].sort()).toEqual(['hard', 'medium']);
-    const late = new Set(Array.from({ length: 200 }, (_, i) => drawTier(7, 14, `p${i}`, 0, 'hard')));
-    expect([...late].sort()).toEqual(['hard', 'veryHard2']);
+  it('la ronda difícil (grupal) usa la misma tabla que las individuales', () => {
+    for (const round of [1, 6, 11, 16, 26, 31, 40]) expect(hardTierShares(round)).toEqual(tierShares(round));
+    const late = new Set(Array.from({ length: 300 }, (_, i) => drawTier(7, 31, `p${i}`, 0, 'hard')));
+    expect([...late].sort()).toEqual(['hard', 'medium', 'veryHard']);
   });
 });
 

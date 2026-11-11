@@ -371,9 +371,25 @@ describe('DEBBORA', () => {
     const game = startGame('serpentis', ['debbora', 'mathusala', 'urias', 'eliseus']);
     const debbora = game.state.players[0]!;
     expect(debbora.charges).toBe(1);
-    const used = act(game.state, { type: 'useActive', playerId: 'p0' }, game.now + 1_000).state.players[0]!;
+    const used = act(game.state, { type: 'useActive', playerId: 'p0', hintKind: 'relleno' }, game.now + 1_000).state.players[0]!;
     expect(used.assignments[0]!.hintsRevealed).toBe(1);
-    expect(used.hints).toBe(debbora.hints);
+    expect(used.assignments[0]!.hintLog).toEqual(['relleno']);
+    expect(used.hints).toEqual(debbora.hints);
     expect(used.charges).toBe(0);
+  });
+});
+
+describe('pistas por tipo (v1.9)', () => {
+  it('se empieza con una pista de un tipo al azar y cada una sirve solo para su tipo', () => {
+    const game = startGame('serpentis', ['mathusala', 'urias', 'eliseus', 'enoch']);
+    const me = game.state.players[0]!;
+    const total = Object.values(me.hints).reduce((a, b) => a + b, 0);
+    expect(total).toBe(1);
+    const kind = (Object.keys(me.hints) as Array<keyof typeof me.hints>).find((k) => me.hints[k] > 0)!;
+    const other = kind === 'definicion' ? 'indicador' : 'definicion';
+    expect(() => act(game.state, { type: 'useHint', playerId: 'p0', kind: other }, game.now + 1_000)).toThrow();
+    const used = act(game.state, { type: 'useHint', playerId: 'p0', kind, letterIndex: 0 }, game.now + 1_000).state.players[0]!;
+    expect(used.hints[kind]).toBe(0);
+    expect(used.assignments[0]!.hintLog).toEqual([kind === 'letra' ? 'letra:0' : kind]);
   });
 });

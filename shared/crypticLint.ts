@@ -9,11 +9,8 @@ export interface CrypticLintReport {
   errors: string[];
   warnings: string[];
   counts: Record<Difficulty, number>;
-  tiebreak: number; // Del total, cuántos son del pool de desempate.
   total: number;
 }
-
-const MIN_HINTS = 2;
 
 function normalizeClueText(clue: string): string {
   return normalizeAnswer(splitClue(clue).text);
@@ -47,16 +44,19 @@ function lintItem(raw: unknown, index: number, report: CrypticLintReport): { ans
   if (typeof item.explanation !== 'string' || item.explanation.trim().length < 10) {
     report.errors.push(`${label}: falta la explicación`);
   }
-  if (item.tiebreak === true) {
-    report.tiebreak += 1;
-    // Desempate: respuestas de 2 o 3 palabras, con la enumeración palabra por palabra.
-    const words = item.answer.trim().split(/\s+/);
-    const expected = `(${words.map((w) => normalizeAnswer(w).length).join(',')})`;
-    if (words.length < 2 || words.length > 3) report.errors.push(`${label}: un criptico de desempate debe tener 2 o 3 palabras`);
-    else if (enumeration !== expected) report.errors.push(`${label}: la enumeración debería ser ${expected}`);
+  // Pistas elegibles (v1.9): la definición es obligatoria; el resto, según el tipo.
+  const parts = item.parts;
+  if (!parts) report.warnings.push(`${label}: sin partes (pistas en orden fijo)`);
+  else {
+    const body = normalizeAnswer(splitClue(item.clue).text);
+    const kind = item.tags?.[0]?.toLowerCase();
+    if (!parts.definicion?.length) report.errors.push(`${label}: falta la definición`);
+    if (kind === 'doble definición' && (parts.definicion?.length ?? 0) < 2) report.errors.push(`${label}: la doble definición necesita dos definiciones`);
+    if (kind !== 'doble definición' && !parts.relleno?.length) report.errors.push(`${label}: falta el relleno`);
+    for (const part of [...(parts.definicion ?? []), ...(parts.indicador ?? []), ...(parts.relleno ?? [])]) {
+      if (!body.includes(normalizeAnswer(part))) report.errors.push(`${label}: «${part}» no está en el enunciado`);
+    }
   }
-  const hints = Array.isArray(item.hints) ? item.hints.filter((h) => typeof h === 'string' && h.trim()) : [];
-  if (hints.length < MIN_HINTS) report.warnings.push(`${label}: menos de ${MIN_HINTS} pistas`);
   if (!item.tags?.length) report.warnings.push(`${label}: sin tipo (tags)`);
   return { answer: normalizeAnswer(item.answer), clue: normalizeClueText(item.clue) };
 }
@@ -68,7 +68,7 @@ function reportDuplicates(values: Map<string, number[]>, what: string, errors: s
 }
 
 export function lintCryptics(items: unknown): CrypticLintReport {
-  const report: CrypticLintReport = { errors: [], warnings: [], counts: { easy: 0, medium: 0, hard: 0 }, tiebreak: 0, total: 0 };
+  const report: CrypticLintReport = { errors: [], warnings: [], counts: { easy: 0, medium: 0, hard: 0, veryHard: 0 }, total: 0 };
   if (!Array.isArray(items)) {
     report.errors.push('El archivo debe contener un array de cripticos.');
     return report;

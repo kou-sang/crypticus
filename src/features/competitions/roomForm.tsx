@@ -244,7 +244,7 @@ function RacePanel({ settings, update }: { settings: ModeSettings['race']; updat
           </Option>
           <Option
             title="Votar dificultad"
-            info="Durante cada criptico se vota la dificultad del siguiente. Si hay empate, decide quien va perdiendo. Desactivado: es aleatoria."
+            info="Entre cripticos se vota la dificultad del siguiente, entre las que ya se habilitaron según la meta. Desactivado: sigue la progresión (fácil → medio → difícil → muy difícil)."
           >
             <Toggle label="Votar dificultad" checked={settings.difficultyVote} onChange={(difficultyVote) => update({ difficultyVote })} />
           </Option>
@@ -258,7 +258,7 @@ function RacePanel({ settings, update }: { settings: ModeSettings['race']; updat
         onChange={(surrender) => update({ surrender })}
         info="Cada jugador puede rendirse ante el criptico actual un número limitado de veces. En Hardcore, el resto tiene 5 segundos para acertarlo antes de pasar al siguiente. En Pacífico, solo tú pasas al siguiente."
       />
-      <Option title="Pedir pista" info="Sí: cada jugador puede pedir 1 o 2 pistas en total durante toda la partida, en los cripticos que elija.">
+      <Option title="Pedir pista" info="Sí: cada jugador puede pedir 1 o 2 pistas en total durante toda la partida, en los cripticos que elija. Cada pista se elige: definición, indicador, relleno o una letra al azar.">
         <div className="flex flex-wrap items-center gap-2">
           <Chips<'no' | 'yes'>
             label="Pedir pista"
@@ -387,7 +387,7 @@ function RoyalePanel({ settings, update }: { settings: ModeSettings['royale']; u
       </Option>
       <Option
         title="Cómo se juega"
-        info="Primer número: minutos de tu reloj. Segundo: segundos que suma cada acierto. Los cripticos son siempre los mismos para todos y cada vez más difíciles (10 fáciles, 10 medios, después difíciles). Sin pausas: al acertar pasas al siguiente. Quien llega a 0 queda eliminado; gana el último en pie."
+        info="Primer número: minutos de tu reloj. Segundo: segundos que suma cada acierto. Los cripticos son siempre los mismos para todos y cada vez más difíciles (12 fáciles, 13 medios, 10 difíciles y después muy difíciles). Sin pausas: al acertar pasas al siguiente. Quien llega a 0 queda eliminado; gana el último en pie."
       >
         <span className="text-sm text-muted">Hasta 8 jugadores</span>
       </Option>
@@ -478,7 +478,7 @@ function DuelPanel({ settings, update }: { settings: ModeSettings['duel']; updat
       <CooldownOption value={settings.cooldownSec} onChange={(cooldownSec) => update({ cooldownSec })} />
       <Option
         title="Cómo se juega"
-        info="Sin pistas. Todos ven el mismo criptico (dificultad al azar). El primero en acertar lo cierra al instante y se muestran respuesta y explicación durante 3 segundos. La partida empieza solo con la sala completa: 2 jugadores en 1 vs 1, 4 en 2 vs 2."
+        info="Sin pistas. Todos ven el mismo criptico, cada vez más difícil según la vida elegida. El primero en acertar lo cierra al instante y se muestran respuesta y explicación durante 3 segundos. La partida empieza solo con la sala completa: 2 jugadores en 1 vs 1, 4 en 2 vs 2."
       >
         <span className="text-sm text-muted">{settings.format === '2v2' ? '2 contra 2' : '1 contra 1'}</span>
       </Option>

@@ -1,4 +1,5 @@
 // Eventos que produce el motor COOP: la UI los anima (y suena) en orden. Solo describen lo que ya pasó.
+import type { HintKind } from '../hints';
 import type { CoopTier } from './balance';
 import type { BossId, PharaonisEffect } from './catalog/bosses';
 import type { ItemId } from './catalog/items';
@@ -31,7 +32,9 @@ export type CoopEvent =
   | { type: 'secretRevealed'; gt: number; secret: 'apple' | 'loneAccept' | 'cross'; playerId: string | null }
   | { type: 'activeUsed'; gt: number; playerId: string; targetId: string | null }
   | { type: 'itemUsed'; gt: number; playerId: string; itemId: ItemId; targetId: string | null }
-  | { type: 'hintRevealed'; gt: number; playerId: string; slot: number; level: number }
+  | { type: 'hintRevealed'; gt: number; playerId: string; slot: number; level: number; kind?: HintKind }
+  /** Pista ganada (tienda, manzana): de un tipo al azar. */
+  | { type: 'hintGained'; gt: number; playerId: string; kind: HintKind; source: 'shop' | 'apple' }
   | { type: 'shopSwap'; gt: number; playerId: string; targetId: string }
   | { type: 'surrenderVote'; gt: number; playerId: string; accept: boolean; yes: number; needed: number; endsGt: number }
   | { type: 'surrenderEnd'; gt: number; passed: boolean }

@@ -4,6 +4,24 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-11
+
+### Added
+
+- Dificultad «muy difícil» (`veryHard`): combinaciones de 3 o más mecanismos y respuestas de 2–3 palabras. Puntaje ×2,5 y 50 de daño en Duel. `parseDifficulty` acepta «muydificil»/«muy difícil» (y 5 = muy difícil, 4 = difícil).
+- Tipo «Charada» (piezas pegadas sin mecanismo): reemplaza a las «Combinación» antiguas que no tenían dos mecanismos.
+- Pistas elegibles (`shared/hints.ts`): el jugador elige definición, indicador, relleno o una letra al azar entre las ocultas. Cada criptico trae `parts` y `hintKinds` (la doble definición solo admite sus dos definiciones; la charada no tiene indicador). Las partes reveladas se resaltan en el enunciado y la letra se escribe en su casilla. En Race cada pista gasta un cupo (por criptico y por partida), de cualquier tipo.
+- COOP: pistas por tipo (`PlayerState.hints` es ahora un `HintBag`). Se empieza con una de tipo al azar; la «Pista» de la tienda y la manzana dan tipos al azar con igual probabilidad; la activa de Debbora revela un tipo al azar entre los que admite el criptico. Evento `hintGained`.
+- Reparto por tipo al sortear (`CRYPTIC_KIND_WEIGHTS`, `kindWeightedOrder`): escondida 7 %, selector 10 %, anagrama 8 %, sustracción 11 %, reverso 7 %, contenedor 10 %, charada 7 %, homófono 7 %, doble definición 7 %, misceláneas 10 %, combinación 16 % (dentro de cada dificultad, entre los tipos que haya). También ordena los pools de COOP.
+- Progresión de dificultad por modo (`shared/progression.ts`): Royale fácil 1–12, medio 13–25, difícil 26–35, muy difícil 36+; Race según la meta (Hardcore por ronda, Pacífico por criptico de la lista); Duel según la vida; la votación de dificultad solo ofrece lo ya habilitado (`tier_locked`).
+
+### Changed
+
+- COOP: una sola tabla de dificultad para rondas individuales y grupales (1–5 fácil/medio; 6–10 con 20 % difícil; 11–15 40 % difícil; 16–25 medio/difícil; 26–30 con 30 % muy difícil; 31+ medio 15 / difícil 43 / muy difícil 42). `CoopTier` es la misma escala que el resto (`veryHard2/3` desaparecen).
+- Race Pacífico: lista en orden progresivo de 30 cripticos (más para metas personalizadas altas).
+- Sin muerte súbita de desempate: el Worker ya no reserva cripticos de 2–3 palabras; un empate en la cima queda en empate (nadie gana ni pierde Elo). El motor conserva el desempate solo para estados guardados antes.
+- Importador y validador: `parts`, `hintKinds`, `veryHard`; la validación exige definición y relleno presentes en el enunciado (dos definiciones en la doble definición). `tiebreak` se ignora.
+
 ## [1.8.1] - 2026-11-10
 
 ### Fixed

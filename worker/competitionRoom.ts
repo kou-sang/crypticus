@@ -22,6 +22,7 @@ import {
   isOnWinningSide,
 } from '../shared/engine';
 import { computeRatingDeltas } from '../shared/scoring';
+import { HINT_KINDS, hintText, revealHints, type HintKind } from '../shared/hints';
 import { isRoyalePool, ratingPoolOf } from '../shared/ratingPools';
 import type { CompetitionConfig, Difficulty, Participant } from '../shared/types';
 import {
@@ -65,8 +66,11 @@ export interface StartInput {
   participants: Participant[];
   crypticIds: string[];
   pool: Record<Difficulty, string[]>;
-  tiebreakIds?: string[];
   startedAt: number;
+}
+
+function parseHintKind(raw: unknown): HintKind | undefined {
+  return HINT_KINDS.find((kind) => kind === raw);
 }
 
 interface SyncMeta {
@@ -96,7 +100,7 @@ function publicState(state: LiveState, now: number, uid: string | null): LiveSta
   // Partida terminada: ya no hay nada que ocultar del juego en sí (las soluciones van aparte).
   // De los cripticos de desempate solo se muestran los que llegaron a jugarse.
   if (state.status === 'finished') {
-    return { ...state, pool: { easy: [], medium: [], hard: [] }, tiebreakIds: state.tiebreak?.played ?? [] };
+    return { ...state, pool: { easy: [], medium: [], hard: [], veryHard: [] }, tiebreakIds: state.tiebreak?.played ?? [] };
   }
 
   const round = state.round;
@@ -124,12 +128,12 @@ function publicState(state: LiveState, now: number, uid: string | null): LiveSta
     tiebreak: tb && !tbOpen ? { ...tb, crypticId: '', played: tb.played.slice(0, tb.index) } : tb,
     crypticIds: visible,
     usedIds: state.usedIds.filter((id) => allowed.has(id)),
-    pool: { easy: [], medium: [], hard: [] },
+    pool: { easy: [], medium: [], hard: [], veryHard: [] },
     // Sin `kind`: el tipo de criptico sería una pista gratis.
     catalog: Object.fromEntries(
       Object.entries(state.catalog)
         .filter(([id]) => allowed.has(id))
-        .map(([id, entry]) => [id, { tier: entry.tier, hintCount: entry.hintCount }]),
+        .map(([id, entry]) => [id, { tier: entry.tier, hintCount: entry.hintCount, ...(entry.hintKinds ? { hintKinds: entry.hintKinds } : {}) }]),
     ),
     round: round && pendingRound ? { ...round, crypticId: '' } : round,
   };
@@ -170,8 +174,8 @@ export class CompetitionRoom extends DurableObject<Env> {
       if (this.state.competitionId !== input.competitionId) throw new Error('Sala inconsistente.');
       return { startedAt: this.state.startedAt, endsAt: this.state.endsAt };
     }
-    const tiebreakIds = input.tiebreakIds ?? [];
-    const allIds = [...new Set([...input.crypticIds, ...input.pool.easy, ...input.pool.medium, ...input.pool.hard, ...tiebreakIds])];
+    // Sin muerte súbita desde v1.9: los empates en la cima quedan en empate.
+    const allIds = [...new Set([...input.crypticIds, ...Object.values(input.pool).flat()])];
     this.state = createLiveState({
       competitionId: input.competitionId,
       title: input.title,
@@ -180,7 +184,6 @@ export class CompetitionRoom extends DurableObject<Env> {
       crypticIds: input.crypticIds,
       pool: input.pool,
       catalog: buildCatalog(allIds),
-      tiebreakIds,
       startedAt: input.startedAt,
     });
     await this.commit();
@@ -337,7 +340,7 @@ export class CompetitionRoom extends DurableObject<Env> {
       case 'answer':
         return this.handleAnswer(uid, String(message.crypticId ?? ''), String(message.guess ?? '').slice(0, 100));
       case 'hint':
-        return this.handleHint(uid, String(message.crypticId ?? ''), message.reveal === true);
+        return this.handleHint(uid, String(message.crypticId ?? ''), message.reveal === true, parseHintKind(message.kind));
       case 'vote':
         applyDifficultyVote(state, { uid, tier: message.tier, now });
         this.markDirty();
@@ -629,12 +632,18 @@ export class CompetitionRoom extends DurableObject<Env> {
     ws.serializeAttachment({ ...attachment, rtts } satisfies SocketAttachment);
   }
 
-  private async handleHint(uid: string, crypticId: string, reveal: boolean): Promise<HintReply> {
+  private async handleHint(uid: string, crypticId: string, reveal: boolean, kind?: HintKind): Promise<HintReply> {
     const state = this.requireState();
-    const { used, maxAllowed } = applyHint(state, { uid, crypticId, reveal, now: Date.now() });
+    const { used, maxAllowed, log } = applyHint(state, { uid, crypticId, reveal, kind, now: Date.now() });
     if (reveal) this.markDirty();
-    const hints = getCrypticSecret(crypticId)?.hints ?? [];
-    return { hints: hints.slice(0, used), remaining: Math.max(0, maxAllowed - used) };
+    const secret = getCrypticSecret(crypticId);
+    const remaining = Math.max(0, maxAllowed - used);
+    // Pistas elegibles (v1.9): se arman desde las partes; importes anteriores, en orden fijo.
+    if (secret?.parts && secret.answer) {
+      const revealed = revealHints(log, secret.parts, secret.answer);
+      return { hints: revealed.map(hintText), revealed, remaining };
+    }
+    return { hints: (secret?.hints ?? []).slice(0, used), remaining };
   }
 
   // ---------- Persistencia, difusión y alarmas ----------

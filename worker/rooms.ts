@@ -116,7 +116,7 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
         hostName,
         status: 'lobby',
         crypticIds: [],
-        pool: { easy: [], medium: [], hard: [] },
+        pool: { easy: [], medium: [], hard: [], veryHard: [] },
         participantIds: [user.uid],
         createdAt: now,
         startedAt: null,
