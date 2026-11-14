@@ -152,36 +152,57 @@ export function releaseKeyboard(): void {
   element = null;
 }
 
-// ---------- Posición de la pantalla con el teclado del celular ----------
-// Reglas (v1.9.1):
-// - La página recuerda dos posiciones: la de lectura (teclado cerrado) y la de escritura (teclado abierto).
-// - Al abrir el teclado: vuelve a la última posición de escritura; la primera vez, mueve lo mínimo para que
-//   el enunciado y las casillas entren en lo visible.
-// - Al cerrar el teclado: vuelve a la última posición de lectura.
-// - Tipear, tocar casillas o pasar al criptico siguiente no mueve nada. Si el jugador se desplaza con el
-//   teclado abierto, esa pasa a ser la posición de escritura.
+// ---------- Posición de la pantalla en el celular (Android e iOS) ----------
+// Reglas (v1.9.2):
+// - Se recuerda dónde están las casillas en la pantalla, una posición con el teclado cerrado (lectura) y otra
+//   con el teclado abierto (escritura). Solo el jugador las cambia, desplazándose con el dedo, la rueda o el teclado.
+// - Al abrir el teclado: las casillas vuelven a su posición de escritura; la primera vez se mueve lo mínimo para
+//   que el enunciado y las casillas entren arriba del teclado. Al cerrarlo: vuelven a la de lectura.
+// - Si la página cambia sola (criptico nuevo, cuenta regresiva, avisos, la página se acorta en la pausa entre
+//   cripticos), las casillas se devuelven a la posición recordada antes de pintar: no salta nada.
+// - Tipear o tocar casillas no mueve nada.
 
 const KEYBOARD_MIN_PX = 120; // Diferencia de alto que indica teclado abierto (no la barra de direcciones).
 const SETTLE_MS = 150; // El teclado anima varios `resize`: se espera a que termine.
-const IGNORE_MS = 600; // Desplazamientos propios (o del navegador al enfocar) que no cuentan como del jugador.
+const MOMENTUM_MS = 2_500; // Tras soltar el dedo, la inercia sigue desplazando la página.
+const USER_SCROLL_QUIET_MS = 400; // Sin desplazamiento del jugador en este lapso, la página se puede reacomodar.
 const MIN_TOP_INSET = 64; // Barra fija de arriba (si no se puede medir).
 const BOTTOM_MARGIN = 12;
 
+type Mode = 'read' | 'type';
+
 let keeperInstalled = false;
 let keyboardShown = false;
-let readTop: number | null = null; // Posición con el teclado cerrado.
-let typeTop: number | null = null; // Posición con el teclado abierto (null: la primera vez se calcula).
-let ignoreUntil = 0;
+/** Posición de las casillas (px desde arriba de lo visible) en cada modo; null: todavía no se fijó. */
+const anchors: Record<Mode, number | null> = { read: null, type: null };
+let dragging = false; // El dedo está desplazando la página (un toque sin mover no cuenta).
+let lastGestureAt = 0; // Último arrastre, rueda o tecla de desplazamiento del jugador.
+let lastLayoutChangeAt = 0;
+let lastUserScrollAt = 0;
 let settleTimer = 0;
+let alignQueued = false;
+let resizeObserver: ResizeObserver | null = null;
+let mutationObserver: MutationObserver | null = null;
 
-/** Parte de arriba de lo que se ve, en coordenadas de página (iOS: el teclado no achica la ventana). */
-function visibleTop(): number {
-  const viewport = window.visualViewport;
-  return viewport ? viewport.pageTop : window.scrollY;
+const mode = (): Mode => (keyboardShown ? 'type' : 'read');
+
+function offsetTop(): number {
+  return window.visualViewport?.offsetTop ?? 0;
 }
 
 function visibleHeight(): number {
   return window.visualViewport?.height ?? window.innerHeight;
+}
+
+/** Casillas del criptico en pantalla (la referencia de todo el acomodo). */
+function grid(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('.answer-grid');
+}
+
+/** Dónde están las casillas, en px desde arriba de lo que se ve. */
+function gridPosition(): number | null {
+  const element = grid();
+  return element ? element.getBoundingClientRect().top - offsetTop() : null;
 }
 
 function keyboardIsUp(): boolean {
@@ -191,9 +212,12 @@ function keyboardIsUp(): boolean {
   return window.innerHeight - viewport.height > KEYBOARD_MIN_PX;
 }
 
-function moveTo(top: number): void {
-  ignoreUntil = performance.now() + IGNORE_MS;
-  const delta = top - visibleTop();
+function userIsScrolling(now = performance.now()): boolean {
+  return dragging || now - lastUserScrollAt < USER_SCROLL_QUIET_MS;
+}
+
+/** Desplaza la página `delta` px sin animación (no cuenta como desplazamiento del jugador). */
+function scrollByNow(delta: number): void {
   if (Math.abs(delta) >= 2) window.scrollBy({ top: delta, behavior: 'instant' });
 }
 
@@ -210,77 +234,147 @@ function topInset(): number {
 }
 
 /**
- * Posición mínima para que el enunciado y las casillas entren arriba del teclado (null: ya entran).
+ * Desplazamiento mínimo para que el enunciado y las casillas entren arriba del teclado (0: ya entran).
  * Si no entran las dos cosas, se priorizan las casillas.
  */
-function fitTop(): number | null {
-  const panel = document.querySelector<HTMLElement>('[data-clue-panel]');
-  const grid = panel?.querySelector<HTMLElement>('.answer-grid') ?? document.querySelector<HTMLElement>('.answer-grid');
-  if (!grid) return null;
-  const clue = (panel ?? document).querySelector<HTMLElement>('[data-clue-text]') ?? grid;
-  const current = visibleTop();
-  const offset = window.visualViewport?.offsetTop ?? 0;
+function fitDelta(): number {
+  const element = grid();
+  if (!element) return 0;
+  const panel = element.closest<HTMLElement>('[data-clue-panel]');
+  const clue = (panel ?? document).querySelector<HTMLElement>('[data-clue-text]') ?? element;
+  const offset = offsetTop();
   const clueRect = clue.getBoundingClientRect();
-  const gridRect = grid.getBoundingClientRect();
+  const gridRect = element.getBoundingClientRect();
   // Enunciado y casillas pueden estar en cualquier orden (en COOP el enunciado va abajo).
-  const clueTop = Math.min(clueRect.top, gridRect.top) - offset + current;
-  const gridBottom = Math.max(clueRect.bottom, gridRect.bottom) - offset + current;
-  const lowest = gridBottom - visibleHeight() + BOTTOM_MARGIN; // Más arriba no: las casillas quedan tapadas.
-  const highest = clueTop - topInset(); // Más abajo no: el enunciado queda bajo la barra.
-  if (lowest > highest) return lowest;
-  if (current >= lowest && current <= highest) return null;
-  return Math.min(Math.max(current, lowest), highest);
+  const top = Math.min(clueRect.top, gridRect.top) - offset;
+  const bottom = Math.max(clueRect.bottom, gridRect.bottom) - offset;
+  const down = bottom - (visibleHeight() - BOTTOM_MARGIN); // > 0: las casillas quedan tapadas por el teclado.
+  const up = top - topInset(); // < 0: el enunciado queda bajo la barra.
+  if (down > 0) return up > 0 ? Math.min(down, up) : down;
+  return up < 0 ? up : 0;
+}
+
+/** Devuelve las casillas a la posición recordada del modo actual. */
+function align(): void {
+  alignQueued = false;
+  if (userIsScrolling()) return;
+  const want = anchors[mode()];
+  const now = gridPosition();
+  if (want === null || now === null) return;
+  scrollByNow(now - want);
+}
+
+/** La página cambió sola: se reacomoda antes de pintar. */
+function onLayoutChange(): void {
+  lastLayoutChangeAt = performance.now();
+  if (alignQueued) return;
+  alignQueued = true;
+  queueMicrotask(align);
 }
 
 function onScroll(): void {
-  if (performance.now() < ignoreUntil) return;
-  if (keyboardShown) typeTop = visibleTop();
-  else readTop = visibleTop();
+  const now = performance.now();
+  // Solo cuenta lo que mueve el jugador: los desplazamientos del navegador o de la página se ignoran.
+  if (!dragging && now - lastGestureAt > MOMENTUM_MS) return;
+  // Si la página acaba de cambiar sola (p. ej. se acortó en la pausa), el desplazamiento es del navegador.
+  if (!dragging && now - lastLayoutChangeAt < 120) {
+    onLayoutChange();
+    return;
+  }
+  lastUserScrollAt = now;
+  anchors[mode()] = gridPosition();
 }
 
 function settle(): void {
   const up = keyboardIsUp();
   if (up === keyboardShown) return;
   keyboardShown = up;
-  if (up) {
-    const target = typeTop ?? fitTop();
-    if (target !== null) moveTo(target);
-    typeTop = target ?? visibleTop();
-  } else if (readTop !== null) {
-    moveTo(readTop);
+  const want = anchors[mode()];
+  const now = gridPosition();
+  if (now === null) return;
+  if (want !== null) scrollByNow(now - want);
+  else if (up) {
+    scrollByNow(fitDelta());
+    anchors.type = gridPosition();
   }
 }
 
 function onViewportResize(): void {
-  ignoreUntil = performance.now() + IGNORE_MS;
   window.clearTimeout(settleTimer);
   settleTimer = window.setTimeout(settle, SETTLE_MS);
 }
 
-/** Al enfocar: se guarda la posición de lectura antes de que el navegador mueva nada. */
+function onTouchMove(): void {
+  dragging = true;
+  lastGestureAt = performance.now();
+}
+
+function onTouchEnd(): void {
+  if (dragging) lastGestureAt = performance.now(); // Empieza la inercia.
+  dragging = false;
+}
+
+function onGesture(): void {
+  lastGestureAt = performance.now();
+}
+
+function onPointerDown(event: PointerEvent): void {
+  if (event.pointerType === 'mouse') onGesture(); // Barra de desplazamiento con el mouse (no toques).
+}
+
+/** Teclas que desplazan la página (fuera del input del juego). */
+function onScrollKey(event: KeyboardEvent): void {
+  if (event.target === element) return;
+  if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(event.key)) onGesture();
+}
+
+/** Al enfocar: si nunca se fijó la posición de lectura, es la actual. */
 function onKeyboardFocus(): void {
-  if (!keyboardShown) readTop = visibleTop();
-  ignoreUntil = performance.now() + IGNORE_MS;
+  if (!keyboardShown && anchors.read === null) anchors.read = gridPosition();
 }
 
 function installViewportKeeper(input: HTMLInputElement): void {
   input.addEventListener('focus', onKeyboardFocus);
   if (keeperInstalled) return;
   keeperInstalled = true;
-  readTop = visibleTop();
+  anchors.read = gridPosition(); // Donde está la grilla al empezar.
+  const passive = { passive: true, capture: true } as const;
   window.addEventListener('scroll', onScroll, { passive: true });
   window.visualViewport?.addEventListener('scroll', onScroll, { passive: true });
   window.visualViewport?.addEventListener('resize', onViewportResize);
+  window.addEventListener('touchmove', onTouchMove, passive);
+  window.addEventListener('touchend', onTouchEnd, passive);
+  window.addEventListener('touchcancel', onTouchEnd, passive);
+  window.addEventListener('wheel', onGesture, passive);
+  window.addEventListener('pointerdown', onPointerDown, passive);
+  window.addEventListener('keydown', onScrollKey, { capture: true });
+  // Criptico nuevo, pausa, avisos: cualquier cambio de la página reacomoda las casillas.
+  resizeObserver = new ResizeObserver(onLayoutChange);
+  resizeObserver.observe(document.body);
+  mutationObserver = new MutationObserver(onLayoutChange);
+  mutationObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 function uninstallViewportKeeper(): void {
   if (!keeperInstalled) return;
   keeperInstalled = false;
+  const capture = { capture: true } as const;
   window.removeEventListener('scroll', onScroll);
   window.visualViewport?.removeEventListener('scroll', onScroll);
   window.visualViewport?.removeEventListener('resize', onViewportResize);
+  window.removeEventListener('touchmove', onTouchMove, capture);
+  window.removeEventListener('touchend', onTouchEnd, capture);
+  window.removeEventListener('touchcancel', onTouchEnd, capture);
+  window.removeEventListener('wheel', onGesture, capture);
+  window.removeEventListener('pointerdown', onPointerDown, capture);
+  window.removeEventListener('keydown', onScrollKey, capture);
+  resizeObserver?.disconnect();
+  mutationObserver?.disconnect();
+  resizeObserver = null;
+  mutationObserver = null;
   window.clearTimeout(settleTimer);
   keyboardShown = false;
-  readTop = null;
-  typeTop = null;
+  dragging = false;
+  anchors.read = null;
+  anchors.type = null;
 }

@@ -16,6 +16,16 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.9.2',
+    date: '2026-11-14',
+    title: 'Celular: las casillas se quedan en su lugar',
+    highlight: false,
+    news: [],
+    fixes: [
+      'Al aparecer el criptico siguiente, las casillas quedan exactamente donde las dejaste (con o sin teclado).',
+    ],
+  },
+  {
     version: '1.9.1',
     date: '2026-11-14',
     title: 'Celular: la pantalla ya no salta',
