@@ -179,13 +179,13 @@ export function CluePanel({
   };
 
   return (
-    // data-clue-panel: se centra en pantalla con el teclado abierto. data-keep-keyboard: tocar aquí no cierra el teclado.
-    <div className="fade-in scroll-mt-28" data-clue-panel data-keep-keyboard>
+    // data-clue-panel: lo que tiene que entrar arriba del teclado. data-keep-keyboard: tocar aquí no cierra el teclado.
+    <div className="fade-in" data-clue-panel data-keep-keyboard>
       <div className="flex flex-wrap items-center gap-2">
         <p className="font-mono text-xs uppercase tracking-widest text-muted">{heading}</p>
         <Badge tone={TIER_TONE[cryptic.tier]}>{DIFFICULTY_LABELS[cryptic.tier]}</Badge>
       </div>
-      <h2 className="mt-3 font-display text-3xl leading-snug md:text-4xl">
+      <h2 className="mt-3 font-display text-3xl leading-snug md:text-4xl" data-clue-text>
         <ClueText cryptic={cryptic} revealed={revealed ?? undefined} />
       </h2>
 

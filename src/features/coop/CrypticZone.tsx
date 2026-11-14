@@ -163,7 +163,7 @@ function RoundCryptics({
       </p>
       {current && clue ? (
         <div key={current.crypticId} className="coop-enter space-y-2">
-          <p className="break-words font-display text-lg leading-snug">
+          <p className="break-words font-display text-lg leading-snug" data-clue-text>
             {highlightClue(clue, current.revealed)} {enumeration && <span className="font-mono text-base text-muted">{enumeration}</span>}
           </p>
           {current.revealed ? (

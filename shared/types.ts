@@ -118,8 +118,6 @@ export interface CrypticImportItem {
   explanation?: string;
   setter?: string;
   tags?: string[];
-  /** Obsoleto desde v1.9 (ya no hay muerte súbita): se ignora al importar. */
-  tiebreak?: boolean;
 }
 
 export interface Competition extends CompetitionConfig {
@@ -176,7 +174,6 @@ export interface Participant {
   nextOpensAt?: number; // El criptico en `cursor` no se muestra ni se puede responder antes.
   surrenders?: number; // Rendiciones usadas.
   skipsUsed?: number; // Royale: saltos usados.
-  tiebreakWon?: boolean; // Ganó la muerte súbita de desempate.
 }
 
 /** Estadísticas por modo (escritas por el servidor). */

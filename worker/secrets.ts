@@ -16,7 +16,6 @@ export interface WorkerCrypticSecret {
   hintKinds?: HintKinds;
   explanation?: string;
   answer?: string; // Forma legible para mostrar al final (los importes anteriores no la tienen).
-  tiebreak?: boolean; // Obsoleto (v1.9): ya no hay muerte súbita; se sortea como cualquier otro.
   kind?: string; // Tipo principal (primer tag). Importes anteriores a v1.0 no lo tienen.
   /** Enunciado y enumeración (COOP los manda con cada ronda). Importes anteriores a COOP no los tienen. */
   clue?: string;
@@ -69,10 +68,7 @@ export function solutionsFor(state: LiveState): Solution[] {
       crypticId,
       answer: secret?.answer ?? null,
       explanation: secret?.explanation ?? null,
-      solvedBy:
-        state.tiebreak?.played.includes(crypticId) === true
-          ? state.tiebreak.winnerId && state.tiebreak.crypticId === crypticId ? [state.tiebreak.winnerId] : []
-          : participants.filter((p) => p.solvedIds.includes(crypticId)).map((p) => p.uid),
+      solvedBy: participants.filter((p) => p.solvedIds.includes(crypticId)).map((p) => p.uid),
     };
   });
 }

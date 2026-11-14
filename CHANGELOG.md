@@ -4,6 +4,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-11-14
+
+### Fixed
+
+- `npm run deploy` fallaba en `tsc -b`: los tests y `scripts/simulate-coop.ts` seguían con la escala de dificultad anterior. Se eliminaron (ver Removed).
+- Celular (Race, Royale, Duel y COOP): la pantalla ya no salta. `keyboardInput.ts` recuerda la posición de lectura (teclado cerrado) y la de escritura (teclado abierto): al abrir el teclado vuelve a la última de escritura (la primera vez mueve lo mínimo para que enunciado y casillas entren arriba del teclado); al cerrarlo vuelve a la de lectura. Tipear, tocar casillas, pasar al criptico siguiente o que aparezca la barra de direcciones no mueven nada; si el jugador se desplaza con el teclado abierto, esa pasa a ser la posición de escritura.
+- Empates: el puesto depende solo del resultado visible (métrica del modo y puntaje); pistas y hora del último acierto ordenan la tabla pero ya no desempatan. Si terminan iguales en la cima, es empate y nadie gana ni pierde Elo.
+
+### Removed
+
+- Tests (`*.test.ts`, `shared/testUtils.ts`), Vitest y el paso `npm test` del CI.
+- Scripts que no hacen falta para la página: `scripts/simulate-coop.ts` y `scripts/backfill-royale-pools.ts` (migración de v1.2 ya aplicada).
+- Código de la muerte súbita de desempate (motor, `TiebreakView`, Worker). El motivo de fin `tiebreak` queda solo para mostrar partidas antiguas del historial.
+
 ## [1.9.0] - 2026-11-11
 
 ### Added

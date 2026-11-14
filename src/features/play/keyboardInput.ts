@@ -88,6 +88,7 @@ function ensureInput(): HTMLInputElement {
   document.body.appendChild(input);
   element = input;
   installKeepFocus();
+  installViewportKeeper(input);
   return input;
 }
 
@@ -144,41 +145,142 @@ export function isTypingElsewhere(): boolean {
 /** Al salir de la partida: cierra el teclado y quita el input. */
 export function releaseKeyboard(): void {
   current = null;
+  uninstallViewportKeeper();
   if (!element) return;
   element.blur();
   element.remove();
   element = null;
 }
 
-/**
- * ¿El elemento se ve entero en la parte visible de la pantalla (descontando el teclado y la barra fija de arriba)?
- */
-export function isFullyInView(target: HTMLElement, topInset = 56): boolean {
-  try {
-    const viewport = window.visualViewport;
-    const visibleTop = viewport?.offsetTop ?? 0;
-    const visibleHeight = viewport?.height ?? window.innerHeight;
-    const rect = target.getBoundingClientRect();
-    return rect.top >= visibleTop + topInset && rect.bottom <= visibleTop + visibleHeight;
-  } catch {
-    return false;
+// ---------- Posición de la pantalla con el teclado del celular ----------
+// Reglas (v1.9.1):
+// - La página recuerda dos posiciones: la de lectura (teclado cerrado) y la de escritura (teclado abierto).
+// - Al abrir el teclado: vuelve a la última posición de escritura; la primera vez, mueve lo mínimo para que
+//   el enunciado y las casillas entren en lo visible.
+// - Al cerrar el teclado: vuelve a la última posición de lectura.
+// - Tipear, tocar casillas o pasar al criptico siguiente no mueve nada. Si el jugador se desplaza con el
+//   teclado abierto, esa pasa a ser la posición de escritura.
+
+const KEYBOARD_MIN_PX = 120; // Diferencia de alto que indica teclado abierto (no la barra de direcciones).
+const SETTLE_MS = 150; // El teclado anima varios `resize`: se espera a que termine.
+const IGNORE_MS = 600; // Desplazamientos propios (o del navegador al enfocar) que no cuentan como del jugador.
+const MIN_TOP_INSET = 64; // Barra fija de arriba (si no se puede medir).
+const BOTTOM_MARGIN = 12;
+
+let keeperInstalled = false;
+let keyboardShown = false;
+let readTop: number | null = null; // Posición con el teclado cerrado.
+let typeTop: number | null = null; // Posición con el teclado abierto (null: la primera vez se calcula).
+let ignoreUntil = 0;
+let settleTimer = 0;
+
+/** Parte de arriba de lo que se ve, en coordenadas de página (iOS: el teclado no achica la ventana). */
+function visibleTop(): number {
+  const viewport = window.visualViewport;
+  return viewport ? viewport.pageTop : window.scrollY;
+}
+
+function visibleHeight(): number {
+  return window.visualViewport?.height ?? window.innerHeight;
+}
+
+function keyboardIsUp(): boolean {
+  const viewport = window.visualViewport;
+  if (!viewport || !isKeyboardFocused()) return false;
+  if (viewport.scale > 1.05) return keyboardShown; // Con zoom del usuario no se decide nada.
+  return window.innerHeight - viewport.height > KEYBOARD_MIN_PX;
+}
+
+function moveTo(top: number): void {
+  ignoreUntil = performance.now() + IGNORE_MS;
+  const delta = top - visibleTop();
+  if (Math.abs(delta) >= 2) window.scrollBy({ top: delta, behavior: 'instant' });
+}
+
+/** Alto tapado arriba de lo visible: cabecera fija y barra de la partida (`data-sticky-top`). */
+function topInset(): number {
+  let inset = MIN_TOP_INSET;
+  for (const bar of document.querySelectorAll<HTMLElement>('header, [data-sticky-top]')) {
+    const style = getComputedStyle(bar);
+    if (style.position !== 'fixed' && style.position !== 'sticky') continue;
+    // Donde queda pegada (su `top`) más su alto: no depende de cuánto se haya desplazado la página.
+    inset = Math.max(inset, (Number.parseFloat(style.top) || 0) + bar.getBoundingClientRect().height + 8);
   }
+  return inset;
 }
 
 /**
- * Centra un elemento en la parte visible de la pantalla (descontando el teclado).
- * En iOS el teclado no achica la ventana: se usa visualViewport para saber cuánto se ve.
+ * Posición mínima para que el enunciado y las casillas entren arriba del teclado (null: ya entran).
+ * Si no entran las dos cosas, se priorizan las casillas.
  */
-export function centerInView(target: HTMLElement): void {
-  try {
-    const viewport = window.visualViewport;
-    const visibleHeight = viewport?.height ?? window.innerHeight;
-    const visibleTop = viewport?.offsetTop ?? 0;
-    const rect = target.getBoundingClientRect();
-    const offset = rect.top - visibleTop - Math.max(56, (visibleHeight - rect.height) / 2);
-    if (Math.abs(offset) < 8) return;
-    window.scrollBy({ top: offset, behavior: 'smooth' });
-  } catch (error) {
-    console.error('[teclado] centrar', error);
+function fitTop(): number | null {
+  const panel = document.querySelector<HTMLElement>('[data-clue-panel]');
+  const grid = panel?.querySelector<HTMLElement>('.answer-grid') ?? document.querySelector<HTMLElement>('.answer-grid');
+  if (!grid) return null;
+  const clue = (panel ?? document).querySelector<HTMLElement>('[data-clue-text]') ?? grid;
+  const current = visibleTop();
+  const offset = window.visualViewport?.offsetTop ?? 0;
+  const clueRect = clue.getBoundingClientRect();
+  const gridRect = grid.getBoundingClientRect();
+  // Enunciado y casillas pueden estar en cualquier orden (en COOP el enunciado va abajo).
+  const clueTop = Math.min(clueRect.top, gridRect.top) - offset + current;
+  const gridBottom = Math.max(clueRect.bottom, gridRect.bottom) - offset + current;
+  const lowest = gridBottom - visibleHeight() + BOTTOM_MARGIN; // Más arriba no: las casillas quedan tapadas.
+  const highest = clueTop - topInset(); // Más abajo no: el enunciado queda bajo la barra.
+  if (lowest > highest) return lowest;
+  if (current >= lowest && current <= highest) return null;
+  return Math.min(Math.max(current, lowest), highest);
+}
+
+function onScroll(): void {
+  if (performance.now() < ignoreUntil) return;
+  if (keyboardShown) typeTop = visibleTop();
+  else readTop = visibleTop();
+}
+
+function settle(): void {
+  const up = keyboardIsUp();
+  if (up === keyboardShown) return;
+  keyboardShown = up;
+  if (up) {
+    const target = typeTop ?? fitTop();
+    if (target !== null) moveTo(target);
+    typeTop = target ?? visibleTop();
+  } else if (readTop !== null) {
+    moveTo(readTop);
   }
+}
+
+function onViewportResize(): void {
+  ignoreUntil = performance.now() + IGNORE_MS;
+  window.clearTimeout(settleTimer);
+  settleTimer = window.setTimeout(settle, SETTLE_MS);
+}
+
+/** Al enfocar: se guarda la posición de lectura antes de que el navegador mueva nada. */
+function onKeyboardFocus(): void {
+  if (!keyboardShown) readTop = visibleTop();
+  ignoreUntil = performance.now() + IGNORE_MS;
+}
+
+function installViewportKeeper(input: HTMLInputElement): void {
+  input.addEventListener('focus', onKeyboardFocus);
+  if (keeperInstalled) return;
+  keeperInstalled = true;
+  readTop = visibleTop();
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.visualViewport?.addEventListener('scroll', onScroll, { passive: true });
+  window.visualViewport?.addEventListener('resize', onViewportResize);
+}
+
+function uninstallViewportKeeper(): void {
+  if (!keeperInstalled) return;
+  keeperInstalled = false;
+  window.removeEventListener('scroll', onScroll);
+  window.visualViewport?.removeEventListener('scroll', onScroll);
+  window.visualViewport?.removeEventListener('resize', onViewportResize);
+  window.clearTimeout(settleTimer);
+  keyboardShown = false;
+  readTop = null;
+  typeTop = null;
 }
