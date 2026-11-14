@@ -4,6 +4,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-11-14
+
+### Fixed
+
+- Celular (Android e iOS): al aparecer un criptico nuevo la pantalla se iba para arriba. En la pausa entre cripticos la página se acorta (cuenta regresiva, ronda anterior) y el navegador recortaba el desplazamiento; esa posición quedaba guardada como si la hubiera elegido el jugador. Ahora `keyboardInput.ts` recuerda dónde están las casillas en la pantalla (una posición con el teclado cerrado y otra con el teclado abierto) y, ante cualquier cambio de la página (criptico nuevo, avisos, pausa), las devuelve a ese lugar antes de pintar. Solo el jugador cambia esas posiciones, arrastrando con el dedo, con la rueda o con las teclas de desplazamiento; un toque, tipear o enviar no cuentan.
+
 ## [1.9.1] - 2026-11-14
 
 ### Fixed
