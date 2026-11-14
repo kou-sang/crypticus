@@ -18,10 +18,13 @@ export const RELEASES: readonly Release[] = [
   {
     version: '1.9.3',
     date: '2026-11-14',
-    title: 'Cyber: sonidos estilo Star Wars',
+    title: 'Cyber estilo Star Wars y muerte súbita en la meta',
     highlight: false,
     news: ['Tema Cyber con sonidos más graves: disparos de bláster, sables de luz y consolas imperiales.'],
-    fixes: ['Los sonidos agudos del tema Cyber que parecían pájaros ahora son graves.'],
+    fixes: [
+      'Los sonidos agudos del tema Cyber que parecían pájaros ahora son graves.',
+      'Race Hardcore: si el rival llega a la meta, igual tienes la muerte súbita para acertar ese criptico y empatar.',
+    ],
   },
   {
     version: '1.9.2',

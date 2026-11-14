@@ -11,6 +11,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 - Tema Cyber: sonidos más graves, estilo Star Wars, sin los pitidos agudos que sonaban a pájaros. Los láseres pasan a ser disparos de bláster (barrido descendente con sub grave y filtro oscuro), los blips son tonos de consola de 300–900 Hz y las fanfarrias y alertas bajan una octava.
 - Tema Cyber, interfaz: el clic es un disparo de bláster de stormtrooper; cambiar de pestaña, un sable de luz que se balancea; abrir y cerrar ventanas, encender y apagar un sable (nuevo `saberHum` con tono, filtro y volumen automatizados).
 
+### Fixed
+
+- Race Hardcore: cuando un jugador acertaba el criptico que lo llevaba a la meta (o a la diferencia de dos), la partida terminaba al instante y el rival perdía su muerte súbita. Ahora la victoria espera a que cierre la ronda: si el rival también acierta, es empate en la meta (sin ganador) o, con diferencia de dos, la partida sigue. Con muerte súbita en 0 s se mantiene el cierre inmediato.
+
 ## [1.9.2] - 2026-11-14
 
 ### Fixed

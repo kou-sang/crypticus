@@ -812,7 +812,11 @@ function closeVote(state: LiveState, now: number, random: () => number): void {
 export function tick(state: LiveState, now: number, random: () => number = Math.random): { finished: boolean } {
   if (state.status !== 'live') return { finished: state.status === 'finished' };
   if (state.round?.voting && now >= (state.round.opensAt ?? 0)) closeVote(state, now, random);
-  if (state.round?.closesAt != null && now >= state.round.closesAt) advanceRound(state, now, random);
+  if (state.round?.closesAt != null && now >= state.round.closesAt) {
+    // Cerró la muerte súbita: si alguien quedó en la meta, termina sin abrir una ronda que nadie jugará.
+    if (evaluate(state, now).finished) return { finished: true };
+    advanceRound(state, now, random);
+  }
   if (state.config.royale) eliminateExpired(state, now);
   return { finished: evaluate(state, now).finished };
 }
@@ -869,15 +873,20 @@ function evaluate(state: LiveState, now: number): { finished: boolean } {
   const solvedLead = leader ? leader.solvedIds.length - (second?.solvedIds.length ?? 0) : 0;
   const hasMargin = !config.winByTwo || solvedLead >= LIMITS.winByTwoMargin;
 
+  // Hardcore: mientras corre la muerte súbita de la ronda, el resto todavía puede acertar ese criptico
+  // (empatar la meta o quitar la diferencia de dos), así que la victoria espera a que cierre la ronda.
+  const suddenDeathOpen = config.flow === 'rounds' && state.round?.closesAt != null && now < state.round.closesAt;
+
   // Diferencia de dos alcanzada en prórroga
-  if (state.overtimeEndsAt !== null && hasMargin && leader) return finish(state, 'winByTwo', leader.uid, now);
+  if (state.overtimeEndsAt !== null && hasMargin && leader && !suddenDeathOpen) return finish(state, 'winByTwo', leader.uid, now);
 
   // Meta en modo cantidad
   if (config.mode === 'count' && leader) {
     const available = config.flow === 'rounds' ? Number.POSITIVE_INFINITY : state.crypticIds.length;
     const target = Math.min(config.targetCount, available);
-    if (leader.solvedIds.length >= target && hasMargin) {
-      return finish(state, config.winByTwo ? 'winByTwo' : 'target', leader.uid, now);
+    if (leader.solvedIds.length >= target && hasMargin && !suddenDeathOpen) {
+      // Si el rival también llegó a la meta en la muerte súbita, es empate (sin ganador).
+      return finish(state, config.winByTwo ? 'winByTwo' : 'target', uniqueLeader, now);
     }
   }
 
