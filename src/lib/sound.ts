@@ -1,6 +1,6 @@
 // Sonidos sintetizados con Web Audio (sin archivos: carga cero y sin licencias), con un paquete por tema:
 // Normal (madera, papel y campanitas), Cripta (piedra, campanas y metal en una cripta con eco) y
-// Cyber (láseres, sables de luz y blips holográficos). Ruido filtrado + envolventes + reverb generada
+// Cyber (blásteres, sables de luz y consolas graves estilo Star Wars). Ruido filtrado + envolventes + reverb generada
 // para que no suenen a pitidos de 8 bits. Todo se crea por evento y se libera solo al terminar.
 import { getSettings, type Skin, type SoundGroup } from './settings';
 
@@ -345,10 +345,11 @@ function clang(b: Bus, at = 0, gain = 0.3): void {
   noise(b, { at, dur: 0.05, f: 4200, q: 2, gain: gain * 0.8, wet: 0.3 });
 }
 
-/** Láser: barrido rápido de diente de sierra con filtro. */
+/** Bláster: barrido descendente de dientes de sierra desafinados, filtro oscuro y sub grave (estilo Star Wars). */
 function laser(b: Bus, from: number, to: number, dur: number, at = 0, gain = 0.22): void {
-  tone(b, { f: vary(from), slide: to, at, dur, type: 'sawtooth', gain, lowpass: 5200, wet: 0.3 });
-  tone(b, { f: vary(from) * 1.01, slide: to * 1.01, at, dur, type: 'square', gain: gain * 0.35, lowpass: 3000, wet: 0.2 });
+  tone(b, { f: vary(from), slide: to, at, dur, type: 'sawtooth', gain, lowpass: 2400, wet: 0.3 });
+  tone(b, { f: vary(from) * 0.995, slide: to * 0.995, at, dur, type: 'sawtooth', gain: gain * 0.6, detune: -14, lowpass: 1600, wet: 0.25 });
+  tone(b, { f: vary(from) / 2, slide: to / 2, at, dur: dur * 1.2, type: 'sine', gain: gain * 0.7, wet: 0.2 });
 }
 
 /** Sable de luz: zumbido grave desafinado que sube (encender) o baja (apagar). */
@@ -356,17 +357,74 @@ function saber(b: Bus, dur: number, rising: boolean, at = 0, gain = 0.18): void 
   const [from, to] = rising ? [70, 115] : [115, 55];
   tone(b, { f: from, slide: to, at, dur, type: 'sawtooth', gain, lowpass: 900, wet: 0.25 });
   tone(b, { f: from * 1.5, slide: to * 1.5, at, dur, type: 'sawtooth', gain: gain * 0.6, detune: 9, lowpass: 1400, wet: 0.25 });
-  noise(b, { at, dur, f: rising ? 600 : 2400, fTo: rising ? 2400 : 400, q: 4, gain: gain * 0.7, wet: 0.3 });
+  noise(b, { at, dur, f: rising ? 500 : 1500, fTo: rising ? 1500 : 350, q: 4, gain: gain * 0.7, wet: 0.3 });
 }
 
-/** Blip holográfico. */
+/** Disparo de bláster de soldado imperial: "pew" que cae rápido, con parciales que caen a distinto ritmo (efecto resorte). */
+function trooperBlast(b: Bus, at = 0, gain = 0.14): void {
+  tone(b, { f: vary(1600, 0.05), slide: 150, at, dur: 0.16, type: 'sine', gain, wet: 0.35 });
+  tone(b, { f: vary(2300, 0.05), slide: 260, at, dur: 0.11, type: 'triangle', gain: gain * 0.35, lowpass: 3200, wet: 0.3 });
+  tone(b, { f: vary(1150, 0.05), slide: 110, at: at + 0.005, dur: 0.19, type: 'sawtooth', gain: gain * 0.3, detune: 20, lowpass: 1800, wet: 0.35 });
+  noise(b, { at, dur: 0.02, f: 2600, q: 1, gain: gain * 0.6, wet: 0.2 });
+}
+
+/** Curva [fracción de la duración, valor] aplicada con rampas lineales. */
+type Curve = Array<[number, number]>;
+
+function automate(param: AudioParam, curve: Curve, start: number, dur: number, scale = 1): void {
+  curve.forEach(([t, value], i) => {
+    const when = start + t * dur;
+    const v = Math.max(value * scale, 0.0001);
+    if (i === 0) param.setValueAtTime(v, when);
+    else param.linearRampToValueAtTime(v, when);
+  });
+}
+
+interface HumOptions {
+  at?: number;
+  dur: number;
+  pitch: Curve; // Hz
+  cutoff: Curve; // Hz del pasabajos
+  level: Curve; // 0..1
+  gain?: number;
+  wet?: number;
+}
+
+/** Zumbido de sable de luz con tono, filtro y volumen automatizados (encendido, vaivén y apagado). */
+function saberHum(b: Bus, o: HumOptions): void {
+  const start = b.now + (o.at ?? 0);
+  const end = start + o.dur;
+  const filter = b.ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.Q.value = 2;
+  automate(filter.frequency, o.cutoff, start, o.dur);
+  const env = b.ctx.createGain();
+  automate(env.gain, o.level, start, o.dur, o.gain ?? 0.16);
+  filter.connect(env);
+  // Fundamental, quinta desafinada y sub: el "hum" grave característico.
+  const voices: Array<[OscillatorType, number, number, number]> = [
+    ['sawtooth', 1, 1, 0],
+    ['sawtooth', 1.5, 0.55, 9],
+    ['sine', 0.5, 0.6, 0],
+  ];
+  for (const [type, ratio, level, detune] of voices) {
+    const osc = b.ctx.createOscillator();
+    osc.type = type;
+    osc.detune.value = detune;
+    automate(osc.frequency, o.pitch, start, o.dur, ratio);
+    const mix = b.ctx.createGain();
+    mix.gain.value = level;
+    osc.connect(mix).connect(filter);
+    osc.start(start);
+    osc.stop(end + 0.05);
+  }
+  route(b, env, o.wet ?? 0.3);
+}
+
+/** Blip de consola imperial: tono grave con armónico suave y filtrado (sin chirridos agudos). */
 function blip(b: Bus, f: number, at = 0, gain = 0.16, dur = 0.05): void {
-  tone(b, { f: vary(f, 0.03), at, dur, type: 'sine', gain, wet: 0.2 });
-  tone(b, { f: vary(f, 0.03) * 2, at, dur: dur * 0.6, type: 'triangle', gain: gain * 0.3, wet: 0.1 });
-}
-
-function whoosh(b: Bus, dur: number, from: number, to: number, at = 0, gain = 0.25): void {
-  noise(b, { at, dur, color: 'pink', f: from, fTo: to, q: 1.4, gain, attack: dur * 0.45, wet: 0.35 });
+  tone(b, { f: vary(f, 0.03), at, dur, type: 'triangle', gain, lowpass: 1800, wet: 0.2 });
+  tone(b, { f: vary(f, 0.03) / 2, at, dur, type: 'sine', gain: gain * 0.5, wet: 0.1 });
 }
 
 // ---------- Paquetes por tema ----------
@@ -546,80 +604,99 @@ const CRYPT: Pack = {
   },
 };
 
+// Notas graves para Cyber (una octava abajo de las de Normal).
+const C4 = 261.63;
+const E4 = 329.63;
+const G4 = 392;
+
 const CYBER: Pack = {
-  // Interfaz: blips, disparos cortos y sables.
-  click: (b) => laser(b, 2400, 700, 0.05, 0, 0.11),
+  // Interfaz: disparos de bláster cortos, sables y consolas graves (estilo Star Wars, sin chirridos).
+  click: (b) => trooperBlast(b, 0, 0.13),
   tab: (b) => {
-    whoosh(b, 0.22, 400, 4200, 0, 0.18);
-    blip(b, 1760, 0.12, 0.08);
+    // Sable que se balancea: el tono y el brillo suben y bajan (efecto Doppler).
+    saberHum(b, { dur: 0.38, pitch: [[0, 92], [0.45, 138], [1, 86]], cutoff: [[0, 320], [0.45, 2200], [1, 300]], level: [[0, 0], [0.45, 1], [1, 0]], gain: 0.17 });
+    noise(b, { dur: 0.38, color: 'pink', f: 450, fTo: 1100, q: 1.2, gain: 0.07, attack: 0.17, wet: 0.3 });
   },
-  open: (b) => saber(b, 0.32, true, 0, 0.16),
-  close: (b) => saber(b, 0.24, false, 0, 0.14),
+  open: (b) => {
+    // Encendido: chasquido, subida rápida de tono y zumbido que se sostiene.
+    noise(b, { dur: 0.06, f: 2800, q: 1.5, gain: 0.22, wet: 0.3 });
+    saberHum(b, { dur: 0.7, pitch: [[0, 42], [0.3, 106], [1, 100]], cutoff: [[0, 200], [0.3, 2000], [1, 900]], level: [[0, 0], [0.06, 1], [0.7, 0.7], [1, 0]], gain: 0.17 });
+    noise(b, { dur: 0.25, color: 'pink', f: 1200, fTo: 2600, q: 1, gain: 0.08, attack: 0.05, wet: 0.3 });
+  },
+  close: (b) => {
+    // Apagado: el zumbido cae de tono y se oscurece hasta desaparecer.
+    saberHum(b, { dur: 0.5, pitch: [[0, 100], [1, 38]], cutoff: [[0, 1400], [1, 150]], level: [[0, 0.8], [0.1, 1], [1, 0]], gain: 0.16 });
+    noise(b, { dur: 0.35, color: 'pink', f: 2200, fTo: 400, q: 1, gain: 0.08, wet: 0.3 });
+  },
   toggle: (b) => {
-    blip(b, 1320, 0, 0.12);
-    blip(b, 1980, 0.045, 0.1);
+    blip(b, 330, 0, 0.14);
+    blip(b, 494, 0.05, 0.12);
   },
-  submit: (b) => laser(b, 1600, 3200, 0.08, 0, 0.12),
-  type: (b) => blip(b, vary(2600, 0.15), 0, 0.06, 0.025),
-  erase: (b) => tone(b, { f: 1800, slide: 600, dur: 0.05, type: 'square', gain: 0.05, lowpass: 2500, wet: 0.1 }),
+  submit: (b) => laser(b, 1100, 220, 0.12, 0, 0.13),
+  type: (b) => blip(b, vary(520, 0.12), 0, 0.07, 0.03),
+  erase: (b) => tone(b, { f: 520, slide: 160, dur: 0.06, type: 'square', gain: 0.05, lowpass: 1400, wet: 0.1 }),
   // Juego.
   success: (b) => {
-    laser(b, 700, 2800, 0.12, 0, 0.14);
-    [C6, 1318.5, 1568, 2093].forEach((f, i) => blip(b, f, 0.08 + i * 0.05, 0.12, 0.09));
+    laser(b, 1200, 260, 0.14, 0, 0.13);
+    [C4, E4, G4, C5].forEach((f, i) => blip(b, f, 0.1 + i * 0.06, 0.13, 0.14));
   },
   wrong: (b) => {
-    // Glitch: ráfagas cuadradas a frecuencias al azar.
-    for (let i = 0; i < 5; i++) tone(b, { f: 120 + Math.random() * 500, at: i * 0.028, dur: 0.028, type: 'square', gain: 0.1, lowpass: 2400, wet: 0.05 });
-    noise(b, { dur: 0.14, f: 800, q: 0.7, gain: 0.12, wet: 0.05 });
+    // Glitch grave: ráfagas cuadradas a frecuencias bajas al azar.
+    for (let i = 0; i < 5; i++) tone(b, { f: 60 + Math.random() * 200, at: i * 0.03, dur: 0.03, type: 'square', gain: 0.11, lowpass: 1200, wet: 0.05 });
+    noise(b, { dur: 0.16, color: 'brown', filter: 'lowpass', f: 700, gain: 0.3, wet: 0.05 });
   },
-  rival: (b) => laser(b, 3000, 900, 0.14, 0, 0.12),
+  rival: (b) => laser(b, 1300, 200, 0.18, 0, 0.12),
   hit: (b) => {
     // Disparo de bláster que impacta.
-    laser(b, 1800, 140, 0.22, 0, 0.18);
-    noise(b, { at: 0.05, dur: 0.3, color: 'brown', filter: 'lowpass', f: 2200, fTo: 200, gain: 0.5, wet: 0.3 });
+    laser(b, 1000, 90, 0.24, 0, 0.18);
+    noise(b, { at: 0.05, dur: 0.35, color: 'brown', filter: 'lowpass', f: 1400, fTo: 120, gain: 0.6, wet: 0.3 });
   },
   heal: (b) => {
-    tone(b, { f: 300, slide: 1200, dur: 0.45, type: 'triangle', gain: 0.12, wet: 0.4 });
-    tone(b, { f: 450, slide: 1800, dur: 0.45, type: 'sine', gain: 0.08, wet: 0.4 });
+    tone(b, { f: 130, slide: 520, dur: 0.5, type: 'triangle', gain: 0.14, lowpass: 1500, wet: 0.4 });
+    tone(b, { f: 196, slide: 780, dur: 0.5, type: 'sine', gain: 0.08, wet: 0.4 });
   },
-  tick: (b) => blip(b, 1400, 0, 0.14, 0.07), // Sonar.
+  tick: (b) => blip(b, 392, 0, 0.16, 0.09), // Sonar grave.
   go: (b) => {
-    laser(b, 400, 3200, 0.25, 0, 0.16);
-    saber(b, 0.4, true, 0.05, 0.14);
+    laser(b, 1400, 160, 0.3, 0, 0.15);
+    saber(b, 0.45, true, 0.05, 0.16);
   },
   lowTime: (b) => {
-    tone(b, { f: 880, slide: 1320, dur: 0.18, type: 'square', gain: 0.07, lowpass: 3000, wet: 0.2 });
-    tone(b, { f: 880, slide: 1320, at: 0.22, dur: 0.18, type: 'square', gain: 0.07, lowpass: 3000, wet: 0.2 });
+    tone(b, { f: 294, slide: 392, dur: 0.18, type: 'square', gain: 0.07, lowpass: 1400, wet: 0.2 });
+    tone(b, { f: 294, slide: 392, at: 0.22, dur: 0.18, type: 'square', gain: 0.07, lowpass: 1400, wet: 0.2 });
   },
   eliminated: (b) => {
-    tone(b, { f: 800, slide: 40, dur: 0.6, type: 'sawtooth', gain: 0.14, lowpass: 2000, wet: 0.3 });
-    noise(b, { at: 0.05, dur: 0.7, color: 'brown', filter: 'lowpass', f: 1800, fTo: 120, gain: 0.6, wet: 0.4 });
+    tone(b, { f: 420, slide: 30, dur: 0.7, type: 'sawtooth', gain: 0.15, lowpass: 1200, wet: 0.3 });
+    noise(b, { at: 0.05, dur: 0.8, color: 'brown', filter: 'lowpass', f: 1200, fTo: 80, gain: 0.65, wet: 0.4 });
   },
   lowHealth: (b) => {
-    blip(b, 1046, 0, 0.14, 0.1);
-    blip(b, 784, 0.14, 0.14, 0.16);
+    blip(b, 392, 0, 0.16, 0.12);
+    blip(b, 294, 0.15, 0.16, 0.2);
   },
   danger: (b) => {
     tone(b, { f: 55, dur: 0.18, type: 'sine', gain: 0.8, wet: 0.1 });
     tone(b, { f: 55, at: 0.22, dur: 0.18, type: 'sine', gain: 0.7, wet: 0.1 });
   },
-  combo: (b) => [0, 0.06, 0.12].forEach((at, i) => laser(b, 900 + i * 500, 2600 + i * 600, 0.07, at, 0.1)),
-  gold: (b) => [2637, 3136].forEach((f, i) => blip(b, f, i * 0.05, 0.1, 0.06)),
+  combo: (b) => [0, 0.08, 0.16].forEach((at, i) => laser(b, 900 + i * 150, 200 + i * 40, 0.09, at, 0.1)),
+  gold: (b) => [659.25, 880].forEach((f, i) => blip(b, f, i * 0.06, 0.11, 0.08)),
   power: (b) => {
-    saber(b, 0.35, true, 0, 0.14);
-    laser(b, 600, 2400, 0.18, 0.08, 0.1);
+    saber(b, 0.4, true, 0, 0.16);
+    tone(b, { f: 110, slide: 440, at: 0.08, dur: 0.3, type: 'sawtooth', gain: 0.08, lowpass: 1200, wet: 0.3 });
   },
   revive: (b) => {
-    tone(b, { f: 200, slide: 1600, dur: 0.7, type: 'triangle', gain: 0.12, wet: 0.4 });
-    [C6, 1568, 2093].forEach((f, i) => blip(b, f, 0.4 + i * 0.07, 0.12, 0.1));
+    tone(b, { f: 90, slide: 600, dur: 0.7, type: 'triangle', gain: 0.14, lowpass: 1500, wet: 0.4 });
+    [C4, G4, C5].forEach((f, i) => blip(b, f, 0.42 + i * 0.08, 0.13, 0.14));
   },
   victory: (b) => {
-    [C5, E5, G5, C6, G5, C6 * 1.5].forEach((f, i) => tone(b, { f, at: i * 0.09, dur: 0.22, type: 'sawtooth', gain: 0.09, lowpass: 3200, wet: 0.35 }));
-    saber(b, 0.6, true, 0.5, 0.12);
+    // Fanfarria de metales grave + sable.
+    [C4, E4, G4, C5, G4, C5 * 1.5].forEach((f, i) => {
+      tone(b, { f, at: i * 0.1, dur: 0.24, type: 'sawtooth', gain: 0.1, lowpass: 1800, attack: 0.02, wet: 0.35 });
+      tone(b, { f: f / 2, at: i * 0.1, dur: 0.24, type: 'sawtooth', gain: 0.06, lowpass: 900, attack: 0.02, wet: 0.35 });
+    });
+    saber(b, 0.6, true, 0.55, 0.14);
   },
   defeat: (b) => {
     // Apagado del sistema.
-    tone(b, { f: 440, slide: 30, dur: 1.1, type: 'sawtooth', gain: 0.12, lowpass: 1600, wet: 0.35 });
+    tone(b, { f: 220, slide: 25, dur: 1.2, type: 'sawtooth', gain: 0.13, lowpass: 1000, wet: 0.35 });
     saber(b, 0.5, false, 0.2, 0.12);
   },
 };

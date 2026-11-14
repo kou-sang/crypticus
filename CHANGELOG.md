@@ -4,6 +4,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-11-14
+
+### Changed
+
+- Tema Cyber: sonidos más graves, estilo Star Wars, sin los pitidos agudos que sonaban a pájaros. Los láseres pasan a ser disparos de bláster (barrido descendente con sub grave y filtro oscuro), los blips son tonos de consola de 300–900 Hz y las fanfarrias y alertas bajan una octava.
+- Tema Cyber, interfaz: el clic es un disparo de bláster de stormtrooper; cambiar de pestaña, un sable de luz que se balancea; abrir y cerrar ventanas, encender y apagar un sable (nuevo `saberHum` con tono, filtro y volumen automatizados).
+
 ## [1.9.2] - 2026-11-14
 
 ### Fixed

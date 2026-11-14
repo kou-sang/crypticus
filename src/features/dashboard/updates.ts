@@ -16,6 +16,14 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.9.3',
+    date: '2026-11-14',
+    title: 'Cyber: sonidos estilo Star Wars',
+    highlight: false,
+    news: ['Tema Cyber con sonidos más graves: disparos de bláster, sables de luz y consolas imperiales.'],
+    fixes: ['Los sonidos agudos del tema Cyber que parecían pájaros ahora son graves.'],
+  },
+  {
     version: '1.9.2',
     date: '2026-11-14',
     title: 'Celular: las casillas se quedan en su lugar',
