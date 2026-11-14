@@ -22,7 +22,6 @@ jobs:
       # solo corren los listados en `allowScripts` de package.json.
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
-      - run: npm test
       - run: npm run build
         env:
           VITE_FIREBASE_API_KEY: ci

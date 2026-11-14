@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { cx } from '../../lib/utils';
 import { enumerationGroups, toCellLetter } from './playUtils';
-import { attachKeyboard, centerInView, focusKeyboard, isFullyInView, isKeyboardFocused, isTypingElsewhere } from './keyboardInput';
+import { attachKeyboard, focusKeyboard, isKeyboardFocused, isTypingElsewhere } from './keyboardInput';
 
 export function AnswerGrid({
   enumeration,
@@ -34,17 +34,6 @@ export function AnswerGrid({
   // Los manejadores del input compartido leen siempre el último estado.
   const latest = useRef({ letters, cursor, locked, total, onLetters, onSubmit, transform });
   latest.current = { letters, cursor, locked, total, onLetters, onSubmit, transform };
-
-  /**
-   * Lleva el criptico al centro de lo que se ve (con el teclado abierto, arriba del teclado). Si las casillas ya se
-   * ven enteras, no mueve nada: antes, cada criptico nuevo (Royale los encadena) desplazaba la página.
-   */
-  const center = () => {
-    const form = formRef.current;
-    if (!form || isFullyInView(form)) return;
-    const panel = form.closest<HTMLElement>('[data-clue-panel]') ?? form;
-    centerInView(panel);
-  };
 
   useEffect(() => {
     const write = (chars: string) => {
@@ -90,33 +79,15 @@ export function AnswerGrid({
     const detach = attachKeyboard({ onText: write, onErase: erase, onKey, onFocusChange: setFocused });
     // Escritorio: el foco va solo a la grilla nueva. Celular: si el teclado ya estaba abierto, sigue abierto.
     // Si escribe en el chat u otro campo, no se le quita el foco.
+    // La posición de la pantalla la maneja keyboardInput (no se mueve al cambiar de criptico).
     if (!isKeyboardFocused() && !isTypingElsewhere() && window.matchMedia('(pointer: fine)').matches) focusKeyboard();
-    if (isKeyboardFocused()) window.requestAnimationFrame(center);
     return detach;
   }, []);
-
-  // Con el teclado del celular abriéndose o cerrándose, el criptico vuelve al centro.
-  useEffect(() => {
-    if (!focused) return;
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    let timer = 0;
-    const onResize = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(center, 120);
-    };
-    viewport.addEventListener('resize', onResize);
-    return () => {
-      window.clearTimeout(timer);
-      viewport.removeEventListener('resize', onResize);
-    };
-  }, [focused]);
 
   const focusAt = (index: number) => {
     if (locked) return;
     setCursor(Math.min(Math.max(index, 0), total - 1));
-    focusKeyboard();
-    window.setTimeout(center, 250);
+    focusKeyboard(); // Tocar una casilla no desplaza la página.
   };
 
   const handleSubmit = (event: FormEvent) => {

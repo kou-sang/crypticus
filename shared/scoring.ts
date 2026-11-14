@@ -240,12 +240,9 @@ export function rankPrimary(p: Participant, metric: RankMetric): number {
 
 export function rankParticipants(participants: Participant[], metric: RankMetric = 'score'): RankedParticipant[] {
   const primary = (p: Participant) => rankPrimary(p, metric);
-  const won = (p: Participant) => (p.tiebreakWon === true ? 1 : 0);
   const sorted = [...participants].sort((a, b) => {
     if (primary(b) !== primary(a)) return primary(b) - primary(a);
     if (b.score !== a.score) return b.score - a.score;
-    // Quien ganó la muerte súbita queda por delante de los empatados.
-    if (won(b) !== won(a)) return won(b) - won(a);
     if (a.hintsUsed !== b.hintsUsed) return a.hintsUsed - b.hintsUsed;
     const aTime = a.lastSolvedAt ?? Number.POSITIVE_INFINITY;
     const bTime = b.lastSolvedAt ?? Number.POSITIVE_INFINITY;
@@ -258,11 +255,10 @@ export function rankParticipants(participants: Participant[], metric: RankMetric
     const previous = ranked[index - 1];
     const tied =
       previous !== undefined &&
+      // Mismo resultado visible (métrica del modo y puntaje) = mismo puesto: empate, sin desempate (v1.9).
+      // Pistas y hora del último acierto solo ordenan la tabla.
       primary(previous) === primary(participant) &&
-      previous.score === participant.score &&
-      won(previous) === won(participant) &&
-      previous.hintsUsed === participant.hintsUsed &&
-      previous.lastSolvedAt === participant.lastSolvedAt;
+      previous.score === participant.score;
     ranked.push({ ...participant, rank: tied ? previous.rank : index + 1 });
   });
   return ranked;

@@ -66,7 +66,7 @@ export function winRate(stats: ModeStats): string {
 
 /**
  * Pool de una partida del historial. Las anteriores a v1.2 no lo guardan: Race y Duel se deducen del modo;
- * Royale, del control de tiempo si está (si no, queda sin pool hasta correr `scripts/backfill-royale-pools.ts`).
+ * Royale, del control de tiempo si está.
  */
 export function entryPool(entry: HistoryEntry): RatingPool | null {
   return entry.ratingPool ?? ratingPoolOf(entry.game, entry.royale);

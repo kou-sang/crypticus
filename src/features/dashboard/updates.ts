@@ -16,6 +16,18 @@ export const HIGHLIGHTS_SHOWN = 3;
 
 export const RELEASES: readonly Release[] = [
   {
+    version: '1.9.1',
+    date: '2026-11-14',
+    title: 'Celular: la pantalla ya no salta',
+    highlight: false,
+    news: [],
+    fixes: [
+      'Con el teclado del celular, la pantalla se queda donde la dejaste: al abrirlo, el enunciado y las casillas quedan a la vista; al cerrarlo, vuelve adonde estabas leyendo.',
+      'Tipear, tocar una casilla o pasar al criptico siguiente ya no mueve la pantalla.',
+      'Si terminan con el mismo resultado, es empate: las pistas y la hora ya no deciden.',
+    ],
+  },
+  {
     version: '1.9.0',
     date: '2026-11-11',
     title: 'Cripticos nuevos, pistas a elección y dificultad progresiva',

@@ -1,5 +1,4 @@
 // Números del modo COOP (manual v2). Todo lo ajustable vive aquí: el motor solo lee estas constantes.
-// Sin confirmar: ajustarlos con `scripts/simulate-coop.ts` antes de tocar las reglas.
 import type { Difficulty } from '../types';
 
 export type BossCategory = 'easy' | 'medium' | 'difficult' | 'expert' | 'nightmare';

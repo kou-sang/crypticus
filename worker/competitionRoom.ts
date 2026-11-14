@@ -98,10 +98,7 @@ interface RaceEntry {
  */
 function publicState(state: LiveState, now: number, uid: string | null): LiveState {
   // Partida terminada: ya no hay nada que ocultar del juego en sí (las soluciones van aparte).
-  // De los cripticos de desempate solo se muestran los que llegaron a jugarse.
-  if (state.status === 'finished') {
-    return { ...state, pool: { easy: [], medium: [], hard: [], veryHard: [] }, tiebreakIds: state.tiebreak?.played ?? [] };
-  }
+  if (state.status === 'finished') return { ...state, pool: { easy: [], medium: [], hard: [], veryHard: [] } };
 
   const round = state.round;
   const pendingRound = round && round.opensAt != null && now < round.opensAt ? round.crypticId : null;
@@ -117,15 +114,9 @@ function publicState(state: LiveState, now: number, uid: string | null): LiveSta
   } else {
     visible = state.crypticIds; // Flujo libre clásico: la lista completa es parte del juego.
   }
-  // Muerte súbita: el criptico actual se envía al abrir; los siguientes siguen siendo secretos.
-  const tb = state.tiebreak;
-  const tbOpen = tb != null && now >= tb.opensAt;
-  const tbVisible = tb ? tb.played.slice(0, tbOpen ? tb.index + 1 : tb.index) : [];
-  const allowed = new Set([...visible, ...tbVisible]);
+  const allowed = new Set(visible);
   return {
     ...state,
-    tiebreakIds: [],
-    tiebreak: tb && !tbOpen ? { ...tb, crypticId: '', played: tb.played.slice(0, tb.index) } : tb,
     crypticIds: visible,
     usedIds: state.usedIds.filter((id) => allowed.has(id)),
     pool: { easy: [], medium: [], hard: [], veryHard: [] },
@@ -377,7 +368,8 @@ export class CompetitionRoom extends DurableObject<Env> {
     const contested =
       correct &&
       state.status === 'live' &&
-      (state.tiebreak ? state.tiebreak.crypticId === crypticId : state.config.flow === 'rounds' && state.round?.crypticId === crypticId);
+      state.config.flow === 'rounds' &&
+      state.round?.crypticId === crypticId;
     // applyAnswer revalida: durante el await pudo cerrarse la ronda. Se usa la hora de llegada, no la de fin de verificación.
     const outcome = contested
       ? await this.joinRace(uid, crypticId, receivedAt)

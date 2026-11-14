@@ -71,7 +71,7 @@ export default function CompetitionRoom() {
     comp.participantIds.includes(profile.uid) &&
     live !== null &&
     live.status === 'live' &&
-    !(expired && !live.tiebreak);
+    !expired;
   useEffect(() => {
     setPlaying(playingNow);
     if (!playingNow) {
@@ -112,8 +112,7 @@ export default function CompetitionRoom() {
     friendIds.includes(comp.hostId) ||
     (comp.invitedIds ?? []).includes(profile.uid);
   const countdown = isLive && startedAt !== null && !started;
-  // Con muerte súbita en curso el reloj de la partida ya venció, pero el juego sigue.
-  const ended = live !== null && (live.status === 'finished' || (expired && !live.tiebreak));
+  const ended = live !== null && (live.status === 'finished' || expired);
   // Durante la partida no se ofrece «Volver»: evita salir por accidente con un toque.
   const playing = isLive && !ended && isParticipant;
   const total = live
@@ -129,9 +128,10 @@ export default function CompetitionRoom() {
       {!playing && <BackLink to="/jugar" label="Volver a Jugar" />}
       <PageHeader kicker={`Anfitrión: ${comp.hostName}`} title={comp.title} />
 
-      {/* Barra fija: el tiempo sigue a la vista al hacer scroll o con el teclado del móvil abierto. */}
+      {/* Barra fija: el tiempo sigue a la vista al hacer scroll o con el teclado del móvil abierto.
+          data-sticky-top: keyboardInput la descuenta al acomodar el enunciado arriba del teclado. */}
       {isLive && !countdown && (
-        <div className="sticky top-14 z-10 -mx-4 -mt-4 mb-6 flex items-center justify-end gap-3 border-b border-line bg-paper/95 px-4 py-2 backdrop-blur">
+        <div data-sticky-top data-keep-keyboard className="sticky top-14 z-10 -mx-4 -mt-4 mb-6 flex items-center justify-end gap-3 border-b border-line bg-paper/95 px-4 py-2 backdrop-blur">
           {live?.participants[profile.uid] && !live.config.royale && (
             <span className="mr-auto font-mono text-sm">
               {live.config.game === 'race' ? (
@@ -160,7 +160,8 @@ export default function CompetitionRoom() {
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+      {/* data-keep-keyboard: tocar la zona de juego para leer no cierra el teclado del celular. */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]" data-keep-keyboard>
         <div className="min-w-0 space-y-6">
           {comp.status !== 'finished' && <DeviceNotice participants={participants} />}
           {comp.status === 'lobby' && !isLive && (

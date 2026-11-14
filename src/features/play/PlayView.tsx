@@ -1,4 +1,4 @@
-// Vista de juego según el modo: desempate, Royale, Race (Pacífico o Hardcore) y rondas (Duel).
+// Vista de juego según el modo: Royale, Race (Pacífico o Hardcore) y rondas (Duel).
 import { memo } from 'react';
 import type { LiveState } from '../../../shared/engine';
 import type { Solution } from '../../../shared/protocol';
@@ -9,7 +9,6 @@ import { DifficultyVote } from './GameControls';
 import { useCryptics } from './useCryptics';
 import { DuelAlerts, DuelBars, NextCountdown, RoyaleFlow } from './ModeViews';
 import { RaceTrack, SequentialRace, SurrenderButton } from './RaceView';
-import { TiebreakView } from './TiebreakView';
 import { cooldownMs, isSequential, gameHintsLeft } from '../../../shared/engine';
 
 
@@ -117,7 +116,6 @@ export const PlayView = memo(function PlayView({
   solutions: Solution[];
   offsetMs: number;
 }) {
-  if (state.tiebreak) return <TiebreakView state={state} uid={uid} actions={actions} solutions={solutions} offsetMs={offsetMs} />;
   if (state.config.royale) return <RoyaleFlow state={state} uid={uid} actions={actions} offsetMs={offsetMs} />;
   if (state.config.game === 'race') {
     return (

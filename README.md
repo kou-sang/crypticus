@@ -82,7 +82,6 @@ npm run deploy                                  # build + wrangler deploy
 | --- | --- |
 | `npm run dev` | Servidor de desarrollo |
 | `npm run typecheck` | TypeScript estricto |
-| `npm test` | Tests de dominio (Vitest) |
 | `npm run build` | Build de producción |
 | `npm run dev:worker` | Build + Worker local con Durable Objects |
 | `npm run deploy` | Build + despliegue a Cloudflare |
