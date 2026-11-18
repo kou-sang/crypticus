@@ -224,7 +224,7 @@ service cloud.firestore {
         && request.resource.data.topics is list && request.resource.data.topics.size() <= 30
         && request.resource.data.config is map && request.resource.data.config.keys().hasOnly(['count', 'stepLimit', 'totalMin', 'mode'])
         && request.resource.data.problems is list && request.resource.data.problems.size() >= 1 && request.resource.data.problems.size() <= 20
-        && request.resource.data.steps is int && request.resource.data.steps >= 1 && request.resource.data.steps <= 200
+        && request.resource.data.steps is int && request.resource.data.steps >= 1 && request.resource.data.steps <= 2000
         && request.resource.data.firstTry is int && request.resource.data.firstTry >= 0
         && request.resource.data.firstTry <= request.resource.data.steps
         // +1 por paso como máximo; −3 por paso como mínimo.
