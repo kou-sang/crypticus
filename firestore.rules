@@ -168,5 +168,73 @@ service cloud.firestore {
         && validText(request.resource.data.text);
       allow update, delete: if false;
     }
+
+    // ---------- Cartiludus ----------
+    // Modelo de escritura: por partida, 1 transacción que
+    //   1) crea  pq_sessions/{uid}/items/{sessionId}
+    //   2) crea/actualiza pq_users/{uid} (agregados), con lastSessionId = sessionId y played + 1.
+    // Nada se escribe por paso. Sin servidor: las reglas limitan forma y rango, no la veracidad del puntaje.
+
+    function pqCategories() { return ['identificarVA', 'distribucion', 'propiedad', 'calculo']; }
+
+    // { identificarVA: {steps, firstTry, score}, ... } con enteros acotados.
+    function pqCatStats(m, maxSteps) {
+      return m is map && m.keys().hasOnly(pqCategories())
+        && pqCat(m, 'identificarVA', maxSteps) && pqCat(m, 'distribucion', maxSteps)
+        && pqCat(m, 'propiedad', maxSteps) && pqCat(m, 'calculo', maxSteps);
+    }
+    function pqCat(m, k, maxSteps) {
+      return !(k in m) || (
+        m[k] is map && m[k].keys().hasOnly(['steps', 'firstTry', 'score'])
+        && m[k].steps is int && m[k].steps >= 0 && m[k].steps <= maxSteps
+        && m[k].firstTry is int && m[k].firstTry >= 0 && m[k].firstTry <= m[k].steps
+        && m[k].score is int && m[k].score >= -3 * maxSteps && m[k].score <= m[k].steps
+      );
+    }
+
+    match /pq_users/{uid} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['played', 'score', 'steps', 'firstTry', 'byCategory', 'lastSessionId', 'updatedAt'])
+        && request.resource.data.played == (resource == null ? 0 : resource.data.played) + 1
+        && request.resource.data.score is int
+        && request.resource.data.steps is int && request.resource.data.steps >= 0
+        && request.resource.data.firstTry is int && request.resource.data.firstTry >= 0
+        && request.resource.data.firstTry <= request.resource.data.steps
+        && pqCatStats(request.resource.data.byCategory, 1000000)
+        && request.resource.data.updatedAt == request.time
+        // La partida se crea en la misma transacción.
+        && !exists(/databases/$(database)/documents/pq_sessions/$(uid)/items/$(request.resource.data.lastSessionId))
+        && existsAfter(/databases/$(database)/documents/pq_sessions/$(uid)/items/$(request.resource.data.lastSessionId));
+      allow delete: if false;
+    }
+
+    match /pq_sessions/{uid}/items/{sessionId} {
+      allow read: if isUser(uid);
+      allow create: if isUser(uid)
+        && sessionId.matches('^[A-Za-z0-9_-]{8,40}$')
+        && request.resource.data.keys().hasOnly(['problemId', 'problemVersion', 'subject', 'topic', 'score', 'steps', 'firstTry', 'byCategory', 'hintsUsed', 'timeouts', 'startedAt', 'finishedAt'])
+        && request.resource.data.problemId is string && request.resource.data.problemId.size() <= 80
+        && request.resource.data.problemVersion is int && request.resource.data.problemVersion >= 1
+        && request.resource.data.subject is string && request.resource.data.subject.size() <= 40
+        && request.resource.data.topic is string && request.resource.data.topic.size() <= 60
+        && request.resource.data.steps is int && request.resource.data.steps >= 1 && request.resource.data.steps <= 50
+        && request.resource.data.firstTry is int && request.resource.data.firstTry >= 0
+        && request.resource.data.firstTry <= request.resource.data.steps
+        // +1 por paso como máximo; −3 por paso como mínimo (4 cartas → hasta 3 incorrectas).
+        && request.resource.data.score is int
+        && request.resource.data.score <= request.resource.data.steps
+        && request.resource.data.score >= -3 * request.resource.data.steps
+        && request.resource.data.hintsUsed is int && request.resource.data.hintsUsed >= 0
+        && request.resource.data.hintsUsed <= request.resource.data.steps
+        && request.resource.data.timeouts is int && request.resource.data.timeouts >= 0
+        && request.resource.data.timeouts <= request.resource.data.steps
+        && pqCatStats(request.resource.data.byCategory, request.resource.data.steps)
+        && request.resource.data.startedAt is timestamp && request.resource.data.startedAt <= request.time
+        && request.resource.data.finishedAt == request.time
+        // Va con la actualización de agregados en la misma transacción.
+        && getAfter(/databases/$(database)/documents/pq_users/$(uid)).data.lastSessionId == sessionId;
+      allow update, delete: if false;
+    }
   }
 }
