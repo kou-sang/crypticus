@@ -170,7 +170,11 @@ service cloud.firestore {
     }
 
     // ---------- Cartiludus ----------
-    // Modelo de escritura: por partida, 1 transacción que
+    // Bloque para `firestore.rules` de CRYPTICUS (dentro de `match /databases/{database}/documents`).
+    // Desplegar desde CRYPTICUS: npx firebase-tools deploy --only firestore:rules --project crypticus-eh
+    // Usa `isUser(uid)`, ya definido en ese archivo.
+    //
+    // Modelo de escritura: por partida (uno o varios problemas), 1 transacción que
     //   1) crea  pq_sessions/{uid}/items/{sessionId}
     //   2) crea/actualiza pq_users/{uid} (agregados), con lastSessionId = sessionId y played + 1.
     // Nada se escribe por paso. Sin servidor: las reglas limitan forma y rango, no la veracidad del puntaje.
@@ -195,13 +199,15 @@ service cloud.firestore {
     match /pq_users/{uid} {
       allow read: if isUser(uid);
       allow create, update: if isUser(uid)
-        && request.resource.data.keys().hasOnly(['played', 'score', 'steps', 'firstTry', 'byCategory', 'lastSessionId', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['played', 'score', 'steps', 'firstTry', 'byCategory', 'byTopic', 'review', 'lastSessionId', 'updatedAt'])
         && request.resource.data.played == (resource == null ? 0 : resource.data.played) + 1
         && request.resource.data.score is int
         && request.resource.data.steps is int && request.resource.data.steps >= 0
         && request.resource.data.firstTry is int && request.resource.data.firstTry >= 0
         && request.resource.data.firstTry <= request.resource.data.steps
         && pqCatStats(request.resource.data.byCategory, 1000000)
+        && request.resource.data.byTopic is map && request.resource.data.byTopic.size() <= 100
+        && request.resource.data.review is map && request.resource.data.review.size() <= 500
         && request.resource.data.updatedAt == request.time
         // La partida se crea en la misma transacción.
         && !exists(/databases/$(database)/documents/pq_sessions/$(uid)/items/$(request.resource.data.lastSessionId))
@@ -213,15 +219,15 @@ service cloud.firestore {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
         && sessionId.matches('^[A-Za-z0-9_-]{8,40}$')
-        && request.resource.data.keys().hasOnly(['problemId', 'problemVersion', 'subject', 'topic', 'score', 'steps', 'firstTry', 'byCategory', 'hintsUsed', 'timeouts', 'startedAt', 'finishedAt'])
-        && request.resource.data.problemId is string && request.resource.data.problemId.size() <= 80
-        && request.resource.data.problemVersion is int && request.resource.data.problemVersion >= 1
+        && request.resource.data.keys().hasOnly(['subject', 'topics', 'config', 'problems', 'score', 'steps', 'firstTry', 'byCategory', 'hintsUsed', 'timeouts', 'startedAt', 'finishedAt'])
         && request.resource.data.subject is string && request.resource.data.subject.size() <= 40
-        && request.resource.data.topic is string && request.resource.data.topic.size() <= 60
-        && request.resource.data.steps is int && request.resource.data.steps >= 1 && request.resource.data.steps <= 50
+        && request.resource.data.topics is list && request.resource.data.topics.size() <= 30
+        && request.resource.data.config is map && request.resource.data.config.keys().hasOnly(['count', 'stepLimit', 'totalMin', 'mode'])
+        && request.resource.data.problems is list && request.resource.data.problems.size() >= 1 && request.resource.data.problems.size() <= 20
+        && request.resource.data.steps is int && request.resource.data.steps >= 1 && request.resource.data.steps <= 200
         && request.resource.data.firstTry is int && request.resource.data.firstTry >= 0
         && request.resource.data.firstTry <= request.resource.data.steps
-        // +1 por paso como máximo; −3 por paso como mínimo (4 cartas → hasta 3 incorrectas).
+        // +1 por paso como máximo; −3 por paso como mínimo.
         && request.resource.data.score is int
         && request.resource.data.score <= request.resource.data.steps
         && request.resource.data.score >= -3 * request.resource.data.steps

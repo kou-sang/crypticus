@@ -14,7 +14,7 @@
     "typecheck": "tsc -b",
     "import:cryptics": "tsx scripts/import-cryptics.ts",
     "validate:cryptics": "tsx scripts/validate-cryptics.ts",
-    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes --project crypticus-eh",
     "prebuild": "node scripts/ensure-secrets.mjs",
     "pretypecheck": "node scripts/ensure-secrets.mjs",
     "dev:worker": "npm run build && wrangler dev",
