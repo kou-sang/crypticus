@@ -199,7 +199,7 @@ service cloud.firestore {
     match /pq_users/{uid} {
       allow read: if isUser(uid);
       allow create, update: if isUser(uid)
-        && request.resource.data.keys().hasOnly(['played', 'score', 'steps', 'firstTry', 'byCategory', 'byTopic', 'review', 'lastSessionId', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['played', 'score', 'steps', 'firstTry', 'byCategory', 'byTopic', 'progress', 'lastSessionId', 'updatedAt'])
         && request.resource.data.played == (resource == null ? 0 : resource.data.played) + 1
         && request.resource.data.score is int
         && request.resource.data.steps is int && request.resource.data.steps >= 0
@@ -207,7 +207,7 @@ service cloud.firestore {
         && request.resource.data.firstTry <= request.resource.data.steps
         && pqCatStats(request.resource.data.byCategory, 1000000)
         && request.resource.data.byTopic is map && request.resource.data.byTopic.size() <= 100
-        && request.resource.data.review is map && request.resource.data.review.size() <= 500
+        && request.resource.data.progress is map && request.resource.data.progress.size() <= 1000
         && request.resource.data.updatedAt == request.time
         // La partida se crea en la misma transacción.
         && !exists(/databases/$(database)/documents/pq_sessions/$(uid)/items/$(request.resource.data.lastSessionId))
